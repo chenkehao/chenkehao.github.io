@@ -1,0 +1,8 @@
+{
+  "name": "Devnors - AI Multi-Agent Recruitment Platform",
+  "description": "A cutting-edge recruitment platform leveraging multi-agent synergy to automate the entire hiring pipeline, from resume parsing to intelligent matching.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
