@@ -9,7 +9,7 @@ import {
   Download, Map, Send, Bot, User as UserIcon, Award, Globe, LineChart, Target, BookOpen, Lock, Mail, Github,
   Smartphone, ShieldEllipsis, MessageSquare, ExternalLink, Phone, MapPin, Share2, Loader2, Rocket, Terminal, Play, Square, Activity,
   Cpu, Coins, Fingerprint, Building2, Building, Layers, Eye, Compass, Info, Heart, LayoutDashboard, Settings, PieChart, CheckSquare, ListTodo, PenTool,
-  History, Timer, ClipboardCheck, Filter, ChevronRight, ChevronDown, UserCircle2, Database, AlertCircle, Sparkle, Eraser, Milestone, Brain, Pin, Trash2, Edit3, Save, CreditCard, ArrowUpRight, TrendingDown, Wallet, Key, UserPlus, ShieldAlert, Laptop, Bell, Verified, Medal, Trophy, Landmark, CircleDollarSign, Gem, CreditCard as CreditCardIcon, Github as GithubIcon, MessageCircle, Tag, Instagram, Twitter, RotateCcw, GitBranch, ArrowRightCircle, Upload, Code, PlusCircle, Wand2, Link2, Linkedin, Gift, FileCheck
+  History, Timer, ClipboardCheck, Filter, ChevronRight, ChevronDown, UserCircle2, Database, AlertCircle, Sparkle, Eraser, Milestone, Brain, Pin, Trash2, Edit3, Save, CreditCard, ArrowUpRight, TrendingDown, Wallet, Key, UserPlus, ShieldAlert, Laptop, Bell, Verified, Medal, Trophy, Landmark, CircleDollarSign, Gem, CreditCard as CreditCardIcon, Github as GithubIcon, MessageCircle, Tag, Instagram, Twitter, RotateCcw, GitBranch, ArrowRightCircle, Upload, Code, PlusCircle, Wand2, Link2, Linkedin, Gift, FileCheck, Moon, Sun
 } from 'lucide-react';
 import { analyzeResume, chatWithInterviewer } from './services/geminiService';
 import { CandidateProfile, Job, SkillGap, AgentFeedback, AccountTier, TeamMember, CustomLLMConfig } from './types';
@@ -622,31 +622,31 @@ const MockInterviewConsole = ({ questions, profile }: { questions: string[], pro
 
 // --- 基础布局组件 ---
 
-const Navbar = () => (
-  <nav className="fixed top-0 w-full z-50 glass border-b border-slate-200/50 px-6 py-4">
+const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDarkMode: () => void }) => (
+  <nav className="fixed top-0 w-full z-50 bg-white border-b border-slate-200 px-6 py-4">
     <div className="max-w-7xl mx-auto flex justify-between items-center">
       <Link to="/" className="flex items-center space-x-2">
-        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 transition-transform active:scale-95">
+        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 transition-transform active:scale-95">
           <Zap className="text-white w-6 h-6" />
         </div>
         <span className="text-2xl font-bold tracking-tight text-slate-900">Devnors <span className="text-indigo-600 text-sm font-normal">得若</span></span>
       </Link>
-      <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-600">
-        <Link to="/ai-assistant" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-bold"><Bot size={16}/> AI助手</Link>
-        <Link to="/workbench" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-bold"><LayoutDashboard size={16}/> 工作台</Link>
+      <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-500">
+        <Link to="/ai-assistant" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><Bot size={16}/> AI助手</Link>
+        <Link to="/workbench" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><LayoutDashboard size={16}/> 工作台</Link>
         <Link to="/candidate" className="hover:text-indigo-600 transition-colors">人才端</Link>
         <Link to="/employer" className="hover:text-indigo-600 transition-colors">企业端</Link>
       </div>
       <div className="flex items-center space-x-3">
-        <Link to="/tokens" className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded border border-amber-200 transition-all group" title="Token 资产管理">
-          <div className="p-1 bg-white rounded-lg shadow-sm group-hover:rotate-12 transition-transform">
+        <Link to="/tokens" className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600 rounded border border-slate-200 transition-all group" title="Token 资产管理">
+          <div className="p-1 bg-white rounded shadow-sm group-hover:rotate-12 transition-transform">
              <CircleDollarSign size={14} className="text-amber-500" />
           </div>
-          <span className="text-xs font-black">1.2M</span>
+          <span className="text-xs font-bold text-slate-700">1.2M</span>
         </Link>
-        <div className="w-px h-6 bg-slate-200 mx-1"></div>
-        <Link to="/settings" className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-all" title="系统设置"><Settings size={18}/></Link>
-        <Link to="/login" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded text-sm font-bold shadow-lg shadow-indigo-200 active:scale-95 transition-all">登录</Link>
+        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+        <Link to="/settings" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title="系统设置"><Settings size={18}/></Link>
+        <Link to="/login" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded text-sm font-semibold shadow-sm hover:shadow transition-all active:scale-95">登录</Link>
       </div>
     </div>
   </nav>
@@ -665,17 +665,23 @@ const LandingPage = () => (
            </div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
              <div className="text-center md:border-r border-slate-100">
-                <div className="inline-flex p-3 bg-indigo-50 rounded text-indigo-600 mb-6"><Users size={32} /></div>
+                <div className="inline-flex p-3 bg-indigo-50 rounded text-indigo-600 mb-6">
+                  <Users size={32} />
+                </div>
                 <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">100万<span className="text-indigo-600">+</span></div>
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">全球储备人才</div>
              </div>
              <div className="text-center md:border-r border-slate-100">
-                <div className="inline-flex p-3 bg-emerald-50 rounded text-emerald-600 mb-6"><Building2 size={32} /></div>
+                <div className="inline-flex p-3 bg-emerald-50 rounded text-emerald-600 mb-6">
+                  <Building2 size={32} />
+                </div>
                 <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">2万<span className="text-emerald-600">+</span></div>
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">活跃入驻企业</div>
              </div>
              <div className="text-center">
-                <div className="inline-flex p-3 bg-rose-50 rounded text-rose-600 mb-6"><Sparkles size={32} /></div>
+                <div className="inline-flex p-3 bg-rose-50 rounded text-rose-600 mb-6">
+                  <Sparkles size={32} />
+                </div>
                 <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">500万<span className="text-rose-600">+</span></div>
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">AI 智能成功对接</div>
              </div>
@@ -737,7 +743,7 @@ const Hero = () => (
         重塑 <span className="gradient-text">AI 驱动</span> 的 <br />
         人才招聘新范式
       </h1>
-      <p className="text-xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
+      <p className="text-xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed ">
         从“人岗匹配”到“智能体自主协同”。Devnors 部署多智能体系统（MAS），
         实现从简历深度解析、多模态评估到面试自调度的全链路闭环。
       </p>
@@ -766,10 +772,10 @@ const FeatureCard = ({ icon: Icon, title, description }: any) => (
 );
 
 // --- 设置与管理页面 ---
-const SettingsManagementView = () => {
+const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDarkMode: () => void }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'General' | 'Account' | 'AIEngine' | 'API' | 'Team' | 'Audit'>('General');
-  const [accountTier, setAccountTier] = useState<AccountTier>('Professional');
+  const [accountTier, setAccountTier] = useState<AccountTier>('Devnors 1.0 Pro');
   const isEmployer = true; // 模拟当前为企业身份
 
   const teamMembers: TeamMember[] = [
@@ -779,18 +785,20 @@ const SettingsManagementView = () => {
   ];
 
   const llmConfigs: CustomLLMConfig[] = [
-    { task: '简历语义解析', modelName: 'Gemini 3 Pro', provider: 'Google' },
-    { task: '多智能体联席面试', modelName: 'GPT-4o', provider: 'OpenAI' },
-    { task: '全局机会路由', modelName: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
+    { task: '基础解析对接', modelName: 'Devnors 1.0', provider: 'Devnors' },
+    { task: '高级智能解析', modelName: 'Devnors 1.0 Pro', provider: 'Devnors' },
+    { task: '顶级智能性能拉满', modelName: 'Devnors 1.0 Ultra', provider: 'Devnors' },
   ];
 
   const navItems = [
     { id: 'General', label: '基础信息', icon: UserCircle2 },
+    { id: 'Verification', label: '企业认证信息', icon: ShieldCheck },
+    { id: 'PersonalVerification', label: '个人认证信息', icon: Fingerprint },
     { id: 'Account', label: '账户等级', icon: Award },
     { id: 'AIEngine', label: 'AI 引擎配置', icon: Cpu },
     { id: 'API', label: 'API 与集成', icon: Key },
     ...(isEmployer ? [{ id: 'Team', label: '人员与权限', icon: Users2 }] : []),
-    { id: 'Audit', label: '安全审计日志', icon: Laptop },
+    { id: 'Audit', label: '系统安全日志', icon: Laptop },
   ];
 
   const renderContent = () => {
@@ -809,6 +817,47 @@ const SettingsManagementView = () => {
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">管理联系邮箱</label>
                   <input type="email" defaultValue="admin@devnors.com" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
                 </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">联系人姓名</label>
+                  <input type="text" defaultValue="陈先生" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">联系电话</label>
+                  <input type="tel" defaultValue="138-0000-8888" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">公司地址</label>
+                  <input type="text" defaultValue="北京市海淀区中关村大街1号" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">官方网址</label>
+                  <input type="url" defaultValue="https://www.devnors.com" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">所属行业</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                    <option>人工智能</option>
+                    <option>互联网</option>
+                    <option>人力资源</option>
+                    <option>金融服务</option>
+                    <option>电子商务</option>
+                    <option>其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">企业规模</label>
+                  <select className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+                    <option>1-50人</option>
+                    <option>51-200人</option>
+                    <option>201-500人</option>
+                    <option>501-1000人</option>
+                    <option>1000人以上</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">企业简介</label>
+                <textarea rows={4} defaultValue="Devnors 得若是一家专注于AI原生招聘平台的创新科技公司，通过多智能体协同技术，为企业提供精准的人才匹配解决方案。" className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none" />
               </div>
               <div className="p-6 bg-indigo-50 rounded border border-indigo-100">
                 <div className="flex items-center justify-between">
@@ -819,10 +868,227 @@ const SettingsManagementView = () => {
                   <div className="w-12 h-6 bg-indigo-600 rounded-full relative cursor-pointer"><div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div></div>
                 </div>
               </div>
+              <div className="p-6 bg-slate-50 rounded border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Moon size={16}/> 深色模式</h4>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">切换到深色主题以减少眼睛疲劳。</p>
+                  </div>
+                  <button 
+                    onClick={toggleDarkMode}
+                    className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
+                  </button>
+                </div>
+              </div>
               <div className="pt-4 flex justify-end">
                 <button className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm hover:bg-indigo-700 transition-all flex items-center gap-2">
-                  <Save size={18} /> 保存更改信息
+                  <Save size={18} /> 保存
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      case 'Verification':
+        return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">企业认证信息</h3>
+            
+            <div className="bg-white rounded-lg p-10 border border-slate-100 shadow-sm space-y-8">
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Award size={20} className="text-amber-500" /> 资质认证
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { name: '国家高新技术企业认证', org: '科技部火炬中心', date: '2024-01-15', status: '有效', color: 'bg-amber-50 border-amber-200' },
+                    { name: 'ISO 27001 信息安全管理体系', org: 'SGS 通标标准', date: '2023-08-20', status: '有效', color: 'bg-blue-50 border-blue-200' },
+                    { name: '可信云服务认证', org: '云计算开源产业联盟', date: '2023-06-10', status: '有效', color: 'bg-emerald-50 border-emerald-200' },
+                    { name: '人力资源服务许可证', org: '北京市人社局', date: '2022-12-01', status: '有效', color: 'bg-rose-50 border-rose-200' },
+                  ].map((cert, idx) => (
+                    <div key={idx} className={`p-5 rounded-lg border ${cert.color} flex items-start gap-4`}>
+                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Medal size={24} className="text-amber-500" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-slate-900 text-sm">{cert.name}</h5>
+                        <p className="text-xs text-slate-500 mt-1">{cert.org}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-slate-400">认证日期: {cert.date}</span>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">{cert.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <ShieldCheck size={20} className="text-emerald-500" /> 信用信息认证
+                </h4>
+                <div className="space-y-4">
+                  {[
+                    { name: '企业工商营业执照', status: '已认证', score: 98, icon: Building2 },
+                    { name: '税务登记证', status: '已认证', score: 100, icon: FileText },
+                    { name: '组织机构代码证', status: '已认证', score: 100, icon: Database },
+                    { name: '银行对公账户', status: '已认证', score: 95, icon: Wallet },
+                  ].map((credit, idx) => (
+                    <div key={idx} className="p-5 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center">
+                        <credit.icon size={24} className="text-indigo-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-slate-900 text-sm">{credit.name}</h5>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">{credit.status}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${credit.score}%` }}></div>
+                          </div>
+                          <span className="text-xs font-bold text-slate-500">{credit.score}分</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Verified size={20} className="text-indigo-500" /> 其他认证
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { name: 'AI 算法专利', count: 12, icon: Lightbulb },
+                    { name: '软件著作权', count: 8, icon: Code },
+                    { name: '商标注册', count: 5, icon: Tag },
+                  ].map((item, idx) => (
+                    <div key={idx} className="p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border border-indigo-100 text-center">
+                      <item.icon size={28} className="mx-auto text-indigo-600 mb-2" />
+                      <h5 className="font-bold text-slate-900 text-sm">{item.name}</h5>
+                      <p className="text-2xl font-black text-indigo-600 mt-1">{item.count}</p>
+                      <p className="text-xs text-slate-400">项</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      case 'PersonalVerification':
+        return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">个人认证信息</h3>
+            
+            <div className="bg-white rounded-lg p-10 border border-slate-100 shadow-sm space-y-8">
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <GraduationCap size={20} className="text-indigo-500" /> 学历认证
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { school: '清华大学', degree: '硕士', major: '计算机科学与技术', date: '2018-06', status: '已认证', color: 'bg-indigo-50 border-indigo-200' },
+                    { school: '北京大学', degree: '学士', major: '软件工程', date: '2015-06', status: '已认证', color: 'bg-emerald-50 border-emerald-200' },
+                  ].map((edu, idx) => (
+                    <div key={idx} className={`p-5 rounded-lg border ${edu.color} flex items-start gap-4`}>
+                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <GraduationCap size={24} className="text-indigo-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-slate-900 text-sm">{edu.school}</h5>
+                        <p className="text-xs text-slate-500 mt-1">{edu.degree} · {edu.major}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-slate-400">毕业时间: {edu.date}</span>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">{edu.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Briefcase size={20} className="text-amber-500" /> 职业认证
+                </h4>
+                <div className="space-y-4">
+                  {[
+                    { name: 'PMP 项目管理专业人士', org: 'PMI', date: '2020-03', status: '有效', color: 'bg-amber-50 border-amber-200' },
+                    { name: 'AWS 认证解决方案架构师', org: 'Amazon', date: '2021-09', status: '有效', color: 'bg-orange-50 border-orange-200' },
+                    { name: '国家软件设计师', org: '工信部', date: '2019-11', status: '有效', color: 'bg-blue-50 border-blue-200' },
+                  ].map((cert, idx) => (
+                    <div key={idx} className={`p-5 rounded-lg border ${cert.color} flex items-start gap-4`}>
+                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <Briefcase size={24} className="text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h5 className="font-black text-slate-900 text-sm">{cert.name}</h5>
+                        <p className="text-xs text-slate-500 mt-1">发证机构: {cert.org}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-slate-400">认证日期: {cert.date}</span>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">{cert.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <FileCheck size={20} className="text-emerald-500" /> 征信认证
+                </h4>
+                <div className="space-y-4">
+                  {[
+                    { name: '个人征信报告', date: '2024-01-10', status: '良好', score: 780, icon: FileText },
+                    { name: '司法记录核查', date: '2024-01-10', status: '无记录', score: 100, icon: ShieldCheck },
+                  ].map((credit, idx) => (
+                    <div key={idx} className="p-5 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-4">
+                      <div className="w-12 h-12 bg-emerald-50 rounded-lg flex items-center justify-center">
+                        <credit.icon size={24} className="text-emerald-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-slate-900 text-sm">{credit.name}</h5>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">{credit.status}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${credit.score}%` }}></div>
+                          </div>
+                          <span className="text-xs font-bold text-slate-500">{credit.score}分</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">查询日期: {credit.date}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+                  <Trophy size={20} className="text-purple-500" /> 权威获奖资质
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[
+                    { name: '国家科技进步奖', org: '科技部', year: '2022', level: '一等奖', icon: Medal },
+                    { name: '中国AI创新人物', org: '中国人工智能学会', year: '2023', level: '年度', icon: Award },
+                    { name: '最佳论文奖', org: 'IEEE', year: '2021', level: '优秀', icon: Trophy },
+                  ].map((award, idx) => (
+                    <div key={idx} className="p-5 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-100 text-center">
+                      <award.icon size={28} className="mx-auto text-purple-600 mb-2" />
+                      <h5 className="font-bold text-slate-900 text-sm">{award.name}</h5>
+                      <p className="text-xs text-slate-500 mt-1">{award.org}</p>
+                      <div className="flex items-center justify-center gap-2 mt-2">
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold">{award.year}年</span>
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold">{award.level}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -841,7 +1107,7 @@ const SettingsManagementView = () => {
                   <button className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-black transition-all">续费当前套餐</button>
                 </div>
                 <div className="flex-1 space-y-6">
-                  <h4 className="text-lg font-black">包含的核心特权</h4>
+                  <h4 className="text-lg font-black text-slate-900">包含的核心特权</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {['无限制简历结构化解析', '自定义多 LLM 用户路由策略', 'API 对外调用权限', '团队成员无限制协作', '专属智能体部署通道', '24/7 技术专家支持'].map((p, i) => (
                       <div key={i} className="flex items-center gap-3 text-sm font-bold text-slate-600">
@@ -854,7 +1120,7 @@ const SettingsManagementView = () => {
                       onClick={() => navigate('/pricing')}
                       className="bg-indigo-600 text-white px-8 py-4 rounded font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
                     >
-                      升级到 Enterprise 旗舰版 <ArrowUpRight size={18} />
+                      升级到 Devnors 1.0 Ultra 旗舰版 <ArrowUpRight size={18} />
                     </button>
                   </div>
                 </div>
@@ -999,7 +1265,7 @@ const SettingsManagementView = () => {
       case 'Audit':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">系统操作审计日志</h3>
+            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">系统安全日志</h3>
             <div className="bg-white rounded p-10 border border-slate-100 shadow-sm space-y-6">
                <div className="flex items-center gap-6 p-6 bg-slate-50 rounded border border-slate-100">
                   <div className="w-14 h-14 bg-white rounded flex items-center justify-center shadow-sm text-slate-400"><Laptop size={24} /></div>
@@ -1029,7 +1295,7 @@ const SettingsManagementView = () => {
                   ))}
                </div>
                <button className="w-full mt-4 py-3 bg-indigo-600 text-white font-black text-sm rounded active:scale-95 transition-all">
-                  下载完整审计历史 (.CSV)
+                  下载完整安全日志 (.CSV)
                </button>
             </div>
           </div>
@@ -1077,7 +1343,7 @@ const SettingsManagementView = () => {
                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                  <span className="text-sm font-black uppercase tracking-tighter text-slate-900">MAS Active</span>
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed font-medium italic">“多智能体系统运行良好，所有设置映射已同步至边缘节点。”</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed font-medium italic ">“多智能体系统运行良好，所有设置映射已同步至边缘节点。”</p>
            </div>
         </aside>
 
@@ -1106,17 +1372,17 @@ const TokenManagementView = () => {
 
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors  ">
         <ChevronLeft size={20} /> 返回
       </button>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 mb-2 flex items-center gap-4">
+          <h1 className="text-4xl font-black text-slate-900 mb-2 flex items-center gap-4 ">
              <div className="p-3 bg-amber-500 text-white rounded shadow-xl"><CircleDollarSign size={28}/></div>
              资金账户
           </h1>
-          <p className="text-slate-500 font-medium tracking-tight">管理多智能体协作所需的 Token 燃料与账户资金</p>
+          <p className="text-slate-500 font-medium tracking-tight ">管理多智能体协作所需的 Token 燃料与账户资金</p>
         </div>
         <div className="flex gap-4">
            <button className="bg-indigo-600 text-white px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl hover:bg-indigo-700 transition-all">
@@ -1129,7 +1395,7 @@ const TokenManagementView = () => {
         <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg p-10 text-white shadow-2xl relative overflow-hidden group">
            <div className="absolute top-0 right-0 p-10 opacity-20 group-hover:scale-110 transition-transform"><Gem size={140} /></div>
            <div className="relative z-10">
-             <div className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+             <div className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ">
                <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse"></div> 可用 Token 余额
              </div>
              <div className="text-6xl font-black mb-6 tracking-tighter">{(balance/1000000).toFixed(2)}M</div>
@@ -1139,11 +1405,11 @@ const TokenManagementView = () => {
            </div>
         </div>
         
-        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between group">
+        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between group  ">
            <div>
-             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4">今日智能体负载消耗</div>
-             <div className="text-4xl font-black text-slate-900 flex items-baseline gap-2">
-               42,500 <span className="text-sm font-bold text-slate-300 uppercase tracking-tighter">Tokens</span>
+             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 ">今日智能体负载消耗</div>
+             <div className="text-4xl font-black text-slate-900 flex items-baseline gap-2 ">
+               42,500 <span className="text-sm font-bold text-slate-300 uppercase tracking-tighter ">Tokens</span>
              </div>
            </div>
            <div className="mt-8 flex items-center gap-2 text-rose-500 font-black text-sm bg-rose-50 px-4 py-1.5 rounded-full w-fit">
@@ -1151,13 +1417,13 @@ const TokenManagementView = () => {
            </div>
         </div>
 
-        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between">
+        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between  ">
            <div>
-             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4">账户累计充值</div>
-             <div className="text-4xl font-black text-slate-900 tracking-tight">¥ 12,450.00</div>
+             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 ">账户累计充值</div>
+             <div className="text-4xl font-black text-slate-900 tracking-tight ">¥ 12,450.00</div>
            </div>
            <div className="mt-8">
-              <button className="text-indigo-600 font-black text-sm flex items-center gap-1 hover:gap-2 transition-all">
+              <button className="text-indigo-600 font-black text-sm flex items-center gap-1 hover:gap-2 transition-all ">
                 管理支付方式 <ArrowRight size={14} />
               </button>
            </div>
@@ -1167,14 +1433,14 @@ const TokenManagementView = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 space-y-10">
            {/* 消耗趋势图 */}
-           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow">
+           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow  ">
               <div className="flex justify-between items-center mb-10">
-                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                   <Activity className="text-indigo-600" /> Token 资源消耗分布 (近 7 日)
+                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-3 ">
+                   <Activity className="text-indigo-600 " /> Token 资源消耗分布 (近 7 日)
                  </h3>
                  <div className="flex gap-2">
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase">峰值: 92k</span>
-                    <span className="px-3 py-1 bg-slate-50 text-slate-400 text-xs font-black rounded-lg uppercase">均值: 45k</span>
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase  ">峰值: 92k</span>
+                    <span className="px-3 py-1 bg-slate-50 text-slate-400 text-xs font-black rounded-lg uppercase  ">均值: 45k</span>
                  </div>
               </div>
               <div className="h-[320px] w-full">
@@ -1201,35 +1467,35 @@ const TokenManagementView = () => {
            </div>
 
            {/* 消耗详情 */}
-           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow overflow-hidden">
-              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                <History className="text-indigo-600" /> 数字能源消耗流水 (Transaction Logs)
+           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow overflow-hidden  ">
+              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3 ">
+                <History className="text-indigo-600 " /> 数字能源消耗流水 (Transaction Logs)
               </h3>
               <div className="overflow-x-auto">
                  <table className="w-full text-left">
                     <thead>
-                       <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400">
+                       <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400  ">
                           <th className="pb-4 pl-2">发生时间</th>
                           <th className="pb-4">操作类型</th>
                           <th className="pb-4 text-center">Token 消耗</th>
                           <th className="pb-4 text-right pr-2">费用参考</th>
                        </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-slate-50 ">
                        {MOCK_TOKEN_HISTORY.map((h, i) => (
-                         <tr key={i} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="py-5 pl-2 text-sm font-bold text-slate-500">{h.date}</td>
+                         <tr key={i} className="group hover:bg-slate-50/50 transition-colors /50">
+                            <td className="py-5 pl-2 text-sm font-bold text-slate-500 ">{h.date}</td>
                             <td className="py-5">
-                               <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase tracking-tight">{h.type}</span>
+                               <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase tracking-tight  ">{h.type}</span>
                             </td>
-                            <td className="py-5 text-center text-sm font-black text-slate-900">{h.tokens.toLocaleString()}</td>
-                            <td className="py-5 text-right text-sm font-black text-slate-900 pr-2">{h.cost}</td>
+                            <td className="py-5 text-center text-sm font-black text-slate-900 ">{h.tokens.toLocaleString()}</td>
+                            <td className="py-5 text-right text-sm font-black text-slate-900  pr-2">{h.cost}</td>
                          </tr>
                        ))}
                     </tbody>
                  </table>
               </div>
-              <button className="w-full mt-6 py-4 text-xs font-black text-slate-400 border border-dashed border-slate-200 rounded hover:bg-slate-50 transition-all uppercase tracking-widest">
+              <button className="w-full mt-6 py-4 text-xs font-black text-slate-400 border border-dashed border-slate-200 rounded hover:bg-slate-50 transition-all uppercase tracking-widest  ">
                 加载更多历史记录
               </button>
            </div>
@@ -1268,12 +1534,12 @@ const TokenManagementView = () => {
            </div>
 
            {/* 智能分析 */}
-           <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow">
+           <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow  ">
               <div className="flex items-center gap-3 mb-6">
-                 <div className="w-10 h-10 bg-indigo-50 rounded flex items-center justify-center"><Bot size={20} className="text-indigo-600" /></div>
-                 <h3 className="text-lg font-black text-slate-900 leading-tight">AI 负载预估</h3>
+                 <div className="w-10 h-10 bg-indigo-50 rounded flex items-center justify-center "><Bot size={20} className="text-indigo-600 " /></div>
+                 <h3 className="text-lg font-black text-slate-900 leading-tight ">AI 负载预估</h3>
               </div>
-              <div className="p-5 bg-slate-50 rounded-lg border border-slate-100 italic text-[11px] leading-relaxed text-slate-600">
+              <div className="p-5 bg-slate-50 rounded-lg border border-slate-100 italic text-[11px] leading-relaxed text-slate-600   ">
                 “系统分析显示您的招聘频率正在上升。建议在下一次人才搜索高峰前，升级为‘精英猎聘’套餐，可额外获得 15% 的智能体优先响应权重。”
               </div>
            </div>
@@ -1301,39 +1567,39 @@ const WorkbenchView = () => {
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 mb-2">智能工作台</h1>
-          <p className="text-slate-500 font-medium">由 Devnors MAS 多智能体系统驱动的全局招聘概览</p>
+          <h1 className="text-4xl font-black text-slate-900 mb-2 ">智能工作台</h1>
+          <p className="text-slate-500 font-medium ">由 Devnors MAS 多智能体系统驱动的全局招聘概览</p>
         </div>
         <div className="flex gap-3">
           <button 
             onClick={() => navigate('/invite')}
-            className="bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            className="bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all active:scale-95    "
           >
             <Users2 size={20} className="text-emerald-500" /> 邀请
           </button>
           <button 
             onClick={() => navigate('/tokens')}
-            className="bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all active:scale-95"
+            className="bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-sm hover:bg-slate-50 transition-all active:scale-95    "
           >
             <CircleDollarSign size={20} className="text-amber-500" /> 资金账户
           </button>
           <button 
             onClick={() => navigate(`/workbench/todo/${MOCK_TODOS[0].id}`)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-100 transition-all active:scale-95"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-100 transition-all active:scale-95 "
           >
             <Bot size={20} /> AI助手
           </button>
         </div>
       </div>
 
-      <div className="mb-10 bg-white p-8 rounded-lg border border-slate-100 card-shadow">
+      <div className="mb-10 bg-white p-8 rounded-lg border border-slate-100 card-shadow  ">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+          <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3 ">
             <ListTodo className="text-indigo-600" /> 任务中心
           </h2>
           <button 
             onClick={() => navigate('/workbench/todos')}
-            className="flex items-center gap-2 text-sm font-black text-indigo-600 hover:text-indigo-700 transition-colors"
+            className="flex items-center gap-2 text-sm font-black text-indigo-600 hover:text-indigo-700 transition-colors  "
           >
             查看全部 <ArrowRight size={16} />
           </button>
@@ -1343,16 +1609,16 @@ const WorkbenchView = () => {
             <div 
               key={todo.id} 
               onClick={() => navigate(`/workbench/todo/${todo.id}`)}
-              className="group cursor-pointer p-6 bg-slate-50 rounded border border-slate-100 flex items-center gap-4 hover:bg-white hover:border-indigo-200 transition-all"
+              className="group cursor-pointer p-6 bg-slate-50 rounded border border-slate-100 flex items-center gap-4 hover:bg-white hover:border-indigo-200 transition-all   "
             >
               <div className="w-12 h-12 bg-white rounded flex items-center justify-center text-indigo-600 border border-slate-100 group-hover:bg-indigo-600 group-hover:text-white transition-all">
                 <todo.icon size={20} />
               </div>
               <div className="flex-1">
-                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">
+                <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1 ">
                   {todo.priority === 'High' ? '核心任务' : todo.priority === 'Medium' ? '常规任务' : '建议任务'}
                 </div>
-                <div className="text-sm font-bold text-slate-700 group-hover:text-indigo-600">{todo.task}</div>
+                <div className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 ">{todo.task}</div>
               </div>
               <ArrowRight size={16} className="text-slate-300 group-hover:text-indigo-600" />
             </div>
@@ -1362,9 +1628,9 @@ const WorkbenchView = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-12 space-y-8">
-          <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow overflow-hidden">
+          <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow overflow-hidden  ">
             <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3 ">
                 <Activity className="text-indigo-600" size={24} /> AI对接队列
               </h2>
               <div className="flex gap-2">
@@ -1375,7 +1641,7 @@ const WorkbenchView = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[1000px]">
                 <thead>
-                  <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400">
+                  <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400 ">
                     <th className="pb-4 pl-2">候选人与目标岗位</th>
                     <th className="pb-4 text-center">匹配分</th>
                     <th className="pb-4">薪资范围</th>
@@ -1384,22 +1650,22 @@ const WorkbenchView = () => {
                     <th className="pb-4 text-right pr-2">状态</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-50 ">
                   {matchingData.map(item => (
                     <tr 
                       key={item.id} 
                       onClick={() => navigate(`/workbench/flow/${item.id}`)}
-                      className="group hover:bg-slate-50/50 transition-colors cursor-pointer"
+                      className="group hover:bg-slate-50/50 transition-colors cursor-pointer /50"
                     >
                       <td className="py-5 pl-2">
                         <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg ring-4 ring-indigo-50">
+                           <div className="w-10 h-10 rounded bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg ring-4 ring-indigo-50 ">
                              {item.candidate.charAt(0)}
                            </div>
                            <div>
-                             <div className="font-black text-slate-900 text-sm">{item.candidate}</div>
+                             <div className="font-black text-slate-900 text-sm ">{item.candidate}</div>
                              <div className="text-xs font-bold text-indigo-600 mt-0.5">{item.company}</div>
-                             <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                             <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1 ">
                                <Briefcase size={10} /> {item.job}
                              </div>
                            </div>
@@ -1407,14 +1673,14 @@ const WorkbenchView = () => {
                       </td>
                       <td className="py-5">
                          <div className="flex flex-col items-center gap-1">
-                           <div className={`px-3 py-1 rounded-full text-[11px] font-black shadow-sm ${item.matchScore >= 90 ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                           <div className={`px-3 py-1 rounded-full text-[11px] font-black shadow-sm ${item.matchScore >= 90 ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600  '}`}>
                              {item.matchScore}%
                            </div>
                            <div className="text-[8px] font-bold text-slate-400 uppercase">Confidence</div>
                          </div>
                       </td>
                       <td className="py-5">
-                        <div className="text-sm font-bold text-slate-700">{item.salary}</div>
+                        <div className="text-sm font-bold text-slate-700 ">{item.salary}</div>
                       </td>
                       <td className="py-5">
                          <div className="flex items-center gap-2">
@@ -1424,10 +1690,10 @@ const WorkbenchView = () => {
                                   className={`w-2 h-2 rounded-full transition-all duration-500 ${nIdx < item.currentStep ? 'bg-indigo-600' : 'bg-slate-200'}`}
                                   title={node}
                                 ></div>
-                                {nIdx < 3 && <div className={`w-4 h-0.5 ${nIdx < item.currentStep - 1 ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>}
+                                {nIdx < 3 && <div className={`w-4 h-0.5 ${nIdx < item.currentStep - 1 ? 'bg-indigo-600' : 'bg-slate-100 '}`}></div>}
                               </div>
                             ))}
-                            <span className="ml-2 text-xs font-bold text-slate-500">{item.nodes[item.currentStep - 1]}</span>
+                            <span className="ml-2 text-xs font-bold text-slate-500 ">{item.nodes[item.currentStep - 1]}</span>
                          </div>
                       </td>
                       <td className="py-5">
@@ -1644,7 +1910,10 @@ const TodoDetailView = () => {
   const [messages, setMessages] = useState<{ role: 'ai' | 'user', text: string }[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
   const scrollRef = useRef<HTMLDivElement>(null);
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   useEffect(() => {
     if (todo) {
@@ -1682,22 +1951,22 @@ const TodoDetailView = () => {
   if (!todo) return (
     <div className="pt-40 text-center">
        <AlertCircle className="mx-auto text-slate-300 mb-4" size={64} />
-       <p className="text-slate-500 font-black">待办任务不存在或已被移除</p>
+       <p className="text-slate-500 font-black ">待办任务不存在或已被移除</p>
        <button onClick={() => navigate('/workbench')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded font-black">返回工作台</button>
     </div>
   );
 
   return (
     <div className="pt-32 pb-20 px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <button onClick={() => navigate('/ai-assistant')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors">
+      <button onClick={() => navigate('/ai-assistant')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors  ">
         <ChevronLeft size={20} /> 返回AI助手
       </button>
 
       <div className="grid grid-cols-1 xl:grid-cols-10 gap-8">
         <div className="xl:col-span-3 space-y-6">
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
+          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl  ">
              <div className="flex items-center justify-between mb-5">
-               <div className="w-14 h-14 bg-indigo-50 rounded flex items-center justify-center text-indigo-600 border border-indigo-100">
+               <div className="w-14 h-14 bg-indigo-50 rounded flex items-center justify-center text-indigo-600 border border-indigo-100  ">
                   <todo.icon size={28} />
                </div>
                <div className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest ${
@@ -1712,13 +1981,13 @@ const TodoDetailView = () => {
                }`}>
                  {todo.priority} Priority
                </span>
-               <span className="text-xs font-medium text-slate-400">
+               <span className="text-xs font-medium text-slate-400 ">
                  {todo.type === 'candidate' ? '人才端' : todo.type === 'employer' ? '企业端' : '系统'}
                </span>
              </div>
-             <h1 className="text-xl font-black text-slate-900 mb-3 leading-tight">{todo.task}</h1>
-             <p className="text-sm text-slate-500 leading-relaxed font-medium mb-4">{todo.description}</p>
-             <div className="flex items-center gap-4 text-xs text-slate-400 pt-4 border-t border-slate-50">
+             <h1 className="text-xl font-black text-slate-900 mb-3 leading-tight ">{todo.task}</h1>
+             <p className="text-sm text-slate-500 leading-relaxed font-medium mb-4 ">{todo.description}</p>
+             <div className="flex items-center gap-4 text-xs text-slate-400 pt-4 border-t border-slate-50  ">
                <div className="flex items-center gap-1">
                  <Calendar size={12} />
                  <span>{todo.dueDate ? `截止: ${todo.dueDate}` : `创建: ${todo.createdAt}`}</span>
@@ -1726,17 +1995,17 @@ const TodoDetailView = () => {
              </div>
           </div>
           
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl  ">
+            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2 ">
               <CheckSquare size={16} className="text-indigo-600" /> 任务进度
             </h3>
             <div className="space-y-4">
               <div>
-                <div className="flex justify-between text-xs text-slate-500 mb-2">
+                <div className="flex justify-between text-xs text-slate-500 mb-2 ">
                   <span>完成度</span>
                   <span className="font-black text-indigo-600">{todo.progress || 0}%</span>
                 </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden ">
                   <div className="h-full bg-indigo-600 rounded-full transition-all duration-500" style={{ width: `${todo.progress || 0}%` }}></div>
                 </div>
               </div>
@@ -1749,11 +2018,11 @@ const TodoDetailView = () => {
                 ]).map((s, idx) => (
                   <div key={idx} className="flex items-center gap-3">
                     <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-black ${
-                      s.done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'
+                      s.done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400  '
                     }`}>
                       {s.done ? <CheckCircle2 size={12} /> : idx + 1}
                     </div>
-                    <span className={`text-xs font-medium ${s.done ? 'text-slate-900' : 'text-slate-400'}`}>{s.name}</span>
+                    <span className={`text-xs font-medium ${s.done ? 'text-slate-900 ' : 'text-slate-400 '}`}>{s.name}</span>
                   </div>
                 ))}
               </div>
@@ -1762,28 +2031,36 @@ const TodoDetailView = () => {
         </div>
 
         <div className="xl:col-span-7">
-           <div className="bg-slate-900 rounded-lg overflow-hidden border border-slate-800 flex flex-col h-[700px] shadow-2xl relative">
-              <div className="bg-slate-800/80 px-6 py-4 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+           <div className="bg-white rounded-lg overflow-hidden border border-slate-200 flex flex-col h-[700px] shadow-xl relative  ">
+              <div className="bg-white/90 px-6 py-4 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center /90 ">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                  <span className="text-white font-black text-sm tracking-wide uppercase">AI 任务执行助手</span>
+                  <span className="text-slate-900 font-black text-sm tracking-wide uppercase ">AI助手</span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
-                  <button onClick={() => setMessages([messages[0]])} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all" title="重置对话">
+                  <select 
+                    value={selectedModel} 
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+                  >
+                    {modelOptions.map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => setMessages([messages[0]])} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all   " title="重置对话">
                     <RotateCcw size={16} />
                   </button>
                 </div>
               </div>
               
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-slate-900">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-slate-50 ">
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`flex gap-4 max-w-[85%] ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 shadow-lg ${m.role === 'user' ? 'bg-indigo-600' : 'bg-indigo-800 border border-indigo-700'}`}>
-                        {m.role === 'user' ? <UserIcon size={18} className="text-white" /> : <Bot size={18} className="text-indigo-400" />}
+                      <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 shadow-lg ${m.role === 'user' ? 'bg-indigo-600' : 'bg-indigo-50 border border-indigo-100  '}`}>
+                        {m.role === 'user' ? <UserIcon size={18} className="text-white" /> : <Bot size={18} className="text-indigo-600 " />}
                       </div>
-                      <div className={`px-5 py-4 rounded-md text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600 backdrop-blur-sm'}`}>
+                      <div className={`px-5 py-4 rounded-md text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                         {m.text}
                       </div>
                     </div>
@@ -1791,22 +2068,22 @@ const TodoDetailView = () => {
                 ))}
                 {isTyping && (
                   <div className="flex gap-4 animate-in fade-in">
-                    <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center border border-slate-600">
-                      <Loader2 className="animate-spin text-indigo-400" size={18} />
+                    <div className="w-10 h-10 rounded bg-white flex items-center justify-center border border-slate-200 shadow-sm  ">
+                      <Loader2 className="animate-spin text-indigo-600" size={18} />
                     </div>
-                    <div className="px-5 py-4 bg-slate-700/50 rounded-md rounded-tl-none border border-slate-600">
-                      <span className="text-white font-mono text-xs italic">正在分析任务上下文并执行智能体操作...</span>
+                    <div className="px-5 py-4 bg-white/50 rounded-md rounded-tl-none border border-slate-200 shadow-sm /50  ">
+                      <span className="text-slate-600 font-mono text-xs italic ">正在分析任务上下文并执行智能体操作...</span>
                     </div>
                   </div>
                 )}
               </div>
               
-              <div className="p-5 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
-                <div className="flex gap-3 bg-slate-700 rounded-lg p-3 border border-slate-600 shadow-lg">
+              <div className="p-5 bg-white/90 border-t border-slate-200 backdrop-blur-md /90 ">
+                <div className="flex gap-3 bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-lg  ">
                   <input 
                     type="text" value={input} onChange={(e) => setInput(e.target.value)} 
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    className="flex-1 bg-transparent border-none rounded-lg px-4 py-3 text-sm text-white focus:outline-none placeholder:text-slate-400/60" 
+                    className="flex-1 bg-transparent border-none rounded-lg px-4 py-3 text-sm text-slate-900 focus:outline-none placeholder:text-slate-400 " 
                     placeholder="输入指令，让 AI 助手帮您完成任务..."
                   />
                   <button 
@@ -1821,7 +2098,7 @@ const TodoDetailView = () => {
                      <button 
                        key={sIdx}
                        onClick={() => { setInput(suggest); }}
-                       className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                       className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                      >
                        {suggest}
                      </button>
@@ -2208,64 +2485,63 @@ const PricingView = () => {
 
   const plans = [
     {
-      name: 'Free',
+      name: 'Devnors 1.0',
       price: billingCycle === 'annual' ? '¥0' : '¥0',
       period: '/月',
-      description: '适合个人探索和小型团队',
+      description: '基础版 · 入门体验',
       features: [
-        { name: '简历解析', limit: '20份/月', included: true },
-        { name: 'AI 匹配推荐', limit: '50次/月', included: true },
-        { name: '人才库容量', limit: '100人', included: true },
-        { name: '基础智能体', limit: '2个', included: true },
-        { name: '多语言支持', included: true },
-        { name: 'API 访问', included: false },
-        { name: '团队协作', included: false },
-        { name: '专属部署', included: false },
+        { name: '上下文长度', value: '32K tokens', included: true },
+        { name: '日免费度 Token 额度', value: '1K', included: true },
+        { name: '请求频率限制', value: '10 RPM', included: true },
+        { name: '并发请求数', value: '1', included: true },
+        { name: '基础模型能力', value: '✓', included: true },
+        { name: '高级推理能力', value: '-', included: false },
+        { name: '专属技术支持', value: '-', included: false },
+        { name: '高阶对接算法', value: '-', included: false },
       ],
-      cta: '当前方案',
+      cta: '免费使用',
       current: true,
       color: 'border-slate-200',
       btnColor: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
     },
     {
-      name: 'Professional',
-      price: billingCycle === 'annual' ? '¥999' : '¥1,299',
+      name: 'Devnors 1.0 Pro',
+      price: billingCycle === 'annual' ? '¥350' : '¥450',
       period: billingCycle === 'annual' ? '/月' : '/月',
-      description: '适合成长型招聘团队',
+      description: '专业版 · 性能平衡',
       popular: true,
       features: [
-        { name: '简历解析', limit: '500份/月', included: true },
-        { name: 'AI 匹配推荐', limit: '无限', included: true },
-        { name: '人才库容量', limit: '5,000人', included: true },
-        { name: '高级智能体', limit: '10个', included: true },
-        { name: '多语言支持', included: true },
-        { name: 'API 访问', limit: '10,000次/月', included: true },
-        { name: '团队协作', limit: '5人', included: true },
-        { name: '专属部署', included: false },
+        { name: '上下文长度', value: '128K tokens', included: true },
+        { name: '日免费度 Token 额度', value: '200K', included: true },
+        { name: '请求频率限制', value: '100 RPM', included: true },
+        { name: '并发请求数', value: '10', included: true },
+        { name: '基础模型能力', value: '✓', included: true },
+        { name: '高级推理能力', value: '✓', included: true },
+        { name: '专属技术支持', value: '工单', included: true },
+        { name: '高阶对接算法', value: '-', included: false },
       ],
-      cta: '升级到旗舰版',
+      cta: '立即升级',
       current: false,
       color: 'border-indigo-200 shadow-xl',
       btnColor: 'bg-indigo-600 text-white hover:bg-indigo-700',
     },
     {
-      name: 'Enterprise',
-      price: billingCycle === 'annual' ? '¥4,999' : '¥6,499',
+      name: 'Devnors 1.0 Ultra',
+      price: billingCycle === 'annual' ? '¥2,000' : '¥2,500',
       period: billingCycle === 'annual' ? '/月' : '/月',
-      description: '适合大型企业和集团',
+      description: '旗舰版 · 无限可能',
       features: [
-        { name: '简历解析', limit: '无限', included: true },
-        { name: 'AI 匹配推荐', limit: '无限', included: true },
-        { name: '人才库容量', limit: '无限', included: true },
-        { name: '全系列智能体', limit: '无限', included: true },
-        { name: '多语言支持', included: true },
-        { name: 'API 访问', limit: '无限', included: true },
-        { name: '团队协作', limit: '无限制', included: true },
-        { name: '专属部署', included: true },
-        { name: '24/7 专属支持', included: true },
-        { name: '私有化定制', included: true },
+        { name: '上下文长度', value: '1M+ tokens', included: true },
+        { name: '日免费度 Token 额度', value: '5M', included: true },
+        { name: '请求频率限制', value: '800 RPM', included: true },
+        { name: '并发请求数', value: '100', included: true },
+        { name: '基础模型能力', value: '✓', included: true },
+        { name: '高级推理能力', value: '✓', included: true },
+        { name: '专属技术支持', value: '工单', included: true },
+        { name: '高阶对接算法', value: '✓', included: true },
+        { name: '定制化微调', value: '✓', included: true },
       ],
-      cta: '联系我们',
+      cta: '立即升级',
       current: false,
       color: 'border-rose-200 shadow-xl',
       btnColor: 'bg-rose-600 text-white hover:bg-rose-700',
@@ -2280,11 +2556,11 @@ const PricingView = () => {
 
       <div className="text-center mb-12">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-indigo-100">
-          <Sparkle size={16} /> 定价方案
+          <Sparkle size={16} /> 模型定价
         </div>
-        <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">选择适合您的方案</h1>
+        <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">选择您的算力方案</h1>
         <p className="text-lg text-slate-600 font-medium max-w-2xl mx-auto">
-          无论您是个人用户、成长型团队还是大型企业，我们都有适合的方案助您提升招聘效率
+          从入门到企业级，满足不同规模的 AI 推理需求
         </p>
       </div>
 
@@ -2321,7 +2597,7 @@ const PricingView = () => {
           >
             {plan.popular && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
-                最受欢迎
+                最具性价比
               </div>
             )}
             
@@ -2348,8 +2624,10 @@ const PricingView = () => {
                     <span className={`text-sm font-medium ${feature.included ? 'text-slate-700' : 'text-slate-400'}`}>
                       {feature.name}
                     </span>
-                    {feature.limit && (
-                      <span className="text-xs text-slate-400 ml-1">({feature.limit})</span>
+                    {feature.value && (
+                      <span className={`text-xs ml-1 ${feature.included ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>
+                        {feature.value}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -2357,7 +2635,7 @@ const PricingView = () => {
             </div>
 
             <button
-              onClick={() => plan.name === 'Enterprise' ? window.open('mailto:contact@devnors.com', '_blank') : navigate('/settings')}
+              onClick={() => navigate('/settings')}
               className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${plan.btnColor}`}
             >
               {plan.cta}
@@ -2370,10 +2648,10 @@ const PricingView = () => {
         <h3 className="text-xl font-black text-slate-900 mb-6 text-center">常见问题</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[
-            { q: '可以随时更换方案吗？', a: '当然可以！您可以随时升级或降级您的方案，费用会按比例调整。' },
-            { q: '年付有什么优惠？', a: '选择年付可以享受 23% 的折扣，相当于免费获得近 3 个月的服务。' },
-            { q: '支持定制化部署吗？', a: 'Enterprise 方案支持私有化部署和定制化需求，请联系我们的销售团队。' },
-            { q: '是否有免费试用？', a: 'Free 方案永久免费使用，Professional 和 Enterprise 方案支持 14 天全额退款保证。' },
+            { q: '如何计算 Token 用量？', a: 'Token 按照输入和输出的总字符数计算，约 4 个字符等于 1 个 Token。中文消耗更多 Token。' },
+            { q: '超出限额怎么办？', a: '超出限额后可以单独购买 token 使用' },
+            { q: '支持私有化部署吗？', a: '不支持私有部署，Ultra 版本支持模型定制化微调' },
+            { q: '是否有免费试用？', a: 'Devnors 1.0 方案每月提供 100K 免费 Token。' },
           ].map((faq, i) => (
             <div key={i} className="bg-white rounded-xl p-6 border border-slate-100">
               <h4 className="font-bold text-slate-900 mb-2">{faq.q}</h4>
@@ -4429,6 +4707,9 @@ const AIAssistantView = () => {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   const handleSend = () => {
     if (!inputMessage.trim()) return;
@@ -4479,8 +4760,8 @@ const AIAssistantView = () => {
               >
                 <div className={`w-12 h-12 rounded flex items-center justify-center flex-shrink-0 ${
                   task.status === 'running' ? 'bg-amber-100 text-amber-600' : 
-                  task.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-slate-400 border border-slate-200'
-                } group-hover:bg-indigo-600 group-hover:text-white transition-all`}>
+                  task.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-white text-slate-400 border border-slate-200 group-hover:bg-indigo-600 group-hover:text-white transition-all'
+                }`}>
                   {task.icon === 'UserIcon' ? (
                     <UserIcon size={20} />
                   ) : task.icon === 'Building2' ? (
@@ -4526,28 +4807,36 @@ const AIAssistantView = () => {
           </div>
         </div>
 
-        <div className="flex-1 bg-slate-900 rounded-lg overflow-hidden border border-slate-800 shadow-2xl relative">
-          <div className="bg-slate-800/80 px-6 py-4 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+        <div className="flex-1 bg-white rounded-lg overflow-hidden border border-slate-200 shadow-xl relative">
+          <div className="bg-white/90 px-6 py-4 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-              <span className="text-white font-black text-sm tracking-wide uppercase">AI 智能助手</span>
+              <span className="text-slate-900 font-black text-sm tracking-wide uppercase">AI助手</span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
-              <button onClick={() => setMessages([messages[0]])} className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all" title="重置对话">
+              <select 
+                value={selectedModel} 
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+              >
+                {modelOptions.map(model => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
+              <button onClick={() => setMessages([messages[0]])} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all" title="重置对话">
                 <RotateCcw size={16} />
               </button>
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-slate-900 h-[calc(100%-240px)]">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide bg-slate-50 h-[calc(100%-240px)]">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-indigo-800 border border-indigo-700'}`}>
-                  {msg.role === 'user' ? <UserIcon size={18} className="text-white" /> : <Bot size={18} className="text-indigo-400" />}
+                <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 shadow-lg ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-indigo-50 border border-indigo-100'}`}>
+                  {msg.role === 'user' ? <UserIcon size={18} className="text-white" /> : <Bot size={18} className="text-indigo-600" />}
                 </div>
-                <div className={`px-5 py-4 rounded-md text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600 backdrop-blur-sm'}`}>
+                <div className={`px-5 py-4 rounded-md text-sm leading-relaxed shadow-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                   <p className="whitespace-pre-line">{msg.content}</p>
                 </div>
               </div>
@@ -4555,25 +4844,25 @@ const AIAssistantView = () => {
           ))}
           {isTyping && (
             <div className="flex gap-4 animate-in fade-in">
-              <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center border border-slate-600">
-                <Loader2 className="animate-spin text-indigo-400" size={18} />
+              <div className="w-10 h-10 rounded bg-white flex items-center justify-center border border-slate-200 shadow-sm">
+                <Loader2 className="animate-spin text-indigo-600" size={18} />
               </div>
-              <div className="px-5 py-4 bg-slate-700/50 rounded-md rounded-tl-none border border-slate-600">
-                <span className="text-white font-mono text-xs italic">正在分析任务上下文并执行智能体操作...</span>
+              <div className="px-5 py-4 bg-white/50 rounded-md rounded-tl-none border border-slate-200 shadow-sm">
+                <span className="text-slate-600 font-mono text-xs italic">正在分析任务上下文并执行智能体操作...</span>
               </div>
             </div>
           )}
         </div>
         
-        <div className="p-5 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
-          <div className="flex gap-3 bg-slate-700 rounded-lg p-3 border border-slate-600 shadow-lg">
+        <div className="p-5 bg-white/90 border-t border-slate-200 backdrop-blur-md">
+          <div className="flex gap-3 bg-slate-50 rounded-lg p-3 border border-slate-200 shadow-lg">
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSend()}
               placeholder="输入指令，让 AI 助手帮您完成任务..."
-              className="flex-1 bg-transparent border-none rounded-lg px-4 py-3 text-sm text-white focus:outline-none placeholder:text-slate-400/60"
+              className="flex-1 bg-transparent border-none rounded-lg px-4 py-3 text-sm text-slate-900 focus:outline-none placeholder:text-slate-400"
             />
             <button
               onClick={handleSend}
@@ -4587,7 +4876,7 @@ const AIAssistantView = () => {
               <button 
                 key={sIdx}
                 onClick={() => { setInputMessage(suggest); }}
-                className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
               >
                 {suggest}
               </button>
@@ -4611,6 +4900,9 @@ const ApplyDetailView = () => {
     {role: 'assistant', content: '您好！我是您的求职智能助手。我可以帮您优化简历、分析职位匹配度，以及准备面试。请问有什么可以帮您的？'}
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   const handleAnalyze = async () => {
     if (!resumeText.trim()) return;
@@ -4713,31 +5005,39 @@ const ApplyDetailView = () => {
         </div>
 
         <div className="xl:col-span-7">
-          <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden flex flex-col h-[600px] shadow-2xl sticky top-8">
-            <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col h-[600px] shadow-xl sticky top-8">
+            <div className="bg-white/90 px-4 py-3 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-white font-black text-sm tracking-wide uppercase">AI 求职助手</span>
+                <span className="text-slate-900 font-black text-sm tracking-wide uppercase">AI 求职助手</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
+                <select 
+                  value={selectedModel} 
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+                >
+                  {modelOptions.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-slate-50">
               {aiMessages.map((msg, i) => (
                 <div key={i} className={`flex justify-${msg.role === 'user' ? 'end' : 'start'}`}>
                   <div className={`flex gap-3 max-w-[85%] flex-row ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-800 border border-emerald-700' : 'bg-indigo-800 border border-indigo-700'}`}>
-                      {msg.role === 'user' ? <UserIcon size={14} className="text-emerald-400" /> : <Bot size={14} className="text-indigo-400" />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-600' : 'bg-indigo-50 border border-indigo-100'}`}>
+                      {msg.role === 'user' ? <UserIcon size={14} className="text-white" /> : <Bot size={14} className="text-indigo-600" />}
                     </div>
-                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600/90 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600'}`}>
+                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                       {msg.content}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
+            <div className="p-4 bg-white/90 border-t border-slate-200 backdrop-blur-md">
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -4745,7 +5045,7 @@ const ApplyDetailView = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="输入您的问题..." 
-                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400/60"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
                 />
                 <button 
                   onClick={handleSendMessage}
@@ -4757,19 +5057,19 @@ const ApplyDetailView = () => {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button 
                   onClick={() => setInputMessage('帮我优化简历中的项目描述')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   优化简历
                 </button>
                 <button 
                   onClick={() => setInputMessage('帮我准备面试常见问题')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   面试辅导
                 </button>
                 <button 
                   onClick={() => setInputMessage('分析我和目标职位的匹配度')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   匹配分析
                 </button>
@@ -4793,6 +5093,9 @@ const EmployerPostView = () => {
     {role: 'assistant', content: '您好！我是您的招聘智能助手。我可以帮您生成职位描述、优化招聘流程，以及筛选合适的候选人。请问有什么可以帮您的？'}
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   const handleGenerate = async () => {
     if (!jobDescription.trim()) return;
@@ -4917,31 +5220,39 @@ const EmployerPostView = () => {
         </div>
 
         <div className="xl:col-span-7">
-          <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden flex flex-col h-[600px] shadow-2xl sticky top-8">
-            <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col h-[600px] shadow-xl sticky top-8">
+            <div className="bg-white/90 px-4 py-3 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-white font-black text-sm tracking-wide uppercase">AI 招聘助手</span>
+                <span className="text-slate-900 font-black text-sm tracking-wide uppercase">AI 招聘助手</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
+                <select 
+                  value={selectedModel} 
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+                >
+                  {modelOptions.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-slate-50">
               {aiMessages.map((msg, i) => (
                 <div key={i} className={`flex justify-${msg.role === 'user' ? 'end' : 'start'}`}>
                   <div className={`flex gap-3 max-w-[85%] flex-row ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-800 border border-emerald-700' : 'bg-indigo-800 border border-indigo-700'}`}>
-                      {msg.role === 'user' ? <UserIcon size={14} className="text-emerald-400" /> : <Bot size={14} className="text-indigo-400" />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-600' : 'bg-indigo-50 border border-indigo-100'}`}>
+                      {msg.role === 'user' ? <UserIcon size={14} className="text-white" /> : <Bot size={14} className="text-indigo-600" />}
                     </div>
-                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600/90 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600'}`}>
+                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                       {msg.content}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
+            <div className="p-4 bg-white/90 border-t border-slate-200 backdrop-blur-md">
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -4949,7 +5260,7 @@ const EmployerPostView = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="输入您的问题..." 
-                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400/60"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
                 />
                 <button 
                   onClick={handleSendMessage}
@@ -4961,19 +5272,19 @@ const EmployerPostView = () => {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button 
                   onClick={() => setInputMessage('帮我优化职位描述')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   优化职位
                 </button>
                 <button 
                   onClick={() => setInputMessage('帮我设置筛选条件')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   筛选条件
                 </button>
                 <button 
                   onClick={() => setInputMessage('生成面试题')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   面试题
                 </button>
@@ -4997,6 +5308,9 @@ const InviteFriendView = () => {
     {role: 'assistant', content: '您好！我是您的邀请助手。您已用完 Token？别担心！通过邀请好友注册，每成功邀请一位新用户，您将获得 500 Token 奖励。让我来教您如何轻松获取更多 Token！'}
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -5142,31 +5456,39 @@ const InviteFriendView = () => {
         </div>
 
         <div className="xl:col-span-7">
-          <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden flex flex-col h-[600px] shadow-2xl sticky top-8">
-            <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col h-[600px] shadow-xl sticky top-8">
+            <div className="bg-white/90 px-4 py-3 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-white font-black text-sm tracking-wide uppercase">邀请助手</span>
+                <span className="text-slate-900 font-black text-sm tracking-wide uppercase">邀请助手</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
+                <select 
+                  value={selectedModel} 
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+                >
+                  {modelOptions.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-slate-50">
               {aiMessages.map((msg, i) => (
                 <div key={i} className={`flex justify-${msg.role === 'user' ? 'end' : 'start'}`}>
                   <div className={`flex gap-3 max-w-[85%] flex-row ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-800 border border-emerald-700' : 'bg-indigo-800 border border-indigo-700'}`}>
-                      {msg.role === 'user' ? <UserIcon size={14} className="text-emerald-400" /> : <Bot size={14} className="text-indigo-400" />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-600' : 'bg-indigo-50 border border-indigo-100'}`}>
+                      {msg.role === 'user' ? <UserIcon size={14} className="text-white" /> : <Bot size={14} className="text-indigo-600" />}
                     </div>
-                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600/90 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600'}`}>
+                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                       {msg.content}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
+            <div className="p-4 bg-white/90 border-t border-slate-200 backdrop-blur-md">
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -5174,7 +5496,7 @@ const InviteFriendView = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="输入您的问题..." 
-                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400/60"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
                 />
                 <button 
                   onClick={handleSendMessage}
@@ -5186,19 +5508,19 @@ const InviteFriendView = () => {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button 
                   onClick={() => setInputMessage('如何获得更多 Token？')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   如何获得 Token
                 </button>
                 <button 
                   onClick={() => setInputMessage('我的邀请记录')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   邀请记录
                 </button>
                 <button 
                   onClick={() => setInputMessage('奖励什么时候到账？')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   到账时间
                 </button>
@@ -5222,6 +5544,9 @@ const AIDeliveryView = () => {
     {role: 'assistant', content: '您好！我是 AI 投递助手。我将帮助您完成简历投递全流程，包括简历优化、求职信生成、投递策略规划等。'}
   ]);
   const [inputMessage, setInputMessage] = useState('');
+  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  
+  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
 
   const handleDelivery = async () => {
     setIsDelivering(true);
@@ -5378,31 +5703,39 @@ const AIDeliveryView = () => {
         </div>
 
         <div className="xl:col-span-7">
-          <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden flex flex-col h-[600px] shadow-2xl sticky top-8">
-            <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 backdrop-blur-sm flex justify-between items-center">
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden flex flex-col h-[600px] shadow-xl sticky top-8">
+            <div className="bg-white/90 px-4 py-3 border-b border-slate-200 backdrop-blur-sm flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-400 rounded-full animate-pulse"></div>
-                <span className="text-white font-black text-sm tracking-wide uppercase">AI 投递助手</span>
+                <span className="text-slate-900 font-black text-sm tracking-wide uppercase">AI 投递助手</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">模型: Gemini 3 Pro</span>
+                <select 
+                  value={selectedModel} 
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
+                >
+                  {modelOptions.map(model => (
+                    <option key={model} value={model}>{model}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-slate-50">
               {aiMessages.map((msg, i) => (
                 <div key={i} className={`flex justify-${msg.role === 'user' ? 'end' : 'start'}`}>
                   <div className={`flex gap-3 max-w-[85%] flex-row ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-800 border border-emerald-700' : 'bg-indigo-800 border border-indigo-700'}`}>
-                      {msg.role === 'user' ? <UserIcon size={14} className="text-emerald-400" /> : <Bot size={14} className="text-indigo-400" />}
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'user' ? 'bg-emerald-600' : 'bg-indigo-50 border border-indigo-100'}`}>
+                      {msg.role === 'user' ? <UserIcon size={14} className="text-white" /> : <Bot size={14} className="text-indigo-600" />}
                     </div>
-                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600/90 text-white rounded-tr-none' : 'bg-indigo-700/90 text-white rounded-tl-none border border-indigo-600'}`}>
+                    <div className={`px-4 py-3 rounded-lg text-sm leading-relaxed ${msg.role === 'user' ? 'bg-emerald-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border border-slate-200'}`}>
                       {msg.content}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="p-4 bg-slate-800/60 border-t border-slate-700 backdrop-blur-md">
+            <div className="p-4 bg-white/90 border-t border-slate-200 backdrop-blur-md">
               <div className="flex gap-2">
                 <input 
                   type="text" 
@@ -5410,7 +5743,7 @@ const AIDeliveryView = () => {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder="输入您的问题..." 
-                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400/60"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400"
                 />
                 <button 
                   onClick={handleSendMessage}
@@ -5422,19 +5755,19 @@ const AIDeliveryView = () => {
               <div className="mt-3 flex flex-wrap gap-2">
                 <button 
                   onClick={() => setInputMessage('帮我优化简历')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   优化简历
                 </button>
                 <button 
                   onClick={() => setInputMessage('生成求职信')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   求职信
                 </button>
                 <button 
                   onClick={() => setInputMessage('准备面试问题')}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-xs font-black text-slate-300 border border-slate-600 rounded-lg transition-colors"
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-xs font-black text-slate-600 border border-slate-200 rounded-lg transition-colors"
                 >
                   面试问题
                 </button>
@@ -5760,10 +6093,24 @@ const TalentPoolView = () => {
 };
 
 const App = () => {
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
   return (
     <Router>
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
+      <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+        <Navbar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<LandingPage />} />
@@ -5789,7 +6136,7 @@ const App = () => {
             <Route path="/candidate/delivery" element={<AIDeliveryView />} />
             <Route path="/employer/talent-pool" element={<TalentPoolView />} />
             <Route path="/tokens" element={<TokenManagementView />} />
-            <Route path="/settings" element={<SettingsManagementView />} />
+            <Route path="/settings" element={<SettingsManagementView isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />} />
             <Route path="/about" element={<AboutUsView />} />
             <Route path="/login" element={<LoginView />} />
             <Route path="/ai-assistant" element={<AIAssistantView />} />

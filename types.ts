@@ -85,7 +85,7 @@ export interface AnalysisResult {
 
 // --- 新增设置相关接口 ---
 
-export type AccountTier = 'Free' | 'Professional' | 'Enterprise';
+export type AccountTier = 'Devnors 1.0' | 'Devnors 1.0 Pro' | 'Devnors 1.0 Ultra';
 
 export interface TeamMember {
   id: string;
@@ -98,5 +98,5 @@ export interface TeamMember {
 export interface CustomLLMConfig {
   task: string;
   modelName: string;
-  provider: 'Google' | 'OpenAI' | 'Anthropic' | 'Custom';
+  provider: 'Google' | 'OpenAI' | 'Anthropic' | 'Custom' | 'Devnors';
 }

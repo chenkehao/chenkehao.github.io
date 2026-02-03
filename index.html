@@ -12,13 +12,13 @@
     <style>
       body {
         font-family: 'Inter', 'Noto Sans SC', sans-serif;
-        background-color: #f8fafc; /* Slate 50 */
-        color: #0f172a; /* Slate 900 */
+        background-color: #ffffff;
+        color: #0f172a;
       }
       .glass {
-        background: rgba(255, 255, 255, 0.7);
+        background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.08);
       }
       .gradient-text {
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
@@ -30,6 +30,192 @@
       }
       .card-shadow:hover {
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+      }
+      html.dark body {
+        background-color: #0f172a;
+        color: #f8fafc;
+      }
+      html.dark .glass {
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      html.dark .card-shadow {
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+      }
+      html.dark .card-shadow:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+      }
+      html.dark .bg-slate-50 { background-color: #0f172a !important; }
+      html.dark .bg-white { background-color: #1e293b !important; }
+      html.dark .bg-slate-100 { background-color: #1e293b !important; }
+      html.dark .text-slate-900 { color: #f8fafc !important; }
+      html.dark .text-slate-800 { color: #f1f5f9 !important; }
+      html.dark .text-slate-700 { color: #e2e8f0 !important; }
+      html.dark .text-slate-600 { color: #cbd5e1 !important; }
+      html.dark .text-slate-500 { color: #cbd5e1 !important; }
+      html.dark .text-slate-400 { color: #94a3b8 !important; }
+      html.dark .text-slate-300 { color: #64748b !important; }
+      html.dark .border-slate-200 { border-color: #334155 !important; }
+      html.dark .border-slate-100 { border-color: #1e293b !important; }
+      html.dark .border-slate-300 { border-color: #475569 !important; }
+      html.dark .ring-slate-200 { ring-color: #334155 !important; }
+      html.dark .divide-slate-200 { border-color: #334155 !important; }
+      html.dark .shadow-slate-200 { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important; }
+      html.dark ::placeholder { color: #64748b !important; }
+      html.dark .bg-slate-200 { background-color: #334155 !important; }
+      html.dark .bg-slate-800 { background-color: #0f172a !important; }
+      html.dark .bg-slate-900 { background-color: #020617 !important; }
+      html.dark .bg-indigo-50 { background-color: #1e1b4b !important; }
+      html.dark .bg-indigo-100 { background-color: #312e81 !important; }
+      html.dark .bg-emerald-50 { background-color: #064e3b !important; }
+      html.dark .bg-amber-50 { background-color: #78350f !important; }
+      html.dark .bg-rose-50 { background-color: #881337 !important; }
+      html.dark .bg-purple-50 { background-color: #581c87 !important; }
+      html.dark .bg-blue-50 { background-color: #1e3a8a !important; }
+      html.dark .bg-orange-50 { background-color: #7c2d12 !important; }
+      html.dark .bg-gradient-to-br { background-image: none !important; }
+      html.dark .bg-gradient-to-r { background-image: none !important; }
+      
+      /* 深色模式下移除按钮和图标的白色阴影 */
+      html.dark button:not(:hover) {
+        box-shadow: none !important;
+      }
+      html.dark button:not(:hover)[class*="shadow-indigo"],
+      html.dark button:not(:hover)[class*="shadow-emerald"],
+      html.dark button:not(:hover)[class*="shadow-purple"],
+      html.dark button:not(:hover)[class*="shadow-rose"],
+      html.dark button:not(:hover)[class*="shadow-amber"] {
+        box-shadow: none !important;
+      }
+      html.dark [class*="shadow-indigo-100"]:not(:hover),
+      html.dark [class*="shadow-indigo-200"]:not(:hover),
+      html.dark [class*="shadow-emerald-100"]:not(:hover),
+      html.dark [class*="shadow-emerald-200"]:not(:hover),
+      html.dark [class*="shadow-purple-200"]:not(:hover),
+      html.dark [class*="shadow-rose-200"]:not(:hover),
+      html.dark [class*="shadow-amber-200"]:not(:hover) {
+        box-shadow: none !important;
+      }
+      
+      /* 深色模式下图标容器移除白色阴影 */
+      html.dark svg:not(:hover) {
+        box-shadow: none !important;
+      }
+      html.dark div[class*="rounded"]:not(:hover) > svg {
+        box-shadow: none !important;
+      }
+      html.dark .rounded-xl:not(:hover) svg,
+      html.dark .rounded-lg:not(:hover) svg,
+      html.dark .rounded-full:not(:hover) svg {
+        box-shadow: none !important;
+      }
+      
+      /* 深色模式下移除 ring-indigo-50 效果 */
+      html.dark [class*="ring-indigo-50"]:not(:hover) {
+        --tw-ring-color: transparent !important;
+        box-shadow: none !important;
+      }
+      
+      /* 深色模式下优化文字颜色对比度 */
+      html.dark .text-indigo-600 {
+        color: #a5b4fc !important;
+      }
+      html.dark .text-indigo-500 {
+        color: #c7d2fe !important;
+      }
+      html.dark .text-rose-600 {
+        color: #fda4af !important;
+      }
+      html.dark .text-amber-600 {
+        color: #fcd34d !important;
+      }
+      html.dark .text-emerald-600 {
+        color: #6ee7b7 !important;
+      }
+      html.dark .text-purple-600 {
+        color: #c4b5fd !important;
+      }
+      
+      /* 深色模式下AI助手优化 */
+      html.dark .bg-slate-50 {
+        background-color: #0f172a !important;
+      }
+      html.dark .bg-slate-50\/50 {
+        background-color: #1e293b !important;
+      }
+      html.dark .bg-slate-50\/30 {
+        background-color: #1e293b !important;
+      }
+      html.dark .bg-indigo-50 {
+        background-color: #1e1b4b !important;
+      }
+      html.dark .bg-indigo-100 {
+        background-color: #312e81 !important;
+      }
+      html.dark .bg-white\/90 {
+        background-color: rgba(30, 41, 59, 0.9) !important;
+      }
+      html.dark .bg-white\/50 {
+        background-color: rgba(30, 41, 59, 0.5) !important;
+      }
+      html.dark .bg-white\/5 {
+        background-color: rgba(30, 41, 59, 0.3) !important;
+      }
+      html.dark .bg-white {
+        background-color: #1e293b !important;
+      }
+      html.dark .text-slate-700 {
+        color: #e2e8f0 !important;
+      }
+      html.dark .text-slate-800 {
+        color: #f1f5f9 !important;
+      }
+      html.dark .border-slate-200 {
+        border-color: #334155 !important;
+      }
+      html.dark .border-slate-100 {
+        border-color: #1e293b !important;
+      }
+      html.dark .border-indigo-100 {
+        border-color: #312e81 !important;
+      }
+      html.dark .text-slate-400 {
+        color: #94a3b8 !important;
+      }
+      html.dark .text-slate-300 {
+        color: #cbd5e1 !important;
+      }
+      html.dark .text-slate-600 {
+        color: #cbd5e1 !important;
+      }
+      
+      /* 深色模式下 indigo 颜色优化 */
+      html.dark .bg-indigo-50 {
+        background-color: #312e81 !important;
+      }
+      html.dark .text-indigo-900 {
+        color: #e0e7ff !important;
+      }
+      html.dark .text-indigo-700\/70,
+      html.dark .text-indigo-700 {
+        color: #c7d2fe !important;
+      }
+      html.dark .text-indigo-600 {
+        color: #a5b4fc !important;
+      }
+      
+      /* 深色模式下优化带透明度的背景色 */
+      html.dark .bg-indigo-50\/80 {
+        background-color: rgba(49, 46, 129, 0.8) !important;
+      }
+      html.dark .bg-indigo-50\/60 {
+        background-color: rgba(49, 46, 129, 0.6) !important;
+      }
+      html.dark .bg-indigo-50\/40 {
+        background-color: rgba(49, 46, 129, 0.4) !important;
+      }
+      html.dark .bg-indigo-50\/20 {
+        background-color: rgba(49, 46, 129, 0.2) !important;
       }
     </style>
   <script type="importmap">
