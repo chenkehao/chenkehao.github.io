@@ -1,13 +1,83 @@
+/**
+ * Gemini Service - AI 功能服务
+ * 
+ * 支持两种模式：
+ * 1. 通过后端 API 调用（推荐，需要启动后端服务）
+ * 2. 直接调用 Gemini API（需要配置 API_KEY）
+ */
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { CandidateProfile } from "../types";
+import { analyzeResumeAPI, chatWithInterviewerAPI } from "./apiService";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// 是否使用后端 API（推荐）
+const USE_BACKEND_API = true;
 
+// 后端 API 可用性检测（每次都重新检测，避免缓存问题）
+const checkBackendAvailable = async (): Promise<boolean> => {
+  try {
+    // 使用相对路径，通过 Vite 代理访问后端
+    const response = await fetch('/health', { 
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' }
+    });
+    const isAvailable = response.ok;
+    console.log('[AI Service] Backend health check:', isAvailable ? 'OK' : 'FAILED');
+    return isAvailable;
+  } catch (e) {
+    console.warn('[AI Service] Backend health check failed:', e);
+    return false;
+  }
+};
+
+/**
+ * AI 简历分析
+ */
 export const analyzeResume = async (resumeText: string): Promise<CandidateProfile> => {
+  console.log('[AI Service] analyzeResume called, text length:', resumeText.length);
+  
+  // 优先使用后端 API
+  if (USE_BACKEND_API) {
+    console.log('[AI Service] Checking backend availability...');
+    const isBackendUp = await checkBackendAvailable();
+    
+    if (isBackendUp) {
+      try {
+        console.log('[AI Service] Calling backend API...');
+        const result = await analyzeResumeAPI(resumeText);
+        console.log('[AI Service] Backend API success:', result.name);
+        return result as CandidateProfile;
+      } catch (error) {
+        console.warn('[AI Service] Backend API failed:', error);
+        // 如果后端失败，降级到直接调用
+      }
+    } else {
+      console.warn('[AI Service] Backend not available');
+    }
+  }
+  
+  // 降级：直接调用 Gemini API
+  console.log('[AI Service] Falling back to direct Gemini API call...');
+  return analyzeResumeDirectly(resumeText);
+};
+
+/**
+ * 直接调用 Gemini API 进行简历分析
+ */
+const analyzeResumeDirectly = async (resumeText: string): Promise<CandidateProfile> => {
+  const { GoogleGenAI, Type } = await import("@google/genai");
+  
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                 (typeof process !== 'undefined' ? process.env?.API_KEY : '') || '';
+  
+  if (!apiKey) {
+    throw new Error('未配置 Gemini API Key，请启动后端服务或配置 API Key');
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
+  
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `请深度分析以下简历并以 JSON 格式返回全方位的结构化人才画像。特别包含该人才最适合的“理想工作画像”描述。简历内容： "${resumeText}"`,
+    model: 'gemini-2.0-flash',
+    contents: `请深度分析以下简历并以 JSON 格式返回全方位的结构化人才画像。特别包含该人才最适合的"理想工作画像"描述。简历内容： "${resumeText}"`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -81,17 +151,66 @@ export const analyzeResume = async (resumeText: string): Promise<CandidateProfil
   return JSON.parse(response.text || "{}") as CandidateProfile;
 };
 
-export const chatWithInterviewer = async (history: { role: string, parts: { text: string }[] }[], userMessage: string): Promise<string> => {
-  const chat = ai.chats.create({
-    model: 'gemini-3-flash-preview',
+/**
+ * AI 面试对话
+ */
+export const chatWithInterviewer = async (
+  history: { role: string, parts: { text: string }[] }[], 
+  userMessage: string
+): Promise<string> => {
+  console.log('[AI Service] chatWithInterviewer called');
+  
+  // 优先使用后端 API
+  if (USE_BACKEND_API) {
+    const isBackendUp = await checkBackendAvailable();
+    
+    if (isBackendUp) {
+      try {
+        // 转换历史格式
+        const convertedHistory = history.map(h => ({
+          role: h.role === 'model' ? 'assistant' : h.role,
+          content: h.parts[0]?.text || ''
+        }));
+        
+        console.log('[AI Service] Calling interview API...');
+        const result = await chatWithInterviewerAPI(convertedHistory, userMessage);
+        console.log('[AI Service] Interview API success');
+        return result.response;
+      } catch (error) {
+        console.warn('[AI Service] Interview API failed:', error);
+      }
+    }
+  }
+  
+  // 降级：直接调用 Gemini API
+  console.log('[AI Service] Falling back to direct Gemini call...');
+  return chatWithInterviewerDirectly(history, userMessage);
+};
+
+/**
+ * 直接调用 Gemini API 进行面试对话
+ */
+const chatWithInterviewerDirectly = async (
+  history: { role: string, parts: { text: string }[] }[], 
+  userMessage: string
+): Promise<string> => {
+  const { GoogleGenAI } = await import("@google/genai");
+  
+  const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                 (typeof process !== 'undefined' ? process.env?.API_KEY : '') || '';
+  
+  if (!apiKey) {
+    throw new Error('未配置 Gemini API Key，请启动后端服务或配置 API Key');
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: [...history, { role: 'user', parts: [{ text: userMessage }] }],
     config: {
       systemInstruction: "你现在是 Devnors 的 AI 面试官。你正在对候选人进行压力面试。你的语气应该专业、犀利但有礼貌。请根据候选人的回答进行追问或评价。",
     }
-  });
-  
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: [...history, { role: 'user', parts: [{ text: userMessage }] }]
   });
   
   return response.text || "AI 面试官暂时离开了。";
