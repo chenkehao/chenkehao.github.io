@@ -720,6 +720,41 @@ export const getPersonalCertifications = async (userId: number = 1): Promise<any
 };
 
 /**
+ * 创建个人认证
+ */
+export const createPersonalCertification = async (data: {
+  name: string;
+  organization: string;
+  cert_date: string;
+  category: string;
+  degree?: string;
+  major?: string;
+  cert_number?: string;
+  score?: number;
+  level?: string;
+  color?: string;
+  icon?: string;
+}, userId: number = 1): Promise<any> => {
+  const params = new URLSearchParams();
+  params.append('name', data.name);
+  params.append('organization', data.organization);
+  params.append('cert_date', data.cert_date);
+  params.append('category', data.category);
+  if (data.degree) params.append('degree', data.degree);
+  if (data.major) params.append('major', data.major);
+  if (data.cert_number) params.append('cert_number', data.cert_number);
+  if (data.score !== undefined) params.append('score', data.score.toString());
+  if (data.level) params.append('level', data.level);
+  if (data.color) params.append('color', data.color);
+  if (data.icon) params.append('icon', data.icon);
+  params.append('user_id', userId.toString());
+  
+  return request(`/settings/personal-certifications?${params.toString()}`, {
+    method: 'POST',
+  });
+};
+
+/**
  * 获取团队成员
  */
 export const getTeamMembers = async (userId: number = 1): Promise<any[]> => {
@@ -908,6 +943,57 @@ export async function updateProfileField(
   });
 }
 
+/**
+ * 更新候选人身份信息（从身份证识别）
+ */
+export async function updateCandidateIdentity(
+  userId: number,
+  data: {
+    real_name?: string;
+    gender?: string;
+    birthday?: string;
+    id_number?: string;
+    address?: string;
+    ethnicity?: string;
+    id_issuing_authority?: string;
+    id_valid_period?: string;
+  }
+): Promise<any> {
+  // 将身份信息存储到 candidate_data 中
+  return request(`/public/profile?user_id=${userId}&profile_type=candidate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      candidate_data: {
+        identity_info: data
+      }
+    }),
+  });
+}
+
+/**
+ * 更新候选人教育信息（从学历证书识别）
+ */
+export async function updateCandidateEducation(
+  userId: number,
+  data: {
+    education?: string;
+    school?: string;
+    major?: string;
+    graduation_year?: string;
+    degree?: string;
+    cert_number?: string;
+  }
+): Promise<any> {
+  return request(`/public/profile?user_id=${userId}&profile_type=candidate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      candidate_data: {
+        education_info: data
+      }
+    }),
+  });
+}
+
 // ============ Token 资金账户 API ============
 
 /**
@@ -1082,4 +1168,46 @@ export async function autoFillProfileFromResume(
   }
   
   return response.json();
+}
+
+/**
+ * 证件 OCR 审核 API
+ * 使用 AI 视觉能力分析证件图片，判断是否有效并提取信息
+ */
+export async function certOCRReview(
+  imageBase64: string,
+  certType: 'education' | 'skill_driver' | 'skill_cert' | 'work' | 'identity_front' | 'identity_back' | 'credit_fund' | 'credit_social',
+  userId: number = 1
+): Promise<{
+  success: boolean;
+  reason?: string;
+  extracted_info?: Record<string, string>;
+  detected_side?: 'front' | 'back';
+}> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/settings/cert-ocr-review`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image_base64: imageBase64,
+        cert_type: certType,
+        user_id: userId,
+      }),
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'OCR 审核失败' }));
+      throw new Error(error.detail || 'OCR 审核失败');
+    }
+    
+    return response.json();
+  } catch (error: any) {
+    // 处理网络错误（如后端未启动）
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('无法连接到服务器，请检查后端服务是否正常运行');
+    }
+    throw error;
+  }
 }

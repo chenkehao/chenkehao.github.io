@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # Gemini API
     gemini_api_key: Optional[str] = None
     
+    # 阿里云 OCR
+    aliyun_access_key_id: Optional[str] = None
+    aliyun_access_key_secret: Optional[str] = None
+    
     # MiniMax API
     minimax_api_key: Optional[str] = None
     minimax_group_id: Optional[str] = None

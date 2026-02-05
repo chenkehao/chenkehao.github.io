@@ -727,6 +727,24 @@ async def seed_database():
         
         # 14. 创建个人认证信息（为候选人用户）
         personal_certs = [
+            # 身份认证
+            {
+                "name": "实名认证",
+                "organization": "公安部身份认证系统",
+                "cert_date": "2024-01-15",
+                "category": "identity",
+                "color": "bg-blue-50 border-blue-200",
+                "icon": "IdCard"
+            },
+            {
+                "name": "人脸识别认证",
+                "organization": "支付宝人脸核身",
+                "cert_date": "2024-01-15",
+                "category": "identity",
+                "color": "bg-blue-50 border-blue-200",
+                "icon": "Scan"
+            },
+            # 学历认证
             {
                 "name": "清华大学",
                 "organization": "清华大学",

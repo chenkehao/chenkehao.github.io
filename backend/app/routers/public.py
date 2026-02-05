@@ -660,9 +660,53 @@ async def optimize_memories(
         # 如果 AI 分析失败，执行简单的重复检测
         optimization_plan = {"merge": [], "delete": [], "reclassify": [], "create": [], "reasoning_updates": []}
         
-        # 简单的重复检测
-        seen_contents = {}
+        # 按类型分组记忆
+        type_groups = {}
         for m in memories:
+            type_key = m.type.value if m.type else 'unknown'
+            if type_key not in type_groups:
+                type_groups[type_key] = []
+            type_groups[type_key].append(m)
+        
+        # 特殊处理：对于 preference 类型，只保留最新的一条（因为求职偏好会更新）
+        if 'preference' in type_groups:
+            pref_memories = type_groups['preference']
+            # 按创建时间降序排序（最新的在前）
+            pref_memories.sort(key=lambda x: x.created_at, reverse=True)
+            
+            if len(pref_memories) > 1:
+                # 保留最新的，删除其他的
+                keep_memory = pref_memories[0]
+                delete_memories = pref_memories[1:]
+                
+                # 检查是否都是求职偏好信息（以【求职偏好信息】开头）
+                job_pref_memories = [m for m in pref_memories if m.content.startswith('【求职偏好信息】')]
+                if len(job_pref_memories) > 1:
+                    keep_memory = job_pref_memories[0]
+                    delete_ids = [m.id for m in job_pref_memories[1:]]
+                    
+                    optimization_plan["merge"].append({
+                        "keep_id": keep_memory.id,
+                        "delete_ids": delete_ids,
+                        "new_content": None,
+                        "reason": f"合并 {len(delete_ids)} 条旧的求职偏好记录，保留最新版本",
+                        "ai_reasoning": "保留用户最新的求职偏好信息，删除历史版本以避免冲突。最新偏好将用于智能岗位匹配。"
+                    })
+        
+        # 对于同类型记忆，检查内容相似度
+        seen_contents = {}
+        processed_ids = set()
+        
+        # 收集已被合并处理的ID
+        for merge in optimization_plan.get("merge", []):
+            processed_ids.add(merge.get("keep_id"))
+            for del_id in merge.get("delete_ids", []):
+                processed_ids.add(del_id)
+        
+        for m in memories:
+            if m.id in processed_ids:
+                continue
+                
             content_key = m.content.lower().strip()[:50]  # 取前50字符作为键
             if content_key in seen_contents:
                 # 发现重复，合并到第一个

@@ -81,6 +81,7 @@ class PersonalCertification(Base):
     # 学历相关
     degree = Column(String(50))  # 学位
     major = Column(String(100))  # 专业
+    cert_number = Column(String(100))  # 证书编号
     
     # 评分相关
     score = Column(Integer)
