@@ -32,6 +32,10 @@ import {
   getEnterpriseCertifications,
   getPersonalCertifications,
   getTeamMembers,
+  inviteTeamMember,
+  deleteTeamMember,
+  transferAdmin,
+  approveMember,
   getAIConfigs,
   getAPIKeys,
   getAuditLogs,
@@ -707,7 +711,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
                   <div className="px-4 py-3 border-b border-slate-100">
                     <div className="font-bold text-slate-900">{user?.name}</div>
-                    <div className="text-xs text-slate-500">{user?.email}</div>
+                    <div className="text-xs text-slate-500">UID: {user?.id}</div>
                   </div>
                   <Link 
                     to="/settings" 
@@ -778,6 +782,59 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
   );
 };
 
+// 数字滚动动画组件
+const AnimatedCounter = ({ end, suffix = '', duration = 2000, color = 'text-indigo-600' }: { end: number; suffix?: string; duration?: number; color?: string }) => {
+  const [count, setCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [isVisible]);
+  
+  useEffect(() => {
+    if (!isVisible) return;
+    
+    let startTime: number;
+    let animationFrame: number;
+    
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      // 使用 easeOutExpo 缓动函数
+      const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      setCount(Math.floor(easeOutExpo * end));
+      
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+    
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [isVisible, end, duration]);
+  
+  return (
+    <div ref={ref} className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">
+      {count}{suffix}<span className={color}>+</span>
+    </div>
+  );
+};
+
 const LandingPage = () => (
   <div className="pt-20">
     <Hero />
@@ -791,24 +848,24 @@ const LandingPage = () => (
            </div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
              <div className="text-center md:border-r border-slate-100">
-                <div className="inline-flex p-3 bg-indigo-50 rounded text-indigo-600 mb-6">
+                <div className="inline-flex p-3 bg-indigo-50 rounded text-indigo-600 mb-6 animate-in zoom-in duration-500">
                   <Users size={32} />
                 </div>
-                <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">100万<span className="text-indigo-600">+</span></div>
+                <AnimatedCounter end={100} suffix="万" color="text-indigo-600" />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">全球储备人才</div>
              </div>
              <div className="text-center md:border-r border-slate-100">
-                <div className="inline-flex p-3 bg-emerald-50 rounded text-emerald-600 mb-6">
+                <div className="inline-flex p-3 bg-emerald-50 rounded text-emerald-600 mb-6 animate-in zoom-in duration-500 delay-150">
                   <Building2 size={32} />
                 </div>
-                <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">2万<span className="text-emerald-600">+</span></div>
+                <AnimatedCounter end={2} suffix="万" color="text-emerald-600" duration={1500} />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">活跃入驻企业</div>
              </div>
              <div className="text-center">
-                <div className="inline-flex p-3 bg-rose-50 rounded text-rose-600 mb-6">
+                <div className="inline-flex p-3 bg-rose-50 rounded text-rose-600 mb-6 animate-in zoom-in duration-500 delay-300">
                   <Sparkles size={32} />
                 </div>
-                <div className="text-5xl font-black text-slate-900 mb-2 tracking-tighter">500万<span className="text-rose-600">+</span></div>
+                <AnimatedCounter end={500} suffix="万" color="text-rose-600" duration={2500} />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">AI 智能成功对接</div>
              </div>
            </div>
@@ -840,17 +897,10 @@ const LandingPage = () => (
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-3xl font-bold mb-16 text-slate-900">量化效率标杆</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {[
-            { label: '效率跨越式提升', value: '578%' },
-            { label: '匹配精度', value: '82%' },
-            { label: 'HR 人力成本降低', value: '70%' },
-            { label: '招聘周期', value: '< 48h' },
-          ].map((stat, i) => (
-            <div key={i} className="p-8 bg-white rounded border border-indigo-50/50 card-shadow">
-              <div className="text-5xl font-extrabold text-indigo-600 mb-2">{stat.value}</div>
-              <div className="text-slate-500 font-semibold">{stat.label}</div>
-            </div>
-          ))}
+          <StatCard value={578} suffix="%" label="效率跨越式提升" delay={0} />
+          <StatCard value={82} suffix="%" label="匹配精度" delay={100} />
+          <StatCard value={70} suffix="%" label="HR 人力成本降低" delay={200} />
+          <StatCard value={48} prefix="< " suffix="h" label="招聘周期" delay={300} />
         </div>
       </div>
     </section>
@@ -921,6 +971,179 @@ const FeatureCard = ({ icon: Icon, title, description }: any) => (
   </div>
 );
 
+// 统计卡片组件（带数字滚动动画）
+const StatCard = ({ value, suffix = '', prefix = '', label, delay = 0 }: { value: number; suffix?: string; prefix?: string; label: string; delay?: number }) => {
+  const [count, setCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setTimeout(() => setIsVisible(true), delay);
+        }
+      },
+      { threshold: 0.3 }
+    );
+    
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [isVisible, delay]);
+  
+  useEffect(() => {
+    if (!isVisible) return;
+    
+    let startTime: number;
+    let animationFrame: number;
+    const duration = 1800;
+    
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      
+      // easeOutExpo 缓动
+      const easeOutExpo = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      setCount(Math.floor(easeOutExpo * value));
+      
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+    
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [isVisible, value]);
+  
+  return (
+    <div 
+      ref={ref} 
+      className={`p-8 bg-white rounded border border-indigo-50/50 card-shadow transition-all duration-500 ${
+        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+      }`}
+    >
+      <div className="text-5xl font-extrabold text-indigo-600 mb-2">
+        {prefix}{count}{suffix}
+      </div>
+      <div className="text-slate-500 font-semibold">{label}</div>
+    </div>
+  );
+};
+
+// 通用动画统计项组件（用于各页面的数据展示）
+const AnimatedStatItem = ({ 
+  value, 
+  label, 
+  icon: Icon, 
+  color = 'text-indigo-600', 
+  bg = 'bg-indigo-50',
+  delay = 0,
+  size = 'normal'
+}: { 
+  value: string; 
+  label: string; 
+  icon?: any; 
+  color?: string; 
+  bg?: string;
+  delay?: number;
+  size?: 'small' | 'normal' | 'large';
+}) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [displayValue, setDisplayValue] = useState('0');
+  const ref = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isVisible) {
+          setTimeout(() => setIsVisible(true), delay);
+        }
+      },
+      { threshold: 0.2 }
+    );
+    
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+    
+    return () => observer.disconnect();
+  }, [isVisible, delay]);
+  
+  useEffect(() => {
+    if (!isVisible) return;
+    
+    // 解析数值
+    const numMatch = value.match(/[\d.]+/);
+    if (!numMatch) {
+      setDisplayValue(value);
+      return;
+    }
+    
+    const targetNum = parseFloat(numMatch[0]);
+    const prefix = value.slice(0, value.indexOf(numMatch[0]));
+    const suffix = value.slice(value.indexOf(numMatch[0]) + numMatch[0].length);
+    
+    let startTime: number;
+    const duration = 1500;
+    
+    const animate = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      
+      const currentNum = targetNum * easeOut;
+      const formatted = numMatch[0].includes('.') 
+        ? currentNum.toFixed(1) 
+        : Math.floor(currentNum).toString();
+      
+      setDisplayValue(`${prefix}${formatted}${suffix}`);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        setDisplayValue(value);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }, [isVisible, value]);
+  
+  const sizeClasses = {
+    small: { value: 'text-xl', label: 'text-xs', icon: 16, iconBox: 'w-8 h-8' },
+    normal: { value: 'text-2xl', label: 'text-xs', icon: 20, iconBox: 'w-10 h-10' },
+    large: { value: 'text-3xl', label: 'text-sm', icon: 24, iconBox: 'w-12 h-12' },
+  };
+  
+  const s = sizeClasses[size];
+  
+  return (
+    <div 
+      ref={ref}
+      className={`transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+    >
+      {Icon ? (
+        <div className="flex items-center gap-4">
+          <div className={`${s.iconBox} rounded-lg flex items-center justify-center ${bg}`}>
+            <Icon className={color} size={s.icon} />
+          </div>
+          <div>
+            <div className={`text-slate-400 ${s.label} font-bold uppercase tracking-wider`}>{label}</div>
+            <div className={`${s.value} font-black text-slate-900`}>{displayValue}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center">
+          <div className={`${s.value} font-black ${color}`}>{displayValue}</div>
+          <div className={`${s.label} text-slate-500 mt-1`}>{label}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- 设置与管理页面 ---
 const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDarkMode: () => void }) => {
   const navigate = useNavigate();
@@ -951,7 +1174,9 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   // 二次验证弹窗状态（手机/邮箱修改）
-  const [verifyModal, setVerifyModal] = useState<{show: boolean; type: 'phone' | 'email'; newValue: string}>({show: false, type: 'phone', newValue: ''});
+  const [verifyModal, setVerifyModal] = useState<{show: boolean; type: 'phone' | 'email'; newValue: string; step: 'old' | 'new'}>({show: false, type: 'phone', newValue: '', step: 'old'});
+  const [showEmailInput, setShowEmailInput] = useState(false);
+  const [newEmailValue, setNewEmailValue] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [verifySending, setVerifySending] = useState(false);
   const [verifyCountdown, setVerifyCountdown] = useState(0);
@@ -971,6 +1196,12 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   const [enterpriseCerts, setEnterpriseCerts] = useState<any[]>([]);
   const [personalCerts, setPersonalCerts] = useState<any[]>([]);
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [teamInfo, setTeamInfo] = useState<{is_admin: boolean; enterprise_id: number | null; enterprise_name: string | null}>({is_admin: false, enterprise_id: null, enterprise_name: null});
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState({phone: '', email: '', role: 'viewer', inviteType: 'phone' as 'phone' | 'email'});
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState<number | null>(null);
   const [llmConfigs, setLlmConfigs] = useState<any[]>([]);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -1009,7 +1240,17 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
         setSettings(settingsData);
         setEnterpriseCerts(enterpriseCertsData);
         setPersonalCerts(personalCertsData);
-        setTeamMembers(teamMembersData);
+        // 处理团队成员数据
+        if (teamMembersData && teamMembersData.members) {
+          setTeamMembers(teamMembersData.members);
+          setTeamInfo({
+            is_admin: teamMembersData.is_admin,
+            enterprise_id: teamMembersData.enterprise_id,
+            enterprise_name: teamMembersData.enterprise_name
+          });
+        } else if (Array.isArray(teamMembersData)) {
+          setTeamMembers(teamMembersData);
+        }
         setLlmConfigs(aiConfigsData);
         setApiKeys(apiKeysData);
         setAuditLogs(auditLogsData);
@@ -1390,22 +1631,23 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                     {qualificationCerts.map((cert: any, idx: number) => {
                       const isBusinessLicense = cert.name?.includes('营业执照');
                       const isLegalPersonId = cert.name?.includes('法人身份证') && !cert.name?.includes('正面') && !cert.name?.includes('背面');
-                      const isFullWidth = isBusinessLicense || isLegalPersonId;
+                      const isFullWidth = isBusinessLicense;
                       
                       return (
                         <div key={idx} className={`p-5 rounded-lg border ${cert.color || 'bg-amber-50 border-amber-200'} flex items-start gap-4 ${isFullWidth ? 'col-span-2' : ''} relative`}>
-                          {/* 右上角已认证标签 */}
-                          <span className="absolute top-3 right-3 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">
-                            {cert.status === 'valid' ? '已认证' : cert.status}
-                          </span>
                           <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
                             {isBusinessLicense ? <Building2 size={24} className="text-indigo-600" /> : 
-                             isLegalPersonId ? <Fingerprint size={24} className="text-emerald-600" /> :
+                             isLegalPersonId ? <Fingerprint size={24} className="text-blue-600" /> :
                              <Medal size={24} className="text-amber-500" />}
                           </div>
-                          <div className="flex-1 pr-16">
-                            <h5 className="font-black text-slate-900 text-sm">{cert.name}</h5>
-                            {isBusinessLicense && (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h5 className="font-black text-slate-900 text-base">{isLegalPersonId ? '法人身份证' : cert.name}</h5>
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold flex-shrink-0">
+                                {cert.status === 'valid' ? '已认证' : cert.status}
+                              </span>
+                            </div>
+                            {isBusinessLicense && !isLegalPersonId && (
                               <p className="text-xs text-slate-500 mt-1">法定代表人：{cert.organization}</p>
                             )}
                             {isBusinessLicense && (
@@ -1427,21 +1669,17 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                                 )}
                               </div>
                             )}
-                            {isLegalPersonId && (
-                              <div className="mt-3 space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
-                                {cert.id_card_name && (
-                                  <p><span className="font-bold">姓名：</span>{cert.id_card_name}</p>
-                                )}
-                                {cert.id_card_number && (
-                                  <p><span className="font-bold">身份证号：</span>{cert.id_card_number.replace(/^(.{6})(.*)(.{4})$/, '$1****$3')}</p>
-                                )}
-                                {cert.id_card_authority && (
-                                  <p><span className="font-bold">签发机关：</span>{cert.id_card_authority}</p>
-                                )}
-                                {cert.id_card_valid_period && (
-                                  <p><span className="font-bold">有效期：</span>{cert.id_card_valid_period}</p>
-                                )}
-                              </div>
+                            {isLegalPersonId && cert.id_card_name && (
+                              <p className="text-sm text-slate-600 mt-1">姓名: {cert.id_card_name}</p>
+                            )}
+                            {isLegalPersonId && cert.id_card_number && (
+                              <p className="text-xs text-slate-500 mt-1 font-mono">{cert.id_card_number.replace(/^(.{6})(.*)(.{4})$/, '$1****$3')}</p>
+                            )}
+                            {isLegalPersonId && cert.id_card_authority && (
+                              <p className="text-xs text-slate-500 mt-1">发证机关: {cert.id_card_authority}</p>
+                            )}
+                            {isLegalPersonId && cert.id_card_valid_period && (
+                              <p className="text-xs text-slate-400 mt-1">有效期: {cert.id_card_valid_period}</p>
                             )}
                             <div className="flex items-center gap-2 mt-3 flex-wrap">
                               <span className="text-xs text-slate-400">认证日期: {cert.date}</span>
@@ -1459,34 +1697,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                                   查看原件
                                 </button>
                               )}
-                              {isLegalPersonId && cert.image_data_front && (
-                                <button 
-                                  onClick={() => {
-                                    const win = window.open('', '_blank');
-                                    if (win) {
-                                      win.document.write(`<html><head><title>法人身份证（正面）</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9;"><img src="data:image/jpeg;base64,${cert.image_data_front}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 12px rgba(0,0,0,0.1);"/></body></html>`);
-                                      win.document.close();
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200 transition-colors"
-                                >
-                                  查看正面
-                                </button>
-                              )}
-                              {isLegalPersonId && cert.image_data_back && (
-                                <button 
-                                  onClick={() => {
-                                    const win = window.open('', '_blank');
-                                    if (win) {
-                                      win.document.write(`<html><head><title>法人身份证（背面）</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9;"><img src="data:image/jpeg;base64,${cert.image_data_back}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 12px rgba(0,0,0,0.1);"/></body></html>`);
-                                      win.document.close();
-                                    }
-                                  }}
-                                  className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200 transition-colors"
-                                >
-                                  查看背面
-                                </button>
-                              )}
+
                             </div>
                           </div>
                         </div>
@@ -1797,7 +2008,8 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           setVerifySending(true);
           try {
             await new Promise(r => setTimeout(r, 800));
-            showToast(`验证码已发送至 ${verifyModal.newValue}`, 'success');
+            const targetEmail = verifyModal.type === 'email' && verifyModal.step === 'old' ? user?.email : verifyModal.newValue;
+            showToast(`验证码已发送至 ${targetEmail}`, 'success');
             setVerifyCountdown(60);
             const timer = setInterval(() => {
               setVerifyCountdown(prev => {
@@ -1821,12 +2033,25 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           setVerifySubmitting(true);
           try {
             await new Promise(r => setTimeout(r, 600));
+            
+            // 邮箱双重验证：先验证原邮箱，再验证新邮箱
+            if (verifyModal.type === 'email' && verifyModal.step === 'old') {
+              // 原邮箱验证通过，进入新邮箱验证
+              setVerifyModal(prev => ({ ...prev, step: 'new' }));
+              setVerifyCode('');
+              setVerifyCountdown(0);
+              setVerifySubmitting(false);
+              showToast('原邮箱验证通过，请继续验证新邮箱', 'success');
+              return;
+            }
+            
             if (verifyModal.type === 'phone') {
               await updateUser({ phone: verifyModal.newValue });
             }
+            // 邮箱修改成功（实际需要后端支持）
             await refreshUser();
             showToast(`${verifyModal.type === 'phone' ? '手机号' : '邮箱'}修改成功`, 'success');
-            setVerifyModal({show: false, type: 'phone', newValue: ''});
+            setVerifyModal({show: false, type: 'phone', newValue: '', step: 'old'});
             setVerifyCode('');
             setVerifyCountdown(0);
           } catch (e: any) {
@@ -1842,7 +2067,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           if (!phone) { showToast('请先输入新手机号', 'error'); return; }
           if (phoneErr) { showToast(phoneErr, 'error'); return; }
           if (phone === (user?.phone || '')) { showToast('新手机号与当前手机号相同', 'warning'); return; }
-          setVerifyModal({show: true, type: 'phone', newValue: phone});
+          setVerifyModal({show: true, type: 'phone', newValue: phone, step: 'old'});
           setVerifyCode(''); setVerifyCountdown(0);
         };
 
@@ -1852,7 +2077,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           if (!email) { showToast('请先输入新邮箱', 'error'); return; }
           if (emailErr) { showToast(emailErr, 'error'); return; }
           if (email === (user?.email || '')) { showToast('新邮箱与当前邮箱相同', 'warning'); return; }
-          setVerifyModal({show: true, type: 'email', newValue: email});
+          setVerifyModal({show: true, type: 'email', newValue: email, step: 'old'});
           setVerifyCode(''); setVerifyCountdown(0);
         };
 
@@ -1888,7 +2113,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           if (local.length <= 2) return `${local[0]}***@${domain}`;
           return `${local[0]}${local[1]}***@${domain}`;
         };
-        const formatUID = (id: number) => `DN${String(id).padStart(8, '0')}`;
+        const formatUID = (id: number) => `UID: ${id}`;
 
         return (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -2022,28 +2247,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                     </div>
                   )}
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-500">邮箱地址</label>
-                    <span className="text-xs text-amber-600 flex items-center gap-1"><ShieldCheck size={10} /> 修改需验证</span>
-                  </div>
-                  {accountEditing ? (
-                    <div>
-                      <div className="flex gap-2">
-                        <input type="email" value={accountInfo.email} onChange={e => { setAccountInfo(p => ({ ...p, email: e.target.value })); setAccountErrors(p => ({ ...p, email: validateAccountField('email', e.target.value) })); }}
-                          className={`flex-1 bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${accountErrors.email ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`}
-                          placeholder="请输入邮箱" />
-                        <button onClick={openEmailVerify} className="flex-shrink-0 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2.5 rounded-lg border border-indigo-200 transition-all">验证修改</button>
-                      </div>
-                      {accountErrors.email && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {accountErrors.email}</p>}
-                    </div>
-                  ) : (
-                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 flex items-center justify-between">
-                      <span>{user?.email ? maskEmail(user.email) : <span className="text-slate-400">未设置</span>}</span>
-                      <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 size={11} /> 已验证</span>
-                    </div>
-                  )}
-                </div>
+
               </div>
             </div>
 
@@ -2082,10 +2286,20 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                 )}
                 <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                   <div>
-                    <h5 className="text-sm font-medium text-slate-800">登录方式</h5>
+                    <h5 className="text-sm font-medium text-slate-800">安全邮箱</h5>
                     <p className="text-xs text-slate-500">{user?.email}</p>
                   </div>
-                  <span className="text-xs font-bold text-emerald-500 flex items-center gap-1"><CheckCircle2 size={12} /> 邮箱登录</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-emerald-500 flex items-center gap-1"><CheckCircle2 size={12} /> 已绑定</span>
+                    <button 
+                      onClick={() => {
+                        setShowEmailInput(true);
+                      }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                    >
+                      修改
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2132,21 +2346,102 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
               </div>
             </div>
 
+            {/* 邮箱输入弹窗 */}
+            {showEmailInput && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => { setShowEmailInput(false); setNewEmailValue(''); }}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                  <h4 className="text-lg font-black text-slate-900 mb-1">修改安全邮箱</h4>
+                  <p className="text-xs text-slate-500 mb-5">请输入新的邮箱地址</p>
+                  
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">当前邮箱</label>
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-500">{user?.email}</div>
+                  </div>
+                  
+                  <div className="mb-5">
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">新邮箱地址</label>
+                    <input 
+                      type="email" 
+                      value={newEmailValue}
+                      onChange={e => setNewEmailValue(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+                      placeholder="请输入新的邮箱地址"
+                    />
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button onClick={() => { setShowEmailInput(false); setNewEmailValue(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all">取消</button>
+                    <button 
+                      onClick={() => {
+                        if (!newEmailValue) {
+                          showToast('请输入新邮箱地址', 'error');
+                          return;
+                        }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmailValue)) {
+                          showToast('请输入有效的邮箱地址', 'error');
+                          return;
+                        }
+                        if (newEmailValue === user?.email) {
+                          showToast('新邮箱与当前邮箱相同', 'warning');
+                          return;
+                        }
+                        setShowEmailInput(false);
+                        setVerifyModal({ show: true, type: 'email', newValue: newEmailValue, step: 'old' });
+                        setNewEmailValue('');
+                      }} 
+                      className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all"
+                    >
+                      下一步
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 二次验证弹窗 */}
             {verifyModal.show && (
-              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: ''}); setVerifyCode(''); }}>
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: '', step: 'old'}); setVerifyCode(''); }}>
                 <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
                   <h4 className="text-lg font-black text-slate-900 mb-1">安全验证</h4>
-                  <p className="text-xs text-slate-500 mb-5">修改{verifyModal.type === 'phone' ? '手机号' : '邮箱'}需要验证身份</p>
+                  <p className="text-xs text-slate-500 mb-5">
+                    {verifyModal.type === 'email' 
+                      ? (verifyModal.step === 'old' ? '请先验证当前绑定的邮箱' : '请验证新邮箱地址')
+                      : '修改手机号需要验证身份'}
+                  </p>
+
+                  {/* 邮箱修改进度指示 */}
+                  {verifyModal.type === 'email' && (
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${verifyModal.step === 'old' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <span className="w-4 h-4 rounded-full bg-current text-white flex items-center justify-center text-[10px]">1</span>
+                        验证原邮箱
+                      </div>
+                      <ChevronRight size={14} className="text-slate-300" />
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${verifyModal.step === 'new' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-400'}`}>
+                        <span className="w-4 h-4 rounded-full bg-current text-white flex items-center justify-center text-[10px]">2</span>
+                        验证新邮箱
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mb-4">
-                    <label className="text-xs font-bold text-slate-500 block mb-1.5">{verifyModal.type === 'phone' ? '新手机号' : '新邮箱'}</label>
-                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-800">{verifyModal.newValue}</div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">
+                      {verifyModal.type === 'phone' ? '新手机号' : (verifyModal.step === 'old' ? '当前邮箱' : '新邮箱')}
+                    </label>
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-800">
+                      {verifyModal.type === 'email' && verifyModal.step === 'old' ? user?.email : verifyModal.newValue}
+                    </div>
                   </div>
 
                   <div className="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg mb-4 flex items-start gap-2">
                     <Info size={13} className="mt-0.5 flex-shrink-0 text-amber-500" />
-                    <span>验证码将发送至{verifyModal.type === 'phone' ? '新手机号' : '新邮箱'}，收到后请填入下方。</span>
+                    <span>
+                      {verifyModal.type === 'email' 
+                        ? (verifyModal.step === 'old' 
+                            ? `验证码将发送至当前邮箱 ${user?.email}` 
+                            : `验证码将发送至新邮箱 ${verifyModal.newValue}`)
+                        : `验证码将发送至新手机号 ${verifyModal.newValue}`}
+                    </span>
                   </div>
 
                   <div className="mb-5">
@@ -2163,7 +2458,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                   </div>
 
                   <div className="flex gap-3">
-                    <button onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: ''}); setVerifyCode(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all">取消</button>
+                    <button onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: '', step: 'old'}); setVerifyCode(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all">取消</button>
                     <button onClick={handleVerifySubmit} disabled={verifySubmitting || verifyCode.length !== 6} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
                       {verifySubmitting ? <Loader2 size={14} className="animate-spin mx-auto" /> : '确认'}
                     </button>
@@ -2300,66 +2595,242 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           </div>
         );
       case 'Team':
+        const handleInviteMember = async () => {
+          if (!inviteForm.phone) {
+            alert('请输入手机号');
+            return;
+          }
+          if (!/^1\d{10}$/.test(inviteForm.phone)) {
+            alert('请输入正确的手机号');
+            return;
+          }
+          
+          setInviteLoading(true);
+          try {
+            await inviteTeamMember({
+              phone: inviteForm.phone,
+              role: inviteForm.role
+            }, userId);
+            
+            // 重新加载团队成员
+            const teamData = await getTeamMembers(userId);
+            if (teamData && teamData.members) {
+              setTeamMembers(teamData.members);
+              setTeamInfo({
+                is_admin: teamData.is_admin,
+                enterprise_id: teamData.enterprise_id,
+                enterprise_name: teamData.enterprise_name
+              });
+            }
+            
+            setShowInviteModal(false);
+            setInviteForm({phone: '', email: '', role: 'viewer', inviteType: 'phone'});
+          } catch (err: any) {
+            alert(err.message || '添加失败');
+          } finally {
+            setInviteLoading(false);
+          }
+        };
+        
+        const handleDeleteMember = async (memberId: number) => {
+          if (!confirm('确定要移除该成员吗？')) return;
+          try {
+            await deleteTeamMember(memberId, userId);
+            setTeamMembers(prev => prev.filter(m => m.id !== String(memberId)));
+          } catch (err: any) {
+            alert(err.message || '移除失败');
+          }
+        };
+        
+        const handleTransferAdmin = async () => {
+          if (!transferTargetId) return;
+          if (!confirm('确定要将管理员权限移交给该成员吗？此操作不可撤销。')) return;
+          try {
+            await transferAdmin(transferTargetId, userId);
+            // 重新加载
+            const teamData = await getTeamMembers(userId);
+            if (teamData && teamData.members) {
+              setTeamMembers(teamData.members);
+              setTeamInfo({
+                is_admin: teamData.is_admin,
+                enterprise_id: teamData.enterprise_id,
+                enterprise_name: teamData.enterprise_name
+              });
+            }
+            setShowTransferModal(false);
+            setTransferTargetId(null);
+          } catch (err: any) {
+            alert(err.message || '移交失败');
+          }
+        };
+        
+        const handleApproveMember = async (memberId: number, approve: boolean) => {
+          try {
+            await approveMember(memberId, approve, userId);
+            // 重新加载
+            const teamData = await getTeamMembers(userId);
+            if (teamData && teamData.members) {
+              setTeamMembers(teamData.members);
+            }
+          } catch (err: any) {
+            alert(err.message || '操作失败');
+          }
+        };
+        
+        const pendingMembers = teamMembers.filter(m => m.status?.toLowerCase() === 'pending_approval');
+        const activeMembers = teamMembers.filter(m => m.status?.toLowerCase() !== 'pending_approval');
+        
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
+            {/* 头部 */}
             <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-black text-slate-900">团队成员与权限控制</h3>
-              <button className="bg-indigo-600 text-white px-6 py-3 rounded font-black text-sm flex items-center gap-2 shadow-lg shadow-indigo-100 active:scale-95 transition-all">
-                <UserPlus size={18} /> 邀请新成员
-              </button>
+              <div>
+                <h3 className="text-2xl font-black text-slate-900">团队成员与权限控制</h3>
+                {teamInfo.enterprise_name && (
+                  <p className="text-sm text-slate-500 mt-1">
+                    企业：{teamInfo.enterprise_name}
+                    {teamInfo.is_admin && <span className="ml-2 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold">主管理员</span>}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                {teamInfo.is_admin && (
+                  <button 
+                    onClick={() => setShowTransferModal(true)}
+                    className="bg-white text-slate-700 px-5 py-2.5 rounded border border-slate-200 font-bold text-sm flex items-center gap-2 hover:border-amber-400 hover:text-amber-600 transition-all"
+                  >
+                    <ShieldAlert size={16} /> 移交管理员
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowInviteModal(true)}
+                  className="bg-indigo-600 text-white px-5 py-2.5 rounded font-bold text-sm flex items-center gap-2 shadow-lg shadow-indigo-100 active:scale-95 transition-all"
+                >
+                  <UserPlus size={16} /> 添加成员
+                </button>
+              </div>
             </div>
-            <div className="bg-white rounded border border-slate-100 shadow-sm overflow-hidden">
-               {teamMembers.length === 0 ? (
-                 <div className="text-center py-12 text-slate-400">
-                   <Users2 size={40} className="mx-auto mb-3 opacity-50" />
-                   <p className="text-sm font-medium">暂无团队成员</p>
-                   <p className="text-xs mt-1">点击上方按钮邀请新成员加入</p>
+            
+            {/* 待审批申请 */}
+            {pendingMembers.length > 0 && teamInfo.is_admin && (
+              <div className="bg-amber-50 rounded-xl border border-amber-200 p-6">
+                <h4 className="text-base font-bold text-amber-800 mb-4 flex items-center gap-2">
+                  <Clock size={18} /> 待审批的加入申请 ({pendingMembers.length})
+                </h4>
+                <div className="space-y-3">
+                  {pendingMembers.map((member: any) => (
+                    <div key={member.id} className="flex items-center justify-between bg-white rounded-lg p-4 border border-amber-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center font-bold text-amber-600">
+                          {member.name?.charAt(0) || member.phone?.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{member.name || member.phone || member.email}</div>
+                          <div className="text-xs text-slate-500">{member.phone || member.email}</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleApproveMember(Number(member.id), false)}
+                          className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 rounded hover:bg-slate-200 transition-colors"
+                        >
+                          拒绝
+                        </button>
+                        <button 
+                          onClick={() => handleApproveMember(Number(member.id), true)}
+                          className="px-4 py-2 text-sm font-bold text-white bg-emerald-500 rounded hover:bg-emerald-600 transition-colors"
+                        >
+                          批准
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* 成员列表 */}
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+               {activeMembers.length === 0 ? (
+                 <div className="text-center py-16 text-slate-400">
+                   <Users2 size={48} className="mx-auto mb-4 opacity-50" />
+                   <p className="text-base font-bold">暂无团队成员</p>
+                   <p className="text-sm mt-2">点击上方按钮添加新成员加入</p>
                  </div>
                ) : (
                  <div className="overflow-x-auto">
                     <table className="w-full text-left">
                        <thead>
-                          <tr className="bg-slate-50/50 border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400">
-                             <th className="py-4 pl-10">成员信息</th>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-xs uppercase font-black tracking-wider text-slate-500">
+                             <th className="py-4 pl-8">成员信息</th>
                              <th className="py-4">角色</th>
-                             <th className="py-4">最近活跃</th>
-                             <th className="py-4 text-right pr-10">管理操作</th>
+                             <th className="py-4">状态</th>
+                             <th className="py-4 text-right pr-8">操作</th>
                           </tr>
                        </thead>
-                       <tbody className="divide-y divide-slate-50">
-                          {teamMembers.map((member: any) => (
-                            <tr key={member.id} className="group hover:bg-slate-50/30 transition-colors">
-                               <td className="py-6 pl-10">
+                       <tbody className="divide-y divide-slate-100">
+                          {activeMembers.map((member: any) => (
+                            <tr key={member.id} className="group hover:bg-slate-50/50 transition-colors">
+                               <td className="py-5 pl-8">
                                   <div className="flex items-center gap-4">
-                                     <div className="w-11 h-11 rounded bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200">
-                                       {member.name?.charAt(0) || member.email?.charAt(0) || '?'}
+                                     <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center font-bold text-indigo-600 border-2 border-white shadow">
+                                       {member.name?.charAt(0) || member.phone?.charAt(0) || member.email?.charAt(0) || '?'}
                                      </div>
                                      <div>
-                                        <div className="text-sm font-black text-slate-900">{member.name || member.email?.split('@')[0]}</div>
-                                        <div className="text-xs text-slate-400 font-medium">{member.email}</div>
+                                        <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                          {member.name || member.phone || member.email?.split('@')[0]}
+                                          {member.is_admin && <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold">管理员</span>}
+                                        </div>
+                                        <div className="text-xs text-slate-400 mt-0.5">
+                                          {member.phone && <span className="mr-3">{member.phone}</span>}
+                                          {member.email && <span>{member.email}</span>}
+                                        </div>
                                      </div>
                                   </div>
                                </td>
-                               <td className="py-6">
-                                  <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${
-                                     member.role?.toLowerCase() === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'
+                               <td className="py-5">
+                                  <span className={`px-3 py-1.5 rounded-lg text-xs font-bold ${
+                                     member.role?.toLowerCase() === 'admin' ? 'bg-rose-50 text-rose-600' : 
+                                     member.role?.toLowerCase() === 'recruiter' ? 'bg-blue-50 text-blue-600' :
+                                     'bg-slate-100 text-slate-600'
                                   }`}>
-                                     {member.role || 'Viewer'}
+                                     {member.role === 'admin' ? '管理员' : member.role === 'recruiter' ? '招聘官' : '查看者'}
                                   </span>
                                </td>
-                               <td className="py-6">
+                               <td className="py-5">
                                   <div className="flex items-center gap-2">
-                                     <div className={`w-2 h-2 rounded-full ${member.status?.toLowerCase() === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                                     <div className={`w-2 h-2 rounded-full ${
+                                       member.status?.toLowerCase() === 'active' ? 'bg-emerald-500' : 
+                                       member.status?.toLowerCase() === 'invited' ? 'bg-amber-400' : 'bg-slate-300'
+                                     }`}></div>
                                      <span className="text-xs font-bold text-slate-600">
-                                       {member.status?.toLowerCase() === 'active' ? '活跃' : '已邀请'}
+                                       {member.status?.toLowerCase() === 'active' ? '已加入' : 
+                                        member.status?.toLowerCase() === 'invited' ? '待接受' : member.status}
                                      </span>
                                   </div>
                                </td>
-                               <td className="py-6 text-right pr-10">
-                                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                     <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><ShieldAlert size={18} /></button>
-                                     <button className="p-2 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 size={18} /></button>
-                                  </div>
+                               <td className="py-5 text-right pr-8">
+                                  {teamInfo.is_admin && !member.is_admin && (
+                                    <div className="flex justify-end gap-1">
+                                       <button 
+                                         onClick={() => {
+                                           setTransferTargetId(member.member_id);
+                                           setShowTransferModal(true);
+                                         }}
+                                         className="p-2 text-slate-400 hover:text-amber-600 transition-colors"
+                                         title="设为管理员"
+                                       >
+                                         <ShieldAlert size={18} />
+                                       </button>
+                                       <button 
+                                         onClick={() => handleDeleteMember(Number(member.id))}
+                                         className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                                         title="移除成员"
+                                       >
+                                         <Trash2 size={18} />
+                                       </button>
+                                    </div>
+                                  )}
                                </td>
                             </tr>
                           ))}
@@ -2368,6 +2839,125 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                  </div>
                )}
             </div>
+            
+            {/* 邀请成员弹窗 */}
+            {showInviteModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+                  <h3 className="text-xl font-black text-slate-900 mb-6">添加团队成员</h3>
+                  
+                  {/* 手机号输入 */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">手机号</label>
+                    <div className="flex">
+                      <span className="px-4 py-3 bg-slate-100 border border-r-0 border-slate-200 rounded-l-lg text-sm text-slate-500">+86</span>
+                      <input
+                        type="tel"
+                        value={inviteForm.phone}
+                        onChange={(e) => setInviteForm(prev => ({...prev, phone: e.target.value}))}
+                        placeholder="请输入手机号"
+                        className="flex-1 px-4 py-3 border border-slate-200 rounded-r-lg text-sm focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 角色选择 */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">成员角色</label>
+                    <select
+                      value={inviteForm.role}
+                      onChange={(e) => setInviteForm(prev => ({...prev, role: e.target.value}))}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 bg-white"
+                    >
+                      <option value="viewer">查看者 - 只能查看信息</option>
+                      <option value="recruiter">招聘官 - 可以管理招聘流程</option>
+                      <option value="admin">管理员 - 拥有全部权限</option>
+                    </select>
+                  </div>
+                  
+                  {/* 提示信息 */}
+                  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                    <p className="text-xs text-blue-700">
+                      如果该手机号已注册账号，将直接加入团队；否则将创建邀请记录，待对方注册后自动加入。
+                    </p>
+                  </div>
+                  
+                  {/* 按钮 */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowInviteModal(false);
+                        setInviteForm({phone: '', email: '', role: 'viewer', inviteType: 'phone'});
+                      }}
+                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleInviteMember}
+                      disabled={inviteLoading}
+                      className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    >
+                      {inviteLoading ? '添加中...' : '确认添加'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 移交管理员弹窗 */}
+            {showTransferModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+                  <h3 className="text-xl font-black text-slate-900 mb-2">移交管理员权限</h3>
+                  <p className="text-sm text-slate-500 mb-6">将主管理员权限移交给其他成员后，您将失去管理员权限。</p>
+                  
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                    <p className="text-sm text-amber-800 font-medium flex items-center gap-2">
+                      <AlertTriangle size={16} />
+                      此操作不可撤销，请谨慎操作
+                    </p>
+                  </div>
+                  
+                  {/* 选择新管理员 */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">选择新管理员</label>
+                    <select
+                      value={transferTargetId || ''}
+                      onChange={(e) => setTransferTargetId(Number(e.target.value))}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-indigo-500 bg-white"
+                    >
+                      <option value="">请选择成员</option>
+                      {activeMembers.filter(m => !m.is_admin && m.member_id).map((member: any) => (
+                        <option key={member.id} value={member.member_id}>
+                          {member.name || member.phone || member.email}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {/* 按钮 */}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        setShowTransferModal(false);
+                        setTransferTargetId(null);
+                      }}
+                      className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-lg font-bold text-sm hover:bg-slate-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleTransferAdmin}
+                      disabled={!transferTargetId}
+                      className="flex-1 py-3 bg-amber-500 text-white rounded-lg font-bold text-sm hover:bg-amber-600 transition-colors disabled:opacity-50"
+                    >
+                      确认移交
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'Audit':
@@ -2778,16 +3368,13 @@ const TokenManagementView = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userId = user?.id || 0;
-  const [rechargeAmount, setRechargeAmount] = useState<number | null>(null);
+  const [rechargeAmount, setRechargeAmount] = useState<string>('');
   
   // 动态数据状态
   const [tokenStats, setTokenStats] = useState<any>(null);
   const [tokenHistory, setTokenHistory] = useState<any[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartPeak, setChartPeak] = useState(0);
-  const [chartAvg, setChartAvg] = useState(0);
   
   // 加载数据
   useEffect(() => {
@@ -2795,40 +3382,30 @@ const TokenManagementView = () => {
       if (!userId) return;
       setLoading(true);
       try {
-        const { getTokenStats, getTokenHistory, getTokenChart, getTokenPackages } = await import('./services/apiService');
+        const { getTokenStats, getTokenHistory, getTokenPackages } = await import('./services/apiService');
         
-        // 并行加载所有数据
-        const [statsRes, historyRes, chartRes, packagesRes] = await Promise.all([
+        const [statsRes, historyRes, packagesRes] = await Promise.all([
           getTokenStats(userId),
-          getTokenHistory(userId, 10),
-          getTokenChart(userId, 7),
+          getTokenHistory(userId, 5),
           getTokenPackages()
         ]);
         
         setTokenStats(statsRes);
         setTokenHistory(historyRes.items || []);
-        setChartData(chartRes.data || []);
-        setChartPeak(chartRes.peak || 0);
-        setChartAvg(chartRes.average || 0);
         setPackages(packagesRes.packages || []);
       } catch (error) {
         console.error('加载 Token 数据失败:', error);
-        // 使用默认数据
         setTokenStats({
           balance: 100000,
           balance_display: '0.10M',
           today_usage: 0,
           today_usage_display: '0',
-          change_rate: 0,
-          change_direction: 'stable',
-          total_purchased: 0,
-          total_purchased_display: '¥ 0.00',
           estimated_days: 999
         });
         setPackages([
-          { id: 'starter', name: '入门体验', tokens_display: '100,000', price: 99, discount: null, accent: 'bg-indigo-50' },
-          { id: 'pro', name: '精英猎聘', tokens_display: '1,000,000', price: 799, discount: '性价比最高', accent: 'bg-amber-50' },
-          { id: 'enterprise', name: '企业旗舰', tokens_display: '10,000,000', price: 6999, discount: '-20%', accent: 'bg-rose-50' },
+          { id: 'starter', name: '入门版', tokens_display: '100K', price: 99 },
+          { id: 'pro', name: '专业版', tokens_display: '1M', price: 799, popular: true },
+          { id: 'enterprise', name: '企业版', tokens_display: '10M', price: 6999 },
         ]);
       } finally {
         setLoading(false);
@@ -2837,194 +3414,134 @@ const TokenManagementView = () => {
     loadData();
   }, [userId]);
   
-  // 加载状态
   if (loading) {
     return (
       <div className="pt-40 text-center">
-        <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
-        <p className="text-slate-500">加载资金账户数据中...</p>
+        <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={40} />
+        <p className="text-slate-400 text-sm">加载中...</p>
       </div>
     );
   }
 
   return (
-    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors  ">
-        <ChevronLeft size={20} /> 返回
+    <div className="pt-28 pb-16 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      {/* 顶部导航 */}
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-600 mb-6 text-sm font-medium transition-colors">
+        <ChevronLeft size={18} /> 返回
       </button>
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-        <div>
-          <h1 className="text-4xl font-black text-slate-900 mb-2 flex items-center gap-4 ">
-             <div className="p-3 bg-amber-500 text-white rounded shadow-xl"><CircleDollarSign size={28}/></div>
-             资金账户
-          </h1>
-          <p className="text-slate-500 font-medium tracking-tight ">管理多智能体协作所需的 Token 燃料与账户资金</p>
-        </div>
-        <div className="flex gap-4">
-           <button className="bg-indigo-600 text-white px-6 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl hover:bg-indigo-700 transition-all">
-             <Download size={18}/> 下载月度对账单
-           </button>
-        </div>
+      {/* 页面标题 */}
+      <div className="mb-10">
+        <h1 className="text-2xl font-bold text-slate-900 mb-1">资金账户</h1>
+        <p className="text-slate-400 text-sm">管理 Token 余额与充值</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 rounded-lg p-10 text-white shadow-2xl relative overflow-hidden group">
-           <div className="absolute top-0 right-0 p-10 opacity-20 group-hover:scale-110 transition-transform"><Gem size={140} /></div>
-           <div className="relative z-10">
-             <div className="text-indigo-200 text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ">
-               <div className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse"></div> 可用 Token 余额
-             </div>
-             <div className="text-6xl font-black mb-6 tracking-tighter">{tokenStats?.balance_display || '0.00M'}</div>
-             <div className="flex items-center gap-2 text-indigo-100 font-bold text-sm bg-black/10 px-4 py-2 rounded-full w-fit">
-                <Clock size={16} /> 预计可续航 <span className="text-amber-400 ml-1">{tokenStats?.estimated_days || 0} 天</span>
-             </div>
-           </div>
+      {/* 余额卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-8 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 opacity-10">
+            <Gem size={160} />
+          </div>
+          <div className="relative">
+            <p className="text-indigo-200 text-xs font-medium mb-2">可用余额</p>
+            <div className="text-5xl font-bold mb-4">{tokenStats?.balance_display || '0'}</div>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-1.5 text-indigo-200">
+                <Clock size={14} /> 预计可用 {tokenStats?.estimated_days || 0} 天
+              </span>
+            </div>
+          </div>
         </div>
         
-        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between group  ">
-           <div>
-             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 ">今日智能体负载消耗</div>
-             <div className="text-4xl font-black text-slate-900 flex items-baseline gap-2 ">
-               {tokenStats?.today_usage_display || '0'} <span className="text-sm font-bold text-slate-300 uppercase tracking-tighter ">Tokens</span>
-             </div>
-           </div>
-           <div className={`mt-8 flex items-center gap-2 font-black text-sm px-4 py-1.5 rounded-full w-fit ${
-             tokenStats?.change_direction === 'up' ? 'text-rose-500 bg-rose-50' : 
-             tokenStats?.change_direction === 'down' ? 'text-emerald-500 bg-emerald-50' : 'text-slate-500 bg-slate-50'
-           }`}>
-             {tokenStats?.change_direction === 'up' ? <TrendingUp size={16} /> : 
-              tokenStats?.change_direction === 'down' ? <TrendingDown size={16} /> : <Activity size={16} />}
-             消耗环比{tokenStats?.change_direction === 'up' ? '上升' : tokenStats?.change_direction === 'down' ? '下降' : ''} {Math.abs(tokenStats?.change_rate || 0)}%
-           </div>
-        </div>
-
-        <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow flex flex-col justify-between  ">
-           <div>
-             <div className="text-slate-400 text-xs font-black uppercase tracking-widest mb-4 ">账户累计充值</div>
-             <div className="text-4xl font-black text-slate-900 tracking-tight ">{tokenStats?.total_purchased_display || '¥ 0.00'}</div>
-           </div>
-           <div className="mt-8">
-              <button className="text-indigo-600 font-black text-sm flex items-center gap-1 hover:gap-2 transition-all ">
-                管理支付方式 <ArrowRight size={14} />
-              </button>
-           </div>
+        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+          <p className="text-slate-400 text-xs font-medium mb-2">今日消耗</p>
+          <div className="text-3xl font-bold text-slate-900 mb-1">{tokenStats?.today_usage_display || '0'}</div>
+          <p className="text-xs text-slate-400">Tokens</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8 space-y-10">
-           {/* 消耗趋势图 */}
-           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow  ">
-              <div className="flex justify-between items-center mb-10">
-                 <h3 className="text-xl font-black text-slate-900 flex items-center gap-3 ">
-                   <Activity className="text-indigo-600 " /> Token 资源消耗分布 (近 7 日)
-                 </h3>
-                 <div className="flex gap-2">
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase  ">峰值: {(chartPeak/1000).toFixed(0)}k</span>
-                    <span className="px-3 py-1 bg-slate-50 text-slate-400 text-xs font-black rounded-lg uppercase  ">均值: {(chartAvg/1000).toFixed(0)}k</span>
-                 </div>
-              </div>
-              <div className="h-[320px] w-full">
-                 <ResponsiveContainer width="100%" height="100%">
-                   <AreaChart data={chartData.length > 0 ? chartData : MOCK_USAGE_CHART}>
-                     <defs>
-                       <linearGradient id="colorValue" x1="0" x2="0" y2="1">
-                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                         <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                       </linearGradient>
-                     </defs>
-                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} />
-                     <Tooltip 
-                       contentStyle={{backgroundColor: '#0f172a', borderRadius: '20px', border: 'none', color: '#fff', padding: '12px'}}
-                       itemStyle={{color: '#818cf8', fontWeight: 900}}
-                       cursor={{stroke: '#6366f1', strokeWidth: 2, strokeDasharray: '5 5'}}
-                     />
-                     <Area type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" animationDuration={2000} />
-                   </AreaChart>
-                 </ResponsiveContainer>
-              </div>
-           </div>
-
-           {/* 消耗详情 */}
-           <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow overflow-hidden  ">
-              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3 ">
-                <History className="text-indigo-600 " /> 数字能源消耗流水 (Transaction Logs)
-              </h3>
-              <div className="overflow-x-auto">
-                 <table className="w-full text-left">
-                    <thead>
-                       <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400  ">
-                          <th className="pb-4 pl-2">发生时间</th>
-                          <th className="pb-4">操作类型</th>
-                          <th className="pb-4 text-center">Token 消耗</th>
-                          <th className="pb-4 text-right pr-2">费用参考</th>
-                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 ">
-                       {(tokenHistory.length > 0 ? tokenHistory : MOCK_TOKEN_HISTORY).map((h: any, i: number) => (
-                         <tr key={i} className="group hover:bg-slate-50/50 transition-colors /50">
-                            <td className="py-5 pl-2 text-sm font-bold text-slate-500 ">{h.date}</td>
-                            <td className="py-5">
-                               <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-black rounded-lg uppercase tracking-tight  ">{h.type}</span>
-                            </td>
-                            <td className="py-5 text-center text-sm font-black text-slate-900 ">{h.tokens.toLocaleString()}</td>
-                            <td className="py-5 text-right text-sm font-black text-slate-900  pr-2">{h.cost}</td>
-                         </tr>
-                       ))}
-                    </tbody>
-                 </table>
-              </div>
-              <button className="w-full mt-6 py-4 text-xs font-black text-slate-400 border border-dashed border-slate-200 rounded hover:bg-slate-50 transition-all uppercase tracking-widest  ">
-                加载更多历史记录
+      {/* 充值 */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-slate-900 mb-4">账户充值</h2>
+        <div className="bg-white rounded-xl border border-slate-100 p-6">
+          {/* 金额输入 */}
+          <div className="mb-5">
+            <label className="block text-sm font-medium text-slate-600 mb-2">充值金额</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">¥</span>
+              <input
+                type="number"
+                value={rechargeAmount}
+                onChange={(e) => setRechargeAmount(e.target.value)}
+                placeholder="0.00"
+                className="w-full pl-12 pr-4 py-4 text-3xl font-bold text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+          </div>
+          
+          {/* 快捷金额 */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {[100, 500, 1000, 2000, 5000].map((amount) => (
+              <button
+                key={amount}
+                onClick={() => setRechargeAmount(String(amount))}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  rechargeAmount === String(amount)
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                ¥{amount}
               </button>
-           </div>
+            ))}
+          </div>
+          
+          {/* Token 换算提示 */}
+          {rechargeAmount && Number(rechargeAmount) > 0 && (
+            <div className="bg-indigo-50 rounded-lg p-4 mb-6">
+              <p className="text-sm text-indigo-700">
+                充值 <span className="font-bold">¥{rechargeAmount}</span> 可获得约 <span className="font-bold">{(Number(rechargeAmount) * 10000).toLocaleString()}</span> Tokens
+              </p>
+            </div>
+          )}
+          
+          <button 
+            disabled={!rechargeAmount || Number(rechargeAmount) <= 0}
+            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white disabled:text-slate-400 font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <CreditCard size={18} /> 立即充值
+          </button>
         </div>
+      </div>
 
-        <div className="lg:col-span-4 space-y-10">
-           {/* 充值面板 */}
-           <div className="bg-indigo-900 rounded-lg p-8 text-white shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-5"><CreditCardIcon size={120} /></div>
-              <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-                 <Plus size={20} className="text-indigo-400" /> 快速储备能源
-              </h3>
-              <div className="space-y-4 relative z-10">
-                 {packages.map((pkg: any, i: number) => (
-                    <div 
-                      key={i} 
-                      onClick={() => setRechargeAmount(pkg.price)}
-                      className={`cursor-pointer p-6 rounded-lg border-2 transition-all ${rechargeAmount === pkg.price ? 'bg-indigo-600 border-indigo-400 shadow-xl scale-[1.02]' : 'bg-white/5 border-white/10 hover:border-indigo-500/50 group'}`}
-                    >
-                       <div className="flex justify-between items-start mb-2">
-                          <div className={`text-xs font-black uppercase ${rechargeAmount === pkg.price ? 'text-indigo-200' : 'text-slate-500'}`}>{pkg.name}</div>
-                          {pkg.discount && <span className="px-2 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded uppercase">{pkg.discount}</span>}
-                       </div>
-                       <div className="text-3xl font-black mb-1">{pkg.tokens_display || pkg.tokens} <span className="text-xs font-bold opacity-40">Tokens</span></div>
-                       <div className="text-sm font-medium opacity-60">¥ {pkg.price}</div>
-                    </div>
-                 ))}
+      {/* 消费记录 */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-slate-900">消费记录</h2>
+          <button className="text-sm text-indigo-600 font-medium hover:underline">查看全部</button>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
+          {(tokenHistory.length > 0 ? tokenHistory : [
+            { date: '今天 14:30', type: '简历解析', tokens: 1200, cost: '¥0.12' },
+            { date: '今天 11:20', type: '面试评估', tokens: 3500, cost: '¥0.35' },
+            { date: '昨天 16:45', type: '市场分析', tokens: 2800, cost: '¥0.28' },
+          ]).map((h: any, i: number) => (
+            <div key={i} className={`flex items-center justify-between px-5 py-4 ${i > 0 ? 'border-t border-slate-50' : ''}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <Zap size={16} className="text-slate-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{h.type}</p>
+                  <p className="text-xs text-slate-400">{h.date}</p>
+                </div>
               </div>
-              <button className="w-full mt-10 py-5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 group">
-                 <CreditCardIcon size={20} className="group-hover:rotate-12 transition-transform" /> 立即确认支付
-              </button>
-              <div className="mt-6 flex items-center justify-center gap-6 text-xs font-black text-slate-500 uppercase tracking-widest">
-                 <span className="flex items-center gap-1.5"><ShieldCheck size={14} className="text-emerald-500" /> 安全盾保</span>
-                 <span className="flex items-center gap-1.5"><Zap size={14} className="text-amber-500" /> 即时充入</span>
+              <div className="text-right">
+                <p className="text-sm font-bold text-slate-900">-{h.tokens.toLocaleString()}</p>
+                <p className="text-xs text-slate-400">{h.cost}</p>
               </div>
-           </div>
-
-           {/* 智能分析 */}
-           <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow  ">
-              <div className="flex items-center gap-3 mb-6">
-                 <div className="w-10 h-10 bg-indigo-50 rounded flex items-center justify-center "><Bot size={20} className="text-indigo-600 " /></div>
-                 <h3 className="text-lg font-black text-slate-900 leading-tight ">AI 负载预估</h3>
-              </div>
-              <div className="p-5 bg-slate-50 rounded-lg border border-slate-100 italic text-[11px] leading-relaxed text-slate-600   ">
-                “系统分析显示您的招聘频率正在上升。建议在下一次人才搜索高峰前，升级为‘精英猎聘’套餐，可额外获得 15% 的智能体优先响应权重。”
-              </div>
-           </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -3937,8 +4454,7 @@ const ProductsPage = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
             {stats.map((stat, i) => (
               <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                <div className="text-3xl font-black text-indigo-600">{stat.value}</div>
-                <div className="text-sm text-slate-500">{stat.label}</div>
+                <AnimatedStatItem value={stat.value} label={stat.label} color="text-indigo-600" delay={i * 100} size="large" />
               </div>
             ))}
           </div>
@@ -4196,8 +4712,7 @@ const SolutionsPage = () => {
                 <div className="grid grid-cols-3 gap-4 mt-6">
                   {solution.stats.map((stat, i) => (
                     <div key={i} className="bg-white rounded-xl p-3 text-center shadow-sm">
-                      <div className={`text-2xl font-black ${solution.textColor}`}>{stat.value}</div>
-                      <div className="text-xs text-slate-500">{stat.label}</div>
+                      <AnimatedStatItem value={stat.value} label={stat.label} color={solution.textColor} delay={i * 100} size="normal" />
                     </div>
                   ))}
                 </div>
@@ -4411,9 +4926,8 @@ const ModelsPage = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {advantages.map((item, i) => (
             <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 text-center">
-              <div className="text-3xl font-black text-indigo-600 mb-1">{item.value}</div>
-              <div className="font-bold text-slate-900 text-sm">{item.title}</div>
-              <div className="text-xs text-slate-500">{item.desc}</div>
+              <AnimatedStatItem value={item.value} label={item.title} color="text-indigo-600" delay={i * 100} size="large" />
+              <div className="text-xs text-slate-400 mt-1">{item.desc}</div>
             </div>
           ))}
         </div>
@@ -4845,14 +5359,15 @@ const CandidateView = () => {
                   { label: 'AI沟通', value: '33小时', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                   { label: '总 Token 消耗', value: '1.8M', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
                 ].map((card, i) => (
-                  <div key={i} className="p-6 flex items-center gap-6">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${card.bg}`}>
-                      <card.icon className={card.color} size={20}/>
-                    </div>
-                    <div>
-                      <div className="text-slate-400 text-xs font-black uppercase tracking-widest">{card.label}</div>
-                      <div className="text-xl font-black text-slate-900">{card.value}</div>
-                    </div>
+                  <div key={i} className="p-6">
+                    <AnimatedStatItem 
+                      value={card.value} 
+                      label={card.label} 
+                      icon={card.icon} 
+                      color={card.color} 
+                      bg={card.bg} 
+                      delay={i * 150} 
+                    />
                   </div>
                 ))}
               </div>
@@ -6298,10 +6813,10 @@ const EmployerDashboard = () => {
           <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow relative overflow-hidden">
              <div className="flex items-center justify-between mb-8">
                <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                 <Briefcase className="text-indigo-600" /> 我的岗位
+                 <Briefcase className="text-indigo-600" /> 职位管理
                </h2>
-               <button onClick={() => navigate('/employer/post')} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
-                 全部管理 <ArrowRight size={14} />
+               <button onClick={() => navigate("/employer/post")} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+                 全部 <ArrowRight size={14} />
                </button>
              </div>
              {myJobsLoading ? (
@@ -6319,31 +6834,38 @@ const EmployerDashboard = () => {
                   {myJobs.slice(0, 5).map((job) => (
                     <div 
                       key={job.id} 
-                      onClick={() => navigate('/employer/post')}
+                      onClick={() => navigate(`/employer/post/${job.id}`)}
                       className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all cursor-pointer"
                     >
                       <div className="flex items-center gap-5 w-full md:w-auto">
-                         <div className="w-14 h-14 bg-indigo-600 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform">
+                         <div className={`w-14 h-14 flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 transition-transform group-hover:scale-105 flex-shrink-0 ${
+                           job.status === 'active' ? 'bg-indigo-600 text-white ring-indigo-50' : 'bg-slate-400 text-white ring-slate-100'
+                         }`}>
                             <Briefcase size={24} />
                          </div>
                          <div>
-                            <div className="text-base font-black text-slate-900 tracking-tight">{job.title}</div>
-                            <div className="text-xs font-bold text-slate-500 mt-0.5">{job.location}</div>
+                            <div className="text-base font-semibold text-slate-900">{job.title}</div>
+                            <div className="text-sm text-slate-500 mt-0.5">{job.location}</div>
                             <div className="flex items-center gap-2 mt-2">
-                               <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                               <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
                                  {job.salary_min && job.salary_max ? `${(job.salary_min/1000).toFixed(0)}k-${(job.salary_max/1000).toFixed(0)}k` : '面议'}
                                </span>
-                               <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${job.status === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
+                               <span className={`text-xs font-medium px-2 py-0.5 rounded ${job.status === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
                                  {job.status === 'active' ? '招聘中' : '已关闭'}
                                </span>
                             </div>
                          </div>
                       </div>
-                      <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
-                         <div className="text-right">
-                            <div className="flex items-center gap-2 justify-end">
-                               <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Eye size={12} /> {job.view_count || 0} 浏览</span>
-                            </div>
+                      <div className="flex items-center gap-4 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
+                         <div className="flex items-center gap-3">
+                           <div className="text-center px-3 py-2 bg-white rounded-lg border border-slate-100 min-w-[60px]">
+                             <div className="text-xl font-bold text-indigo-600">{job.view_count || 0}</div>
+                             <div className="text-xs text-slate-400">浏览</div>
+                           </div>
+                           <div className="text-center px-3 py-2 bg-white rounded-lg border border-slate-100 min-w-[60px]">
+                             <div className="text-xl font-bold text-emerald-600">{job.apply_count || 0}</div>
+                             <div className="text-xs text-slate-400">投递</div>
+                           </div>
                          </div>
                          <div className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
                            <ChevronRight size={18} />
@@ -6352,7 +6874,7 @@ const EmployerDashboard = () => {
                     </div>
                   ))}
                   {myJobs.length > 5 && (
-                    <button onClick={() => navigate('/employer/post')} className="text-center py-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+                    <button onClick={() => navigate("/employer/post")} className="text-center py-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
                       查看全部 {myJobs.length} 个岗位 →
                     </button>
                   )}
@@ -6438,18 +6960,20 @@ const EmployerDashboard = () => {
            <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
              <div className="grid grid-cols-1 divide-y divide-slate-100">
                {[
-                 { label: '平均招聘周期', value: '42.5 小时', icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                 { label: '平均招聘周期', value: '42.5小时', icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
                  { label: '匹配成功率', value: '91.2%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                  { label: '总 Token 消耗', value: '1.2M', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
                ].map((card, i) => (
-                 <div key={i} className="p-6 flex items-center gap-6">
-                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${card.bg}`}>
-                     <card.icon className={card.color} size={24}/>
-                   </div>
-                   <div>
-                     <div className="text-slate-400 text-xs font-black uppercase tracking-widest">{card.label}</div>
-                     <div className="text-2xl font-black text-slate-900">{card.value}</div>
-                   </div>
+                 <div key={i} className="p-6">
+                   <AnimatedStatItem 
+                     value={card.value} 
+                     label={card.label} 
+                     icon={card.icon} 
+                     color={card.color} 
+                     bg={card.bg} 
+                     delay={i * 150}
+                     size="large"
+                   />
                  </div>
                ))}
              </div>
@@ -6473,6 +6997,8 @@ const EnterpriseHomeView = () => {
   const [settingsData, setSettingsData] = useState<any>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [certData, setCertData] = useState<any>(null);
+  const [jobList, setJobList] = useState<any[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
   
   useEffect(() => {
     if (userId) {
@@ -6485,6 +7011,11 @@ const EnterpriseHomeView = () => {
           .then(data => setCertData(data))
           .catch(() => {});
       });
+      // 获取岗位列表
+      getMyJobs(userId)
+        .then(data => setJobList(data || []))
+        .catch(() => setJobList([]))
+        .finally(() => setJobsLoading(false));
     }
   }, [userId]);
   
@@ -6679,6 +7210,71 @@ const EnterpriseHomeView = () => {
               </div>
             </div>
           )}
+
+          {/* 招聘中的岗位 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><Briefcase size={20} className="text-indigo-600" /></div>
+                招聘中的岗位
+                {jobList.filter(job => job.status === 'active').length > 0 && (
+                  <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">{jobList.filter(job => job.status === 'active').length}</span>
+                )}
+              </h2>
+              <button onClick={() => navigate('/employer/post')} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 hover:gap-2 transition-all">
+                全部 <ChevronRight size={16} />
+              </button>
+            </div>
+            {jobsLoading ? (
+              <div className="text-center py-8">
+                <Loader2 className="animate-spin mx-auto text-indigo-600 mb-2" size={24} />
+                <p className="text-sm text-slate-400">加载中...</p>
+              </div>
+            ) : jobList.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Briefcase size={28} className="text-slate-400" />
+                </div>
+                <p className="text-slate-400 mb-4">暂无发布的岗位</p>
+                <button onClick={() => navigate('/employer/post')} className="text-indigo-600 font-bold text-sm hover:underline">
+                  发布第一个岗位
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {jobList.filter(job => job.status === 'active').slice(0, 5).map((job) => (
+                  <div
+                    key={job.id}
+                    onClick={() => navigate(`/employer/post/${job.id}`)}
+                    className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 hover:shadow-sm transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-4 min-w-0 flex-1">
+                      <div className="w-11 h-11 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-600 transition-colors">
+                        <Briefcase size={20} className="text-indigo-600 group-hover:text-white transition-colors" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">{job.title}</div>
+                        <div className="text-sm text-slate-500 mt-1 truncate">{job.location}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                      <span className="text-base font-bold text-indigo-600">
+                        {job.salary_min && job.salary_max ? `${(job.salary_min/1000).toFixed(0)}k-${(job.salary_max/1000).toFixed(0)}k` : '面议'}
+                      </span>
+                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center border border-slate-200 group-hover:border-indigo-300 group-hover:bg-indigo-50 transition-colors">
+                        <ChevronRight size={16} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!jobsLoading && jobList.filter(job => job.status === 'active').length > 5 && (
+              <button onClick={() => navigate('/employer/post')} className="w-full mt-5 py-3 text-sm text-indigo-600 font-medium bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors">
+                查看全部 {jobList.filter(job => job.status === 'active').length} 个岗位 →
+              </button>
+            )}
+          </div>
 
           {/* 认证信息 */}
           {dc.isCertified && dc.certInfo && (
@@ -7020,6 +7616,10 @@ const JobPostDetailView = () => {
   const [showDesc, setShowDesc] = useState(false);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [postId]);
+
+  useEffect(() => {
     if (postId && userId) {
       setLoading(true);
       getJobDetail(Number(postId), userId)
@@ -7092,7 +7692,7 @@ const JobPostDetailView = () => {
         <div className="text-center py-20">
           <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
           <p className="text-slate-900 font-black mb-2">岗位不存在或无权访问</p>
-          <button onClick={() => navigate('/employer/post')} className="bg-indigo-600 text-white px-6 py-3 rounded font-black text-sm mt-4 shadow-xl shadow-indigo-200">
+          <button onClick={() => navigate("/employer/post")} className="bg-indigo-600 text-white px-6 py-3 rounded font-black text-sm mt-4 shadow-xl shadow-indigo-200">
             返回职位管理
           </button>
         </div>
@@ -7103,7 +7703,7 @@ const JobPostDetailView = () => {
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
       {/* 页面头部 */}
-      <button onClick={() => navigate('/employer/post')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group text-sm">
+      <button onClick={() => navigate("/employer/post")} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group text-sm">
         <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回职位管理
       </button>
 
@@ -7133,33 +7733,36 @@ const JobPostDetailView = () => {
               </div>
             )}
             {jobData.description && (
-              <div>
-                <button onClick={() => setShowDesc(!showDesc)} className="text-sm text-slate-500 hover:text-indigo-600 font-black flex items-center gap-1.5 transition-colors">
-                  <FileText size={14} />
-                  {showDesc ? '收起详情' : '查看岗位描述'}
-                  {showDesc ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-                {showDesc && (
-                  <div className="mt-3 p-5 bg-slate-50 rounded-lg text-sm text-slate-600 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto border border-slate-100">
-                    {jobData.description}
-                  </div>
+              <div className="mt-4 p-5 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="flex items-center gap-2 mb-3 text-slate-700">
+                  <FileText size={16} className="text-indigo-600" />
+                  <span className="font-semibold">岗位描述</span>
+                </div>
+                <div className={`text-sm text-slate-600 leading-relaxed whitespace-pre-wrap ${!showDesc && jobData.description.length > 300 ? 'line-clamp-4' : ''}`}>
+                  {jobData.description}
+                </div>
+                {jobData.description.length > 300 && (
+                  <button onClick={() => setShowDesc(!showDesc)} className="mt-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1 transition-colors">
+                    {showDesc ? '收起' : '展开全文'}
+                    {showDesc ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </button>
                 )}
               </div>
             )}
           </div>
           {/* 统计 */}
-          <div className="flex md:flex-col gap-4">
-            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
-              <div className="text-2xl font-black text-indigo-600">{stats.total || 0}</div>
-              <div className="text-xs text-slate-400 mt-1 font-black uppercase">投递</div>
+          <div className="flex gap-3">
+            <div className="bg-white rounded-lg px-4 py-3 text-center min-w-[80px] border border-slate-100">
+              <div className="text-xl font-bold text-indigo-600">{stats.total || 0}</div>
+              <div className="text-xs text-slate-400">投递</div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
-              <div className="text-2xl font-black text-emerald-600">{acceptedCount}</div>
-              <div className="text-xs text-slate-400 mt-1 font-black uppercase">录用</div>
+            <div className="bg-white rounded-lg px-4 py-3 text-center min-w-[80px] border border-slate-100">
+              <div className="text-xl font-bold text-emerald-600">{acceptedCount}</div>
+              <div className="text-xs text-slate-400">录用</div>
             </div>
-            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
-              <div className="text-2xl font-black text-slate-900">{jobData.view_count || 0}</div>
-              <div className="text-xs text-slate-400 mt-1 font-black uppercase">浏览</div>
+            <div className="bg-white rounded-lg px-4 py-3 text-center min-w-[80px] border border-slate-100">
+              <div className="text-xl font-bold text-slate-900">{jobData.view_count || 0}</div>
+              <div className="text-xs text-slate-400">浏览</div>
             </div>
           </div>
         </div>
@@ -7477,29 +8080,31 @@ const LoginView = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, register, isLoggedIn, needsRoleSelection, userRole } = useAuth();
-  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [loginMethod, setLoginMethod] = useState<'password' | 'code'>('password');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [showSetPassword, setShowSetPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   
   // 获取来源页面（如果有）
   const from = (location.state as any)?.from || null;
   
   // 表单数据
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [verifyCode, setVerifyCode] = useState('');
   
-  // 已登录则跳转
+  // 已登录则跳转（除非需要设置密码）
   useEffect(() => {
-    if (isLoggedIn) {
+    if (isLoggedIn && !showSetPassword) {
       if (needsRoleSelection) {
         navigate('/select-role', { state: { from } });
       } else if (from) {
-        // 跳转到来源页面
         navigate(from);
       } else {
-        // 根据角色跳转到默认控制台
         if (userRole === 'employer' || userRole === 'recruiter' || userRole === 'admin') {
           navigate('/employer');
         } else {
@@ -7507,35 +8112,158 @@ const LoginView = () => {
         }
       }
     }
-  }, [isLoggedIn, needsRoleSelection, navigate, from, userRole]);
+  }, [isLoggedIn, needsRoleSelection, navigate, from, userRole, showSetPassword]);
+
+  // 倒计时
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // 检查手机号是否已注册
+  const checkPhoneRegistered = async (phoneNum: string): Promise<boolean> => {
+    try {
+      const emailFormat = `${phoneNum}@phone.devnors.com`;
+      // 尝试用一个错误密码登录来检查用户是否存在
+      const result = await login(emailFormat, '__check_only__');
+      // 如果返回"邮箱或密码错误"说明用户存在
+      return result.error?.includes('邮箱或密码错误') || false;
+    } catch {
+      return false;
+    }
+  };
+
+  // 发送验证码
+  const handleSendCode = async () => {
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+      setError('请输入正确的手机号');
+      return;
+    }
+    setError('');
+    
+    // 检查是否是新用户
+    const registered = await checkPhoneRegistered(phone);
+    setIsNewUser(!registered);
+    
+    if (!registered) {
+      // 新用户只能验证码登录
+      setLoginMethod('code');
+    }
+    
+    setCountdown(60);
+    // TODO: 调用后端发送验证码API
+    // 目前模拟发送成功
+  };
+
+  // 手机号变化时重置状态
+  const handlePhoneChange = (value: string) => {
+    const newPhone = value.replace(/\D/g, '').slice(0, 11);
+    setPhone(newPhone);
+    setIsNewUser(false);
+    setError('');
+  };
+
+  // 设置密码
+  const handleSetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      setError('密码至少需要6位');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError('两次密码输入不一致');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      // 调用修改密码API
+      const { changePassword } = await import('./services/apiService');
+      await changePassword('code_' + verifyCode, newPassword);
+      setShowSetPassword(false);
+      // 跳转
+      if (needsRoleSelection) {
+        navigate('/select-role', { state: { from } });
+      } else if (from) {
+        navigate(from);
+      } else {
+        navigate('/candidate');
+      }
+    } catch (err: any) {
+      setError(err.message || '设置密码失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 跳过设置密码
+  const handleSkipSetPassword = () => {
+    setShowSetPassword(false);
+    if (needsRoleSelection) {
+      navigate('/select-role', { state: { from } });
+    } else if (from) {
+      navigate(from);
+    } else {
+      navigate('/candidate');
+    }
+  };
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // 验证手机号
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+      setError('请输入正确的手机号');
+      return;
+    }
+
+    if (loginMethod === 'password') {
+      if (!password || password.length < 6) {
+        setError('密码至少需要6位');
+        return;
+      }
+    } else {
+      if (!verifyCode || verifyCode.length !== 6) {
+        setError('请输入6位验证码');
+        return;
+      }
+    }
+    
     setIsLoading(true);
     
     try {
-      if (isLoginMode) {
-        // 登录
-        const result = await login(email, password);
+      const emailFormat = `${phone}@phone.devnors.com`;
+      
+      if (loginMethod === 'code') {
+        // 验证码登录
+        const result = await login(emailFormat, 'code_' + verifyCode);
         if (!result.success) {
-          setError(result.error || '登录失败');
+          // 尝试注册（新用户）
+          const regResult = await register({ email: emailFormat, password: 'code_' + verifyCode, name: phone, role: 'VIEWER' });
+          if (!regResult.success) {
+            setError('验证码错误或已过期');
+          } else {
+            // 注册成功后自动登录
+            const loginResult = await login(emailFormat, 'code_' + verifyCode);
+            if (loginResult.success) {
+              // 首次登录，提示设置密码
+              setShowSetPassword(true);
+            }
+          }
         }
       } else {
-        // 注册
-        if (password !== confirmPassword) {
-          setError('两次密码输入不一致');
-          setIsLoading(false);
-          return;
-        }
-        if (password.length < 6) {
-          setError('密码至少需要6位');
-          setIsLoading(false);
-          return;
-        }
-        const result = await register({ email, password, name, role: 'VIEWER' });
+        // 密码登录
+        const result = await login(emailFormat, password);
         if (!result.success) {
-          setError(result.error || '注册失败');
+          if (result.error?.includes('邮箱或密码错误')) {
+            // 检查是否是新用户
+            setError('手机号未注册或密码错误，请使用验证码登录');
+            setLoginMethod('code');
+          } else {
+            setError(result.error || '登录失败');
+          }
         }
       }
     } catch (err: any) {
@@ -7561,6 +8289,77 @@ const LoginView = () => {
     setIsLoading(false);
   };
 
+  // 设置密码界面
+  if (showSetPassword) {
+    return (
+      <div className="pt-32 pb-20 px-6 min-h-screen bg-gradient-to-b from-slate-50 to-white">
+        <div className="bg-white rounded-2xl p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
+          
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-100">
+              <Lock className="text-white" size={32}/>
+            </div>
+            <h2 className="text-2xl font-black text-slate-900 mb-2">设置登录密码</h2>
+            <p className="text-slate-400 text-sm font-medium">设置密码后可使用密码快速登录</p>
+          </div>
+
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-sm font-medium flex items-center gap-2">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">设置密码</label>
+              <input 
+                type="password" 
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-emerald-500/10 focus:bg-white focus:border-emerald-300 focus:outline-none transition-all" 
+                placeholder="请设置密码（至少6位）"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">确认密码</label>
+              <input 
+                type="password" 
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-emerald-500/10 focus:bg-white focus:border-emerald-300 focus:outline-none transition-all" 
+                placeholder="请再次输入密码"
+              />
+            </div>
+            
+            <button 
+              onClick={handleSetPassword}
+              disabled={isLoading}
+              className="w-full bg-emerald-500 text-white font-black py-4 rounded-lg shadow-xl shadow-emerald-200 hover:bg-emerald-600 hover:shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  处理中...
+                </>
+              ) : (
+                '确认设置'
+              )}
+            </button>
+            
+            <button 
+              onClick={handleSkipSetPassword}
+              className="w-full py-3 text-slate-500 font-medium hover:text-slate-700 transition-colors"
+            >
+              暂时跳过，稍后设置
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-gradient-to-b from-slate-50 to-white">
       <div className="bg-white rounded-2xl p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
@@ -7571,12 +8370,8 @@ const LoginView = () => {
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100 rotate-6 hover:rotate-0 transition-transform">
             <Zap className="text-white" size={32}/>
           </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2">
-            {isLoginMode ? '欢迎回来' : '创建账号'}
-          </h2>
-          <p className="text-slate-400 text-sm font-medium">
-            {isLoginMode ? '登录您的智能招聘空间' : '开启 AI 原生招聘之旅'}
-          </p>
+          <h2 className="text-2xl font-black text-slate-900 mb-2">登录 / 注册</h2>
+          <p className="text-slate-400 text-sm font-medium">未注册的手机号将自动创建账号</p>
         </div>
 
         {/* 错误提示 */}
@@ -7587,57 +8382,98 @@ const LoginView = () => {
           </div>
         )}
 
-        {/* 登录/注册表单 */}
+        {/* 新用户提示 */}
+        {isNewUser && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm font-medium flex items-center gap-2">
+            <AlertCircle size={16} />
+            该手机号未注册，请使用验证码完成首次登录
+          </div>
+        )}
+
+        {/* 登录方式切换 */}
+        {!isNewUser && (
+          <div className="flex bg-slate-100 rounded-lg p-1 mb-6">
+            <button
+              type="button"
+              onClick={() => { setLoginMethod('password'); setError(''); }}
+              className={`flex-1 py-2.5 text-sm font-bold rounded-md transition-all ${
+                loginMethod === 'password' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              密码登录
+            </button>
+            <button
+              type="button"
+              onClick={() => { setLoginMethod('code'); setError(''); }}
+              className={`flex-1 py-2.5 text-sm font-bold rounded-md transition-all ${
+                loginMethod === 'code' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              验证码登录
+            </button>
+          </div>
+        )}
+
+        {/* 登录表单 */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLoginMode && (
-            <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">姓名</label>
+          <div>
+            <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">手机号</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">+86</span>
               <input 
-                type="text" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
-                placeholder="请输入您的姓名"
-                required={!isLoginMode}
+                type="tel" 
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 pl-14 pr-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
+                placeholder="请输入手机号"
+                maxLength={11}
+                required
               />
             </div>
-          )}
-          
-          <div>
-            <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">邮箱</label>
-            <input 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
-              placeholder="请输入邮箱地址"
-              required
-            />
           </div>
           
-          <div>
-            <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">密码</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
-              placeholder={isLoginMode ? '请输入密码' : '设置密码（至少6位）'}
-              required
-            />
-          </div>
-
-          {!isLoginMode && (
+          {(loginMethod === 'password' && !isNewUser) ? (
             <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">确认密码</label>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">密码</label>
               <input 
                 type="password" 
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
-                placeholder="再次输入密码"
-                required={!isLoginMode}
+                placeholder="请输入密码"
+                required
               />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">验证码</label>
+              <div className="flex gap-3">
+                <input 
+                  type="text" 
+                  value={verifyCode}
+                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="flex-1 bg-slate-50 border border-slate-100 rounded-lg py-3.5 px-4 font-medium focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all" 
+                  placeholder="请输入6位验证码"
+                  maxLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={countdown > 0}
+                  className={`px-4 py-3.5 rounded-lg font-bold text-sm whitespace-nowrap transition-all ${
+                    countdown > 0 
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                      : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+                  }`}
+                >
+                  {countdown > 0 ? `${countdown}s` : '获取验证码'}
+                </button>
+              </div>
             </div>
           )}
           
@@ -7652,23 +8488,10 @@ const LoginView = () => {
                 处理中...
               </>
             ) : (
-              isLoginMode ? '登录' : '注册'
+              isNewUser ? '注册并登录' : '登录'
             )}
           </button>
         </form>
-
-        {/* 切换登录/注册 */}
-        <div className="mt-6 text-center">
-          <button 
-            onClick={() => {
-              setIsLoginMode(!isLoginMode);
-              setError('');
-            }}
-            className="text-sm text-indigo-600 font-bold hover:text-indigo-700 transition-colors"
-          >
-            {isLoginMode ? '没有账号？立即注册' : '已有账号？立即登录'}
-          </button>
-        </div>
 
         {/* 分割线 */}
         <div className="flex items-center gap-4 my-8">
@@ -14774,7 +15597,7 @@ const JobManagementView = () => {
       {/* 页面头部 */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-4 font-black transition-colors group text-sm">
+          <button onClick={() => navigate("/employer")} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-4 font-black transition-colors group text-sm">
             <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回
           </button>
           <h1 className="text-4xl font-black text-slate-900 flex items-center gap-4">
@@ -14787,7 +15610,7 @@ const JobManagementView = () => {
           onClick={() => navigate('/ai-assistant?taskType=post')}
           className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-200 active:scale-95 transition-all"
         >
-          <Plus size={20} /> 发布新岗位
+          <Plus size={20} /> 发布职位
         </button>
       </div>
 
@@ -14896,27 +15719,33 @@ const JobManagementView = () => {
                     <Briefcase size={24} />
                   </div>
                   <div>
-                    <div className="text-base font-black text-slate-900 tracking-tight">{job.title}</div>
-                    <div className="text-xs font-bold text-slate-500 mt-0.5">{job.company} · {job.location}</div>
+                    <div className="text-base font-semibold text-slate-900">{job.title}</div>
+                    <div className="text-sm text-slate-500 mt-0.5">{job.company} · {job.location}</div>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                      <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
                         {formatSalary(job.salary_min, job.salary_max)}
                       </span>
-                      <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${st.color}`}>{st.text}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${st.color}`}>{st.text}</span>
                       {job.tags && job.tags.slice(0, 3).map((tag: string) => (
-                        <span key={tag} className="text-xs font-black uppercase text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">{tag}</span>
+                        <span key={tag} className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-100">{tag}</span>
                       ))}
-                      {job.tags && job.tags.length > 3 && <span className="text-xs text-slate-400 font-bold">+{job.tags.length - 3}</span>}
+                      {job.tags && job.tags.length > 3 && <span className="text-xs text-slate-400">+{job.tags.length - 3}</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
-                  <div className="text-right">
-                    <div className="flex items-center gap-4 justify-end text-xs font-black text-slate-400 uppercase tracking-widest">
-                      <span className="flex items-center gap-1"><Eye size={12} /> {job.view_count || 0}</span>
-                      <span className="flex items-center gap-1"><Users size={12} /> {job.apply_count || 0}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-center px-3 py-2 bg-white rounded-lg border border-slate-100 min-w-[60px]">
+                      <div className="text-xl font-bold text-indigo-600">{job.view_count || 0}</div>
+                      <div className="text-xs text-slate-400">浏览</div>
                     </div>
-                    <div className="text-xs text-slate-400 font-bold mt-1">{job.created_at ? new Date(job.created_at).toLocaleDateString('zh-CN') : '-'}</div>
+                    <div className="text-center px-3 py-2 bg-white rounded-lg border border-slate-100 min-w-[60px]">
+                      <div className="text-xl font-bold text-emerald-600">{job.apply_count || 0}</div>
+                      <div className="text-xs text-slate-400">投递</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-400 text-right hidden md:block">
+                    {job.created_at ? new Date(job.created_at).toLocaleDateString('zh-CN') : '-'}
                   </div>
                   <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button onClick={() => openEdit(job)} className="p-2.5 bg-white text-slate-400 hover:text-indigo-600 rounded border border-slate-100 hover:border-indigo-200 transition-all" title="编辑"><Edit3 size={16} /></button>

@@ -2,9 +2,11 @@
 Authentication Router
 """
 
+import os
+import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,10 @@ from app.utils.security import (
     create_access_token,
     get_current_user,
 )
+
+# 头像上传目录
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "avatars")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 router = APIRouter()
 
@@ -223,3 +229,54 @@ async def change_password(
     await db.commit()
     
     return {"message": "密码修改成功"}
+
+
+@router.post("/me/avatar", response_model=UserResponse)
+async def upload_avatar(
+    file: UploadFile = File(..., description="头像图片 (JPG/PNG/WEBP, 最大 5MB)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """上传/更新用户头像"""
+    # 校验文件类型
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 JPG、PNG、WEBP、GIF 格式的图片"
+        )
+    
+    # 读取文件内容并校验大小
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:  # 5MB
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="图片大小不能超过 5MB"
+        )
+    
+    # 生成唯一文件名
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+    filename = f"{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    
+    # 删除旧头像文件
+    if current_user.avatar_url and "/uploads/avatars/" in current_user.avatar_url:
+        old_filename = current_user.avatar_url.split("/uploads/avatars/")[-1]
+        old_path = os.path.join(UPLOAD_DIR, old_filename)
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except Exception:
+                pass
+    
+    # 保存新文件
+    with open(filepath, "wb") as f:
+        f.write(content)
+    
+    # 更新用户头像 URL
+    avatar_url = f"/uploads/avatars/{filename}"
+    current_user.avatar_url = avatar_url
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return current_user

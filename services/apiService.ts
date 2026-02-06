@@ -200,6 +200,30 @@ export const changePassword = async (oldPassword: string, newPassword: string): 
   });
 };
 
+/**
+ * 上传头像
+ */
+export const uploadAvatar = async (file: File): Promise<UserInfo> => {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${API_BASE_URL}/auth/me/avatar`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || '头像上传失败');
+  }
+  
+  return response.json();
+};
+
 // ============ AI API ============
 
 export interface ResumeAnalysisResult {
@@ -351,28 +375,52 @@ export const createJob = async (data: {
   salary_min?: number;
   salary_max?: number;
   tags?: string[];
+  user_id?: number;
 }): Promise<Job> => {
-  return request('/jobs', {
+  const storedUser = getStoredUser();
+  const payload = {
+    ...data,
+    user_id: data.user_id || storedUser?.id || 1,
+  };
+  return request('/public/jobs', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
+};
+
+/**
+ * 获取我发布的职位
+ */
+export const getMyJobs = async (userId: number): Promise<any[]> => {
+  return request(`/public/my-jobs?user_id=${userId}`);
+};
+
+/**
+ * 获取岗位详情及投递列表
+ */
+export const getJobDetail = async (jobId: number, userId: number): Promise<any> => {
+  return request(`/public/job-detail/${jobId}?user_id=${userId}`);
 };
 
 /**
  * 更新职位
  */
-export const updateJob = async (id: number, data: Partial<Job>): Promise<Job> => {
-  return request(`/jobs/${id}`, {
+export const updateJob = async (id: number, data: Partial<Job> & { user_id?: number }): Promise<any> => {
+  const storedUser = getStoredUser();
+  const payload = { ...data, user_id: data.user_id || storedUser?.id || 1 };
+  return request(`/public/jobs/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
   });
 };
 
 /**
  * 删除职位
  */
-export const deleteJob = async (id: number): Promise<void> => {
-  return request(`/jobs/${id}`, {
+export const deleteJob = async (id: number, userId?: number): Promise<void> => {
+  const storedUser = getStoredUser();
+  const uid = userId || storedUser?.id || 1;
+  return request(`/public/jobs/${id}?user_id=${uid}`, {
     method: 'DELETE',
   });
 };
@@ -688,16 +736,22 @@ export const getSettings = async (userId: number = 1): Promise<any> => {
  */
 export const updateSettings = async (data: {
   display_name?: string;
+  short_name?: string;
   contact_email?: string;
   contact_name?: string;
   contact_phone?: string;
   address?: string;
+  detail_address?: string;
   website?: string;
   industry?: string;
   company_size?: string;
+  funding_stage?: string;
   description?: string;
+  hr_phone?: string;
+  benefits?: string;
   notification_enabled?: boolean;
   dark_mode?: boolean;
+  [key: string]: any;
 }, userId: number = 1): Promise<any> => {
   return request(`/settings?user_id=${userId}`, {
     method: 'PUT',
@@ -755,18 +809,70 @@ export const createPersonalCertification = async (data: {
 };
 
 /**
+ * 创建企业认证
+ */
+export const createEnterpriseCertification = async (data: {
+  name: string;
+  organization?: string;
+  cert_date?: string;
+  category?: string;
+  color?: string;
+  icon?: string;
+  score?: number;
+  credit_code?: string;
+  valid_period?: string;
+  business_address?: string;
+  registered_capital?: string;
+  business_scope?: string;
+  image_data?: string;
+  id_card_name?: string;
+  id_card_number?: string;
+  id_card_authority?: string;
+  id_card_valid_period?: string;
+  image_data_front?: string;
+  image_data_back?: string;
+}, userId: number = 1): Promise<any> => {
+  // 使用 JSON body 传递数据以支持大字段（如 base64 图片）
+  return request(`/settings/enterprise-certifications?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name: data.name,
+      organization: data.organization || '系统认证',
+      cert_date: data.cert_date || new Date().toISOString().split('T')[0],
+      category: data.category || 'qualification',
+      color: data.color,
+      icon: data.icon,
+      score: data.score,
+      credit_code: data.credit_code,
+      valid_period: data.valid_period,
+      business_address: data.business_address,
+      registered_capital: data.registered_capital,
+      business_scope: data.business_scope,
+      image_data: data.image_data,
+      id_card_name: data.id_card_name,
+      id_card_number: data.id_card_number,
+      id_card_authority: data.id_card_authority,
+      id_card_valid_period: data.id_card_valid_period,
+      image_data_front: data.image_data_front,
+      image_data_back: data.image_data_back
+    })
+  });
+};
+
+/**
  * 获取团队成员
  */
-export const getTeamMembers = async (userId: number = 1): Promise<any[]> => {
+export const getTeamMembers = async (userId: number = 1): Promise<any> => {
   return request(`/settings/team-members?user_id=${userId}`);
 };
 
 /**
- * 邀请团队成员
+ * 邀请团队成员（支持手机号或邮箱）
  */
 export const inviteTeamMember = async (data: {
-  name: string;
-  email: string;
+  name?: string;
+  email?: string;
+  phone?: string;
   role: string;
 }, userId: number = 1): Promise<any> => {
   return request(`/settings/team-members?user_id=${userId}`, {
@@ -781,6 +887,50 @@ export const inviteTeamMember = async (data: {
 export const deleteTeamMember = async (memberId: number, userId: number = 1): Promise<any> => {
   return request(`/settings/team-members/${memberId}?user_id=${userId}`, {
     method: 'DELETE',
+  });
+};
+
+/**
+ * 移交管理员权限
+ */
+export const transferAdmin = async (newAdminId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/team-members/transfer-admin?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ new_admin_id: newAdminId }),
+  });
+};
+
+/**
+ * 获取企业信息
+ */
+export const getEnterpriseInfo = async (userId: number = 1): Promise<any> => {
+  return request(`/settings/enterprise-info?user_id=${userId}`);
+};
+
+/**
+ * 检查企业是否已被验证
+ */
+export const checkEnterpriseVerification = async (creditCode: string, userId: number = 1): Promise<any> => {
+  return request(`/settings/enterprise/check-verification?credit_code=${encodeURIComponent(creditCode)}&user_id=${userId}`, {
+    method: 'POST',
+  });
+};
+
+/**
+ * 申请加入企业
+ */
+export const requestJoinEnterprise = async (enterpriseId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/enterprise/request-join?enterprise_id=${enterpriseId}&user_id=${userId}`, {
+    method: 'POST',
+  });
+};
+
+/**
+ * 审批成员加入申请
+ */
+export const approveMember = async (memberId: number, approve: boolean, userId: number = 1): Promise<any> => {
+  return request(`/settings/enterprise/approve-member/${memberId}?approve=${approve}&user_id=${userId}`, {
+    method: 'POST',
   });
 };
 
@@ -862,6 +1012,8 @@ export default {
   createJob,
   updateJob,
   deleteJob,
+  getMyJobs,
+  getJobDetail,
   // Candidates
   getMyCandidate,
   getCandidates,
@@ -1176,7 +1328,7 @@ export async function autoFillProfileFromResume(
  */
 export async function certOCRReview(
   imageBase64: string,
-  certType: 'education' | 'skill_driver' | 'skill_cert' | 'work' | 'identity_front' | 'identity_back' | 'credit_fund' | 'credit_social',
+  certType: 'education' | 'skill_driver' | 'skill_cert' | 'work' | 'identity_front' | 'identity_back' | 'credit_fund' | 'credit_social' | 'business_license' | 'org_code' | 'tax_registration' | 'legal_person_id' | 'legal_person_id_front' | 'legal_person_id_back' | 'qualification' | 'enterprise_credit',
   userId: number = 1
 ): Promise<{
   success: boolean;
@@ -1185,6 +1337,14 @@ export async function certOCRReview(
   detected_side?: 'front' | 'back';
 }> {
   try {
+    // 映射法人身份证类型到通用身份证类型
+    let mappedCertType = certType;
+    if (certType === 'legal_person_id_front') {
+      mappedCertType = 'identity_front';
+    } else if (certType === 'legal_person_id_back') {
+      mappedCertType = 'identity_back';
+    }
+    
     const response = await fetch(`${API_BASE_URL}/settings/cert-ocr-review`, {
       method: 'POST',
       headers: {
@@ -1192,7 +1352,7 @@ export async function certOCRReview(
       },
       body: JSON.stringify({
         image_base64: imageBase64,
-        cert_type: certType,
+        cert_type: mappedCertType,
         user_id: userId,
       }),
     });

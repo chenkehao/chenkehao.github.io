@@ -64,12 +64,46 @@ class User(Base):
         back_populates="owner",
         foreign_keys="TeamMember.owner_id"
     )
+    admin_enterprise: Mapped[Optional["Enterprise"]] = relationship(
+        "Enterprise",
+        back_populates="admin_user",
+        foreign_keys="Enterprise.admin_user_id",
+        uselist=False
+    )
     
     # Memory/Preferences stored as JSON
     memory_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
+
+
+class Enterprise(Base):
+    """Enterprise model for verified companies"""
+    
+    __tablename__ = "enterprises"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    credit_code: Mapped[str] = mapped_column(String(50), unique=True, index=True)  # 统一社会信用代码
+    company_name: Mapped[str] = mapped_column(String(255))
+    legal_person: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # 主管理员
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    
+    # 企业状态
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active, suspended
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationships
+    admin_user: Mapped["User"] = relationship("User", back_populates="admin_enterprise", foreign_keys=[admin_user_id])
+    members: Mapped[List["TeamMember"]] = relationship("TeamMember", back_populates="enterprise")
+    
+    def __repr__(self):
+        return f"<Enterprise(id={self.id}, name={self.company_name}, credit_code={self.credit_code})>"
 
 
 class TeamMember(Base):
@@ -80,11 +114,14 @@ class TeamMember(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     member_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    enterprise_id: Mapped[Optional[int]] = mapped_column(ForeignKey("enterprises.id"), nullable=True, index=True)
     
     # Invitation info
-    invited_email: Mapped[str] = mapped_column(String(255))
+    invited_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    invited_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.VIEWER)
-    status: Mapped[str] = mapped_column(String(20), default="invited")  # invited, active
+    status: Mapped[str] = mapped_column(String(20), default="invited")  # invited, active, pending_approval
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否是管理员
     
     # Timestamps
     invited_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -93,6 +130,7 @@ class TeamMember(Base):
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="team_members", foreign_keys=[owner_id])
     member: Mapped[Optional["User"]] = relationship("User", foreign_keys=[member_id])
+    enterprise: Mapped[Optional["Enterprise"]] = relationship("Enterprise", back_populates="members")
     
     def __repr__(self):
-        return f"<TeamMember(id={self.id}, email={self.invited_email}, status={self.status})>"
+        return f"<TeamMember(id={self.id}, email={self.invited_email}, phone={self.invited_phone}, status={self.status})>"

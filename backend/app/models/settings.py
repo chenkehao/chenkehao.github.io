@@ -24,16 +24,44 @@ class UserSettings(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     
-    # 基础信息
-    display_name = Column(String(200), default="")  # 显示名称/企业全称
-    contact_email = Column(String(200), default="")  # 管理联系邮箱
-    contact_name = Column(String(100), default="")  # 联系人姓名
-    contact_phone = Column(String(50), default="")  # 联系电话
-    address = Column(String(500), default="")  # 公司地址
-    website = Column(String(200), default="")  # 官方网址
-    industry = Column(String(100), default="人工智能")  # 所属行业
-    company_size = Column(String(50), default="1-50人")  # 企业规模
-    description = Column(Text, default="")  # 企业简介
+    # 企业基本信息
+    display_name = Column(String(200), default="")  # 企业全称
+    short_name = Column(String(100), default="")  # 企业简称/品牌名
+    enterprise_type = Column(String(100), default="")  # 企业类型（有限责任公司/股份有限公司等）
+    industry = Column(String(100), default="")  # 所属行业
+    company_size = Column(String(50), default="")  # 企业规模
+    founding_year = Column(String(20), default="")  # 成立年份
+    funding_stage = Column(String(50), default="")  # 融资阶段
+    
+    # 企业地址
+    province = Column(String(50), default="")  # 省
+    city = Column(String(50), default="")  # 市
+    district = Column(String(50), default="")  # 区
+    detail_address = Column(String(500), default="")  # 详细地址
+    address = Column(String(500), default="")  # 完整地址（兼容旧字段）
+    
+    # 企业联系方式
+    contact_phone = Column(String(50), default="")  # 企业联系电话
+    contact_email = Column(String(200), default="")  # 企业邮箱
+    website = Column(String(200), default="")  # 官方网站
+    
+    # HR联系人
+    contact_name = Column(String(100), default="")  # HR联系人姓名
+    hr_position = Column(String(100), default="")  # HR联系人职位
+    hr_phone = Column(String(50), default="")  # HR联系人电话
+    hr_email = Column(String(200), default="")  # HR联系人邮箱
+    
+    # 企业介绍
+    slogan = Column(String(200), default="")  # 一句话介绍
+    description = Column(Text, default="")  # 企业详细介绍
+    
+    # 工作环境
+    work_time = Column(String(100), default="")  # 工作时间（如：9:00-18:00）
+    rest_type = Column(String(50), default="")  # 休息类型（双休/单休/大小周）
+    
+    # 福利与照片
+    benefits = Column(Text, default="[]")  # 福利标签（JSON数组）
+    company_photos = Column(Text, default="[]")  # 公司环境照片（JSON数组）
     
     # 功能开关
     notification_enabled = Column(Boolean, default=True)  # 智能消息推送
@@ -53,13 +81,29 @@ class EnterpriseCertification(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
     name = Column(String(200), nullable=False)  # 认证名称
-    organization = Column(String(200))  # 发证机构
+    organization = Column(String(200))  # 发证机构/法定代表人
     cert_date = Column(String(20))  # 认证日期
     status = Column(SQLEnum(CertificationStatus), default=CertificationStatus.VALID)
     category = Column(String(50), default="qualification")  # 类别：qualification, credit, other
     score = Column(Integer)  # 信用分数（如适用）
     color = Column(String(100))  # 显示颜色
     icon = Column(String(50))  # 图标名称
+    
+    # 营业执照专用字段
+    credit_code = Column(String(50))  # 统一社会信用代码
+    valid_period = Column(String(100))  # 有效期
+    business_address = Column(String(500))  # 住所/经营地址
+    registered_capital = Column(String(100))  # 注册资本
+    business_scope = Column(Text)  # 经营范围
+    image_data = Column(Text)  # 证件图片 Base64（用于后台查看）
+    
+    # 身份证专用字段
+    id_card_name = Column(String(50))  # 身份证姓名
+    id_card_number = Column(String(30))  # 身份证号
+    id_card_authority = Column(String(100))  # 签发机关
+    id_card_valid_period = Column(String(50))  # 有效期
+    image_data_front = Column(Text)  # 正面图片
+    image_data_back = Column(Text)  # 背面图片
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

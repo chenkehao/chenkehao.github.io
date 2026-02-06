@@ -19,7 +19,7 @@ from app.models.settings import (
     AuditLog,
     CertificationStatus
 )
-from app.models.user import TeamMember, UserRole
+from app.models.user import TeamMember, UserRole, Enterprise, User
 
 router = APIRouter(tags=["settings"])
 
@@ -27,23 +27,64 @@ router = APIRouter(tags=["settings"])
 # === Pydantic 模型 ===
 
 class UserSettingsUpdate(BaseModel):
-    display_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    address: Optional[str] = None
-    website: Optional[str] = None
-    industry: Optional[str] = None
-    company_size: Optional[str] = None
-    description: Optional[str] = None
+    # 企业基本信息
+    display_name: Optional[str] = None  # 企业全称
+    short_name: Optional[str] = None  # 企业简称/品牌名
+    enterprise_type: Optional[str] = None  # 企业类型
+    industry: Optional[str] = None  # 所属行业
+    company_size: Optional[str] = None  # 企业规模
+    founding_year: Optional[str] = None  # 成立年份
+    funding_stage: Optional[str] = None  # 融资阶段
+    
+    # 企业地址
+    province: Optional[str] = None  # 省
+    city: Optional[str] = None  # 市
+    district: Optional[str] = None  # 区
+    detail_address: Optional[str] = None  # 详细地址
+    address: Optional[str] = None  # 完整地址（兼容旧字段）
+    
+    # 企业联系方式
+    contact_phone: Optional[str] = None  # 企业联系电话
+    contact_email: Optional[str] = None  # 企业邮箱
+    website: Optional[str] = None  # 官方网站
+    
+    # HR联系人
+    contact_name: Optional[str] = None  # HR联系人姓名
+    hr_position: Optional[str] = None  # HR联系人职位
+    hr_phone: Optional[str] = None  # HR联系人电话
+    hr_email: Optional[str] = None  # HR联系人邮箱
+    
+    # 企业介绍
+    slogan: Optional[str] = None  # 一句话介绍
+    description: Optional[str] = None  # 企业详细介绍
+    
+    # 工作环境
+    work_time: Optional[str] = None  # 工作时间
+    rest_type: Optional[str] = None  # 休息类型
+    
+    # 福利与照片
+    benefits: Optional[str] = None  # 福利标签（JSON字符串）
+    company_photos: Optional[str] = None  # 公司环境照片（JSON字符串）
+    
+    # 功能开关
     notification_enabled: Optional[bool] = None
     dark_mode: Optional[bool] = None
 
 
 class TeamMemberCreate(BaseModel):
-    name: str
-    email: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     role: str = "viewer"
+
+
+class TransferAdminRequest(BaseModel):
+    new_admin_id: int
+
+
+class JoinEnterpriseRequest(BaseModel):
+    enterprise_id: int
+    user_id: int
 
 
 class AIEngineConfigCreate(BaseModel):
@@ -56,6 +97,29 @@ class AuditLogCreate(BaseModel):
     action: str
     actor: str
     ip_address: Optional[str] = None
+
+
+class EnterpriseCertificationCreate(BaseModel):
+    """企业认证创建请求"""
+    name: str
+    organization: Optional[str] = "系统认证"
+    cert_date: Optional[str] = None
+    category: Optional[str] = "qualification"
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    score: Optional[int] = None
+    credit_code: Optional[str] = None
+    valid_period: Optional[str] = None
+    business_address: Optional[str] = None
+    registered_capital: Optional[str] = None
+    business_scope: Optional[str] = None
+    image_data: Optional[str] = None
+    id_card_name: Optional[str] = None
+    id_card_number: Optional[str] = None
+    id_card_authority: Optional[str] = None
+    id_card_valid_period: Optional[str] = None
+    image_data_front: Optional[str] = None
+    image_data_back: Optional[str] = None
 
 
 # === 基础设置 API ===
@@ -71,32 +135,82 @@ async def get_settings(
     )
     settings = result.scalar_one_or_none()
     
+    # 默认设置
+    default_settings = {
+        # 企业基本信息
+        "display_name": "",
+        "short_name": "",
+        "enterprise_type": "",
+        "industry": "",
+        "company_size": "",
+        "founding_year": "",
+        "funding_stage": "",
+        # 企业地址
+        "province": "",
+        "city": "",
+        "district": "",
+        "detail_address": "",
+        "address": "",
+        # 企业联系方式
+        "contact_phone": "",
+        "contact_email": "",
+        "website": "",
+        # HR联系人
+        "contact_name": "",
+        "hr_position": "",
+        "hr_phone": "",
+        "hr_email": "",
+        # 企业介绍
+        "slogan": "",
+        "description": "",
+        # 工作环境
+        "work_time": "",
+        "rest_type": "",
+        # 福利与照片
+        "benefits": "[]",
+        "company_photos": "[]",
+        # 功能开关
+        "notification_enabled": True,
+        "dark_mode": False
+    }
+    
     if not settings:
-        # 返回默认设置
-        return {
-            "display_name": "",
-            "contact_email": "",
-            "contact_name": "",
-            "contact_phone": "",
-            "address": "",
-            "website": "",
-            "industry": "人工智能",
-            "company_size": "1-50人",
-            "description": "",
-            "notification_enabled": True,
-            "dark_mode": False
-        }
+        return default_settings
     
     return {
+        # 企业基本信息
         "display_name": settings.display_name or "",
-        "contact_email": settings.contact_email or "",
-        "contact_name": settings.contact_name or "",
-        "contact_phone": settings.contact_phone or "",
+        "short_name": settings.short_name or "",
+        "enterprise_type": settings.enterprise_type or "",
+        "industry": settings.industry or "",
+        "company_size": settings.company_size or "",
+        "founding_year": settings.founding_year or "",
+        "funding_stage": settings.funding_stage or "",
+        # 企业地址
+        "province": settings.province or "",
+        "city": settings.city or "",
+        "district": settings.district or "",
+        "detail_address": settings.detail_address or "",
         "address": settings.address or "",
+        # 企业联系方式
+        "contact_phone": settings.contact_phone or "",
+        "contact_email": settings.contact_email or "",
         "website": settings.website or "",
-        "industry": settings.industry or "人工智能",
-        "company_size": settings.company_size or "1-50人",
+        # HR联系人
+        "contact_name": settings.contact_name or "",
+        "hr_position": settings.hr_position or "",
+        "hr_phone": settings.hr_phone or "",
+        "hr_email": settings.hr_email or "",
+        # 企业介绍
+        "slogan": settings.slogan or "",
         "description": settings.description or "",
+        # 工作环境
+        "work_time": settings.work_time or "",
+        "rest_type": settings.rest_type or "",
+        # 福利与照片
+        "benefits": settings.benefits or "[]",
+        "company_photos": settings.company_photos or "[]",
+        # 功能开关
         "notification_enabled": settings.notification_enabled if settings.notification_enabled is not None else True,
         "dark_mode": settings.dark_mode if settings.dark_mode is not None else False
     }
@@ -177,38 +291,134 @@ async def get_enterprise_certifications(
         "category": c.category,
         "score": c.score,
         "color": c.color,
-        "icon": c.icon
+        "icon": c.icon,
+        "credit_code": c.credit_code,
+        "valid_period": c.valid_period,
+        "business_address": c.business_address,
+        "registered_capital": c.registered_capital,
+        "business_scope": c.business_scope,
+        "image_data": c.image_data,
+        "id_card_name": c.id_card_name,
+        "id_card_number": c.id_card_number,
+        "id_card_authority": c.id_card_authority,
+        "id_card_valid_period": c.id_card_valid_period,
+        "image_data_front": c.image_data_front,
+        "image_data_back": c.image_data_back
     } for c in certs]
 
 
 @router.post("/enterprise-certifications")
 async def create_enterprise_certification(
-    name: str,
-    organization: str,
-    cert_date: str,
-    category: str = "qualification",
-    color: str = None,
-    icon: str = None,
-    score: int = None,
+    data: EnterpriseCertificationCreate,
     user_id: int = Query(1, description="用户ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """创建企业认证"""
+    """创建企业认证（使用 JSON body 传递数据以支持大字段如图片）"""
+    from datetime import date
+    
+    # 检查是否是营业执照认证，如果是则处理企业关联
+    enterprise_exists = False
+    existing_enterprise = None
+    is_new_enterprise = False
+    
+    if data.credit_code:
+        # 检查该信用代码是否已被其他企业验证
+        enterprise_result = await db.execute(
+            select(Enterprise).where(Enterprise.credit_code == data.credit_code)
+        )
+        existing_enterprise = enterprise_result.scalar_one_or_none()
+        
+        if existing_enterprise:
+            enterprise_exists = True
+            # 企业已存在，检查当前用户是否已是成员
+            member_result = await db.execute(
+                select(TeamMember).where(
+                    TeamMember.enterprise_id == existing_enterprise.id,
+                    TeamMember.member_id == user_id
+                )
+            )
+            existing_member = member_result.scalar_one_or_none()
+            
+            if not existing_member and existing_enterprise.admin_user_id != user_id:
+                # 用户不是成员也不是管理员，创建待审批的加入申请
+                user_result = await db.execute(select(User).where(User.id == user_id))
+                user = user_result.scalar_one_or_none()
+                
+                join_request = TeamMember(
+                    owner_id=existing_enterprise.admin_user_id,
+                    member_id=user_id,
+                    enterprise_id=existing_enterprise.id,
+                    invited_email=user.email if user else None,
+                    invited_phone=user.phone if user else None,
+                    role=UserRole.VIEWER,
+                    status="pending_approval",
+                    is_admin=False
+                )
+                db.add(join_request)
+    
     cert = EnterpriseCertification(
         user_id=user_id,
-        name=name,
-        organization=organization,
-        cert_date=cert_date,
-        category=category,
-        color=color,
-        icon=icon,
-        score=score,
+        name=data.name,
+        organization=data.organization or '系统认证',
+        cert_date=data.cert_date or date.today().isoformat(),
+        category=data.category or 'qualification',
+        color=data.color,
+        icon=data.icon,
+        score=data.score,
+        credit_code=data.credit_code,
+        valid_period=data.valid_period,
+        business_address=data.business_address,
+        registered_capital=data.registered_capital,
+        business_scope=data.business_scope,
+        image_data=data.image_data,
+        id_card_name=data.id_card_name,
+        id_card_number=data.id_card_number,
+        id_card_authority=data.id_card_authority,
+        id_card_valid_period=data.id_card_valid_period,
+        image_data_front=data.image_data_front,
+        image_data_back=data.image_data_back,
         status=CertificationStatus.VALID
     )
     db.add(cert)
+    
+    # 如果是营业执照且企业不存在，创建新企业
+    if data.credit_code and not enterprise_exists:
+        is_new_enterprise = True
+        new_enterprise = Enterprise(
+            credit_code=data.credit_code,
+            company_name=data.name or '未命名企业',
+            legal_person=data.id_card_name,
+            admin_user_id=user_id,
+            status="active"
+        )
+        db.add(new_enterprise)
+        await db.flush()  # 获取 enterprise id
+        
+        # 将当前用户添加为企业管理员成员
+        admin_member = TeamMember(
+            owner_id=user_id,
+            member_id=user_id,
+            enterprise_id=new_enterprise.id,
+            role=UserRole.ADMIN,
+            status="active",
+            is_admin=True,
+            joined_at=datetime.utcnow()
+        )
+        db.add(admin_member)
+    
     await db.commit()
     
-    return {"message": "认证已添加", "id": cert.id}
+    response = {"message": "认证已添加", "id": cert.id}
+    
+    if enterprise_exists and existing_enterprise:
+        response["enterprise_exists"] = True
+        response["enterprise_name"] = existing_enterprise.company_name
+        response["message"] = f"认证已添加。该企业已被验证，您的加入申请已提交给管理员审批。"
+    elif is_new_enterprise:
+        response["is_new_enterprise"] = True
+        response["message"] = "认证已添加，您已成为该企业的主管理员。"
+    
+    return response
 
 
 # === 个人认证信息 API ===
@@ -383,21 +593,78 @@ async def get_team_members(
     db: AsyncSession = Depends(get_db)
 ):
     """获取团队成员列表"""
-    result = await db.execute(
-        select(TeamMember)
-        .where(TeamMember.owner_id == user_id)
-        .order_by(TeamMember.invited_at.desc())
+    # 首先获取用户信息，检查是否是企业管理员
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    current_user = user_result.scalar_one_or_none()
+    
+    # 查找用户所属的企业（作为管理员或成员）
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
     )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    is_admin = enterprise is not None
+    enterprise_id = enterprise.id if enterprise else None
+    
+    # 如果不是管理员，检查是否是企业成员
+    if not is_admin:
+        member_result = await db.execute(
+            select(TeamMember).where(
+                TeamMember.member_id == user_id,
+                TeamMember.status == "active"
+            )
+        )
+        member_record = member_result.scalar_one_or_none()
+        if member_record and member_record.enterprise_id:
+            enterprise_id = member_record.enterprise_id
+    
+    # 获取团队成员
+    if enterprise_id:
+        result = await db.execute(
+            select(TeamMember)
+            .where(TeamMember.enterprise_id == enterprise_id)
+            .order_by(TeamMember.is_admin.desc(), TeamMember.invited_at.desc())
+        )
+    else:
+        result = await db.execute(
+            select(TeamMember)
+            .where(TeamMember.owner_id == user_id)
+            .order_by(TeamMember.invited_at.desc())
+        )
     members = result.scalars().all()
     
-    return [{
-        "id": str(m.id),
-        "name": m.invited_email.split('@')[0].title(),  # 从邮箱提取名字
-        "email": m.invited_email,
-        "role": m.role.value if m.role else "viewer",
-        "status": m.status.title() if m.status else "Invited",
-        "lastActive": m.joined_at.isoformat() if m.joined_at else None
-    } for m in members]
+    # 获取成员的用户信息
+    member_list = []
+    for m in members:
+        member_info = None
+        if m.member_id:
+            member_result = await db.execute(select(User).where(User.id == m.member_id))
+            member_info = member_result.scalar_one_or_none()
+        
+        name = m.invited_phone or m.invited_email
+        if member_info:
+            name = member_info.name or member_info.email.split('@')[0]
+        elif m.invited_email:
+            name = m.invited_email.split('@')[0].title()
+        
+        member_list.append({
+            "id": str(m.id),
+            "member_id": m.member_id,
+            "name": name,
+            "email": m.invited_email,
+            "phone": m.invited_phone,
+            "role": m.role.value if m.role else "viewer",
+            "status": m.status.title() if m.status else "Invited",
+            "is_admin": m.is_admin,
+            "lastActive": m.joined_at.isoformat() if m.joined_at else None
+        })
+    
+    return {
+        "members": member_list,
+        "is_admin": is_admin,
+        "enterprise_id": enterprise_id,
+        "enterprise_name": enterprise.company_name if enterprise else None
+    }
 
 
 @router.post("/team-members")
@@ -406,16 +673,47 @@ async def create_team_member(
     user_id: int = Query(1, description="用户ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """邀请新团队成员"""
-    # 检查是否已存在
-    result = await db.execute(
-        select(TeamMember)
-        .where(TeamMember.owner_id == user_id)
-        .where(TeamMember.invited_email == data.email)
+    """邀请新团队成员（支持手机号或邮箱）"""
+    # 获取用户所属企业
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
     )
+    enterprise = enterprise_result.scalar_one_or_none()
+    enterprise_id = enterprise.id if enterprise else None
+    
+    # 检查是否已存在
+    if data.phone:
+        result = await db.execute(
+            select(TeamMember)
+            .where(TeamMember.owner_id == user_id)
+            .where(TeamMember.invited_phone == data.phone)
+        )
+    elif data.email:
+        result = await db.execute(
+            select(TeamMember)
+            .where(TeamMember.owner_id == user_id)
+            .where(TeamMember.invited_email == data.email)
+        )
+    else:
+        raise HTTPException(status_code=400, detail="请提供手机号或邮箱")
+    
     existing = result.scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=400, detail="该邮箱已被邀请")
+        raise HTTPException(status_code=400, detail="该成员已被邀请")
+    
+    # 检查手机号是否已注册，如果已注册则关联用户
+    member_user_id = None
+    if data.phone:
+        # 查找手机号对应的用户（通过 phone 字段或邮箱格式）
+        phone_email = f"{data.phone}@phone.devnors.com"
+        user_result = await db.execute(
+            select(User).where(
+                (User.phone == data.phone) | (User.email == phone_email)
+            )
+        )
+        existing_user = user_result.scalar_one_or_none()
+        if existing_user:
+            member_user_id = existing_user.id
     
     # 解析角色
     try:
@@ -425,24 +723,29 @@ async def create_team_member(
     
     member = TeamMember(
         owner_id=user_id,
+        member_id=member_user_id,
+        enterprise_id=enterprise_id,
         invited_email=data.email,
+        invited_phone=data.phone,
         role=role,
-        status="invited"
+        status="active" if member_user_id else "invited",
+        is_admin=False
     )
     db.add(member)
     await db.commit()
     
     # 记录审计日志
+    invite_target = data.phone or data.email
     audit_log = AuditLog(
         user_id=user_id,
-        action=f"邀请新成员: {data.email}",
+        action=f"邀请新成员: {invite_target}",
         actor="管理员",
         ip_address="127.0.0.1"
     )
     db.add(audit_log)
     await db.commit()
     
-    return {"message": "邀请已发送", "id": member.id}
+    return {"message": "成员已添加", "id": member.id, "status": member.status}
 
 
 @router.delete("/team-members/{member_id}")
@@ -452,20 +755,270 @@ async def delete_team_member(
     db: AsyncSession = Depends(get_db)
 ):
     """删除团队成员"""
+    # 检查是否是管理员
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
     result = await db.execute(
         select(TeamMember)
         .where(TeamMember.id == member_id)
-        .where(TeamMember.owner_id == user_id)
     )
     member = result.scalar_one_or_none()
     
     if not member:
         raise HTTPException(status_code=404, detail="成员不存在")
     
+    # 只有管理员或邀请者可以删除
+    if member.owner_id != user_id and (not enterprise or member.enterprise_id != enterprise.id):
+        raise HTTPException(status_code=403, detail="无权限删除该成员")
+    
+    # 不能删除管理员
+    if member.is_admin:
+        raise HTTPException(status_code=400, detail="不能删除管理员，请先移交管理员权限")
+    
     await db.delete(member)
     await db.commit()
     
     return {"message": "成员已移除"}
+
+
+@router.post("/team-members/transfer-admin")
+async def transfer_admin(
+    data: TransferAdminRequest,
+    user_id: int = Query(1, description="当前管理员用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """移交管理员权限"""
+    # 检查当前用户是否是企业管理员
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    if not enterprise:
+        raise HTTPException(status_code=403, detail="您不是企业管理员")
+    
+    # 检查新管理员是否是企业成员
+    new_admin_member = await db.execute(
+        select(TeamMember).where(
+            TeamMember.enterprise_id == enterprise.id,
+            TeamMember.member_id == data.new_admin_id
+        )
+    )
+    new_admin = new_admin_member.scalar_one_or_none()
+    
+    if not new_admin:
+        raise HTTPException(status_code=404, detail="该用户不是企业成员")
+    
+    # 更新企业管理员
+    enterprise.admin_user_id = data.new_admin_id
+    
+    # 更新成员的 is_admin 状态
+    # 移除当前管理员的 admin 标记
+    current_admin_member = await db.execute(
+        select(TeamMember).where(
+            TeamMember.enterprise_id == enterprise.id,
+            TeamMember.member_id == user_id
+        )
+    )
+    current_admin = current_admin_member.scalar_one_or_none()
+    if current_admin:
+        current_admin.is_admin = False
+    
+    # 设置新管理员
+    new_admin.is_admin = True
+    
+    await db.commit()
+    
+    # 记录审计日志
+    audit_log = AuditLog(
+        user_id=user_id,
+        action=f"移交管理员权限给用户 {data.new_admin_id}",
+        actor="管理员",
+        ip_address="127.0.0.1"
+    )
+    db.add(audit_log)
+    await db.commit()
+    
+    return {"message": "管理员权限已移交"}
+
+
+@router.get("/enterprise-info")
+async def get_enterprise_info(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取企业信息"""
+    # 检查用户是否是企业管理员
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    if enterprise:
+        return {
+            "enterprise_id": enterprise.id,
+            "company_name": enterprise.company_name,
+            "credit_code": enterprise.credit_code,
+            "legal_person": enterprise.legal_person,
+            "is_admin": True,
+            "status": enterprise.status
+        }
+    
+    # 检查是否是企业成员
+    member_result = await db.execute(
+        select(TeamMember).where(
+            TeamMember.member_id == user_id,
+            TeamMember.status == "active"
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    
+    if member and member.enterprise_id:
+        ent_result = await db.execute(
+            select(Enterprise).where(Enterprise.id == member.enterprise_id)
+        )
+        enterprise = ent_result.scalar_one_or_none()
+        if enterprise:
+            return {
+                "enterprise_id": enterprise.id,
+                "company_name": enterprise.company_name,
+                "credit_code": enterprise.credit_code,
+                "legal_person": enterprise.legal_person,
+                "is_admin": False,
+                "status": enterprise.status
+            }
+    
+    return {"enterprise_id": None, "is_admin": False}
+
+
+@router.post("/enterprise/check-verification")
+async def check_enterprise_verification(
+    credit_code: str = Query(..., description="统一社会信用代码"),
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """检查企业是否已被验证，用于判断是否需要申请加入"""
+    # 查找是否已有企业使用该信用代码
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.credit_code == credit_code)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    if enterprise:
+        # 企业已存在，返回企业信息
+        return {
+            "exists": True,
+            "enterprise_id": enterprise.id,
+            "company_name": enterprise.company_name,
+            "admin_user_id": enterprise.admin_user_id,
+            "message": "该企业已被验证，您需要申请加入该企业"
+        }
+    
+    return {"exists": False, "message": "该企业尚未被验证"}
+
+
+@router.post("/enterprise/request-join")
+async def request_join_enterprise(
+    enterprise_id: int = Query(..., description="企业ID"),
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """申请加入已验证的企业"""
+    # 检查企业是否存在
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.id == enterprise_id)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    if not enterprise:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    
+    # 检查是否已经是成员
+    existing_member = await db.execute(
+        select(TeamMember).where(
+            TeamMember.enterprise_id == enterprise_id,
+            TeamMember.member_id == user_id
+        )
+    )
+    if existing_member.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="您已经是该企业成员")
+    
+    # 检查是否已有待审批的申请
+    pending_request = await db.execute(
+        select(TeamMember).where(
+            TeamMember.enterprise_id == enterprise_id,
+            TeamMember.member_id == user_id,
+            TeamMember.status == "pending_approval"
+        )
+    )
+    if pending_request.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="您已提交过申请，请等待审批")
+    
+    # 获取用户信息
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    
+    # 创建待审批的成员记录
+    member = TeamMember(
+        owner_id=enterprise.admin_user_id,
+        member_id=user_id,
+        enterprise_id=enterprise_id,
+        invited_email=user.email if user else None,
+        invited_phone=user.phone if user else None,
+        role=UserRole.VIEWER,
+        status="pending_approval",
+        is_admin=False
+    )
+    db.add(member)
+    await db.commit()
+    
+    return {"message": "申请已提交，请等待管理员审批", "member_id": member.id}
+
+
+@router.post("/enterprise/approve-member/{member_id}")
+async def approve_member(
+    member_id: int,
+    approve: bool = Query(True, description="是否批准"),
+    user_id: int = Query(1, description="管理员用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """审批成员加入申请"""
+    # 检查是否是企业管理员
+    enterprise_result = await db.execute(
+        select(Enterprise).where(Enterprise.admin_user_id == user_id)
+    )
+    enterprise = enterprise_result.scalar_one_or_none()
+    
+    if not enterprise:
+        raise HTTPException(status_code=403, detail="您不是企业管理员")
+    
+    # 获取待审批的成员
+    member_result = await db.execute(
+        select(TeamMember).where(
+            TeamMember.id == member_id,
+            TeamMember.enterprise_id == enterprise.id,
+            TeamMember.status == "pending_approval"
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    
+    if not member:
+        raise HTTPException(status_code=404, detail="未找到待审批的申请")
+    
+    if approve:
+        member.status = "active"
+        member.joined_at = datetime.utcnow()
+        message = "成员已批准加入"
+    else:
+        await db.delete(member)
+        message = "申请已拒绝"
+    
+    await db.commit()
+    
+    return {"message": message}
 
 
 # === AI引擎配置 API ===
@@ -999,6 +1552,56 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
         
         # 将 base64 转为字节流
         image_bytes = base64.b64decode(image_base64)
+        
+        # 检测并转换图片格式为 JPEG（阿里云 OCR 对某些格式支持不好）
+        need_save = False
+        try:
+            from PIL import Image
+            img = Image.open(io.BytesIO(image_bytes))
+            original_format = img.format or 'Unknown'
+            original_size = img.size
+            print(f"[Aliyun OCR] Original image format: {original_format}, size: {img.size}, mode: {img.mode}")
+            
+            # 转换为 RGB 模式（JPEG 不支持 RGBA）
+            if img.mode in ['RGBA', 'P', 'LA']:
+                print(f"[Aliyun OCR] Converting color mode from {img.mode} to RGB...")
+                # 创建白色背景
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode in ['RGBA', 'LA'] else None)
+                img = background
+                need_save = True
+            elif img.mode != 'RGB':
+                img = img.convert('RGB')
+                need_save = True
+            
+            # 营业执照对图片尺寸有要求，太小的图片需要放大
+            # 阿里云建议最小尺寸约 800x600
+            MIN_WIDTH = 800
+            MIN_HEIGHT = 600
+            width, height = img.size
+            
+            if cert_type == 'business_license' and (width < MIN_WIDTH or height < MIN_HEIGHT):
+                # 计算放大比例
+                scale = max(MIN_WIDTH / width, MIN_HEIGHT / height)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                print(f"[Aliyun OCR] Image too small for business_license ({width}x{height}), resizing to {new_width}x{new_height}...")
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                need_save = True
+            
+            # 如果进行了任何修改，保存为 JPEG
+            if need_save or original_format not in ['JPEG', 'PNG']:
+                print(f"[Aliyun OCR] Saving image as JPEG...")
+                output = io.BytesIO()
+                img.save(output, format='JPEG', quality=95)
+                image_bytes = output.getvalue()
+                print(f"[Aliyun OCR] Final image size: {img.size}, bytes: {len(image_bytes)}")
+        except Exception as convert_err:
+            print(f"[Aliyun OCR] Image format detection/conversion warning: {convert_err}")
+            # 继续使用原始图片
+        
         image_stream = io.BytesIO(image_bytes)
         
         if cert_type == 'education':
@@ -1883,6 +2486,245 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                 return CertOCRResponse(
                     success=False,
                     reason='**OCR 识别失败**\n\n无法识别图片内容。'
+                )
+        
+        # ========== 企业证件处理 ==========
+        elif cert_type == 'business_license':
+            # 营业执照识别 - 使用阿里云营业执照识别 API
+            try:
+                request = ocr_models.RecognizeBusinessLicenseRequest(
+                    body=image_stream
+                )
+                response = client.recognize_business_license_with_options(request, runtime)
+                result = response.body
+                
+                print(f"[Aliyun OCR] Business License Response: {result}")
+                
+                if result and result.data:
+                    import json
+                    raw_data = json.loads(result.data) if isinstance(result.data, str) else result.data
+                    print(f"[Aliyun OCR] Business License Raw Data: {json.dumps(raw_data, ensure_ascii=False)}")
+                    
+                    # 阿里云返回的数据结构是嵌套的，实际信息在 data['data'] 中
+                    data = raw_data.get('data', {}) if isinstance(raw_data, dict) else {}
+                    print(f"[Aliyun OCR] Extracted data object: {data}")
+                    
+                    # 提取营业执照信息
+                    company_name = data.get('companyName', '') or data.get('name', '') or data.get('企业名称', '')
+                    credit_code = data.get('creditCode', '') or data.get('socialCreditCode', '') or data.get('统一社会信用代码', '')
+                    legal_person = data.get('legalPerson', '') or data.get('法定代表人', '')
+                    registered_capital = data.get('registeredCapital', '') or data.get('注册资本', '')
+                    establish_date = data.get('establishDate', '') or data.get('RegistrationDate', '') or data.get('成立日期', '')
+                    business_scope = data.get('businessScope', '') or data.get('经营范围', '')
+                    address = data.get('businessAddress', '') or data.get('address', '') or data.get('住所', '') or data.get('地址', '')
+                    # 有效期/经营期限
+                    valid_period = data.get('validPeriod', '') or data.get('businessTerm', '') or data.get('经营期限', '') or data.get('有效期', '')
+                    # 企业类型
+                    enterprise_type = data.get('type', '') or data.get('enterpriseType', '') or data.get('类型', '')
+                    
+                    if company_name:
+                        extracted_info = {
+                            '企业名称': company_name,
+                            '统一社会信用代码': credit_code,
+                            '法定代表人': legal_person,
+                            '注册资本': registered_capital,
+                            '成立日期': establish_date,
+                            '有效期': valid_period,
+                            '企业类型': enterprise_type,
+                            '经营范围': business_scope[:100] + '...' if len(business_scope) > 100 else business_scope,
+                            '住所': address,
+                            '审核状态': '已上传'
+                        }
+                        # 过滤空值
+                        extracted_info = {k: v for k, v in extracted_info.items() if v}
+                        extracted_info['审核状态'] = '已上传'
+                        
+                        return CertOCRResponse(
+                            success=True,
+                            extracted_info=extracted_info
+                        )
+                    else:
+                        return CertOCRResponse(
+                            success=False,
+                            reason='**未能识别营业执照**\n\n未能从图片中提取企业名称。\n\n请确保上传清晰的营业执照照片。'
+                        )
+                else:
+                    return CertOCRResponse(
+                        success=False,
+                        reason='**营业执照识别失败**\n\n无法识别图片内容。'
+                    )
+            except Exception as bl_err:
+                print(f"[Aliyun OCR] Business License API error: {bl_err}")
+                print(f"[Aliyun OCR] Falling back to General OCR...")
+                
+                # 降级到通用 OCR
+                image_stream.seek(0)
+                request = ocr_models.RecognizeGeneralRequest(
+                    body=image_stream
+                )
+                response = client.recognize_general_with_options(request, runtime)
+                
+                if response.body and response.body.data:
+                    import json
+                    data = json.loads(response.body.data) if isinstance(response.body.data, str) else response.body.data
+                    content = data.get('content', '') if isinstance(data, dict) else str(data)
+                    
+                    print(f"[Aliyun OCR] General OCR fallback content (first 500 chars): {content[:500]}...")
+                    
+                    # 检查是否包含营业执照关键词（更宽松的匹配）
+                    license_keywords = ['营业执照', '统一社会信用代码', '企业名称', '法定代表人', '注册资本', '经营范围', '有限公司', '有限责任公司', '住所', '经营期限']
+                    matched_keywords = [kw for kw in license_keywords if kw in content]
+                    print(f"[Aliyun OCR] Matched keywords: {matched_keywords}")
+                    
+                    if len(matched_keywords) >= 2:  # 匹配到至少2个关键词
+                        import re
+                        # 更灵活的正则匹配
+                        company_match = re.search(r'(?:企业名称|名\s*称|公司名称)[：:\s]*([^\n]{2,30}?(?:公司|企业|集团))', content)
+                        if not company_match:
+                            # 尝试匹配 "XXX有限公司" 格式
+                            company_match = re.search(r'([\u4e00-\u9fa5]{2,20}(?:有限公司|有限责任公司|股份有限公司|集团))', content)
+                        credit_match = re.search(r'(?:统一社会信用代码|信用代码|代码)[：:\s]*([A-Z0-9]{15,18})', content)
+                        if not credit_match:
+                            # 直接匹配18位代码格式
+                            credit_match = re.search(r'\b([0-9A-Z]{18})\b', content)
+                        legal_match = re.search(r'(?:法定代表人|代表人|负责人)[：:\s]*([\u4e00-\u9fa5]{2,4})', content)
+                        # 住所/地址
+                        address_match = re.search(r'(?:住\s*所|地\s*址|经营场所)[：:\s]*([^\n]{5,50})', content)
+                        # 注册资本
+                        capital_match = re.search(r'(?:注册资本)[：:\s]*([^\n]{2,20})', content)
+                        # 有效期/经营期限
+                        valid_match = re.search(r'(?:经营期限|有效期|营业期限)[：:\s]*([^\n]{5,30})', content)
+                        # 经营范围
+                        scope_match = re.search(r'(?:经营范围)[：:\s]*([^\n]{10,100})', content)
+                        
+                        extracted_info = {
+                            '企业名称': company_match.group(1).strip() if company_match else '',
+                            '统一社会信用代码': credit_match.group(1) if credit_match else '',
+                            '法定代表人': legal_match.group(1) if legal_match else '',
+                            '住所': address_match.group(1).strip() if address_match else '',
+                            '注册资本': capital_match.group(1).strip() if capital_match else '',
+                            '有效期': valid_match.group(1).strip() if valid_match else '',
+                            '经营范围': scope_match.group(1).strip()[:100] + '...' if scope_match and len(scope_match.group(1)) > 100 else (scope_match.group(1).strip() if scope_match else ''),
+                            '审核状态': '已上传'
+                        }
+                        extracted_info = {k: v for k, v in extracted_info.items() if v}
+                        extracted_info['审核状态'] = '已上传'
+                        
+                        print(f"[Aliyun OCR] Extracted info from fallback: {extracted_info}")
+                        
+                        return CertOCRResponse(
+                            success=True,
+                            extracted_info=extracted_info
+                        )
+                    else:
+                        print(f"[Aliyun OCR] Not enough keywords matched ({len(matched_keywords)} < 2)")
+                
+                return CertOCRResponse(
+                    success=False,
+                    reason='**营业执照识别失败**\n\n请确保上传清晰的营业执照照片。'
+                )
+        
+        elif cert_type in ['org_code', 'tax_registration', 'qualification', 'enterprise_credit', 'legal_person_id']:
+            # 其他企业证件 - 使用通用 OCR
+            request = ocr_models.RecognizeGeneralRequest(
+                body=image_stream
+            )
+            response = client.recognize_general_with_options(request, runtime)
+            
+            if response.body and response.body.data:
+                import json
+                data = json.loads(response.body.data) if isinstance(response.body.data, str) else response.body.data
+                content = data.get('content', '') if isinstance(data, dict) else str(data)
+                
+                print(f"[Aliyun OCR] Enterprise cert ({cert_type}) content: {content[:500]}...")
+                
+                # 根据证件类型提取信息
+                import re
+                extracted_info = {'审核状态': '已上传'}
+                
+                if cert_type == 'org_code':
+                    # 组织机构代码证
+                    org_match = re.search(r'(?:机构名称|名称)[：:]\s*(.+?)(?:\n|$)', content)
+                    code_match = re.search(r'(?:代码|组织机构代码)[：:]\s*([A-Z0-9-]+)', content)
+                    extracted_info.update({
+                        '机构名称': org_match.group(1).strip() if org_match else '',
+                        '组织机构代码': code_match.group(1) if code_match else ''
+                    })
+                
+                elif cert_type == 'tax_registration':
+                    # 税务登记证
+                    tax_match = re.search(r'(?:纳税人识别号|税号)[：:]\s*([A-Z0-9]+)', content)
+                    name_match = re.search(r'(?:纳税人名称|名称)[：:]\s*(.+?)(?:\n|$)', content)
+                    extracted_info.update({
+                        '纳税人名称': name_match.group(1).strip() if name_match else '',
+                        '纳税人识别号': tax_match.group(1) if tax_match else ''
+                    })
+                
+                elif cert_type == 'qualification':
+                    # 资质证书
+                    cert_name_match = re.search(r'(?:证书名称|资质名称)[：:]\s*(.+?)(?:\n|$)', content)
+                    cert_no_match = re.search(r'(?:证书编号|编号)[：:]\s*(\S+)', content)
+                    org_match = re.search(r'(?:发证机关|颁发单位)[：:]\s*(.+?)(?:\n|$)', content)
+                    extracted_info.update({
+                        '证书名称': cert_name_match.group(1).strip() if cert_name_match else '',
+                        '证书编号': cert_no_match.group(1) if cert_no_match else '',
+                        '发证机关': org_match.group(1).strip() if org_match else ''
+                    })
+                
+                elif cert_type == 'enterprise_credit':
+                    # 企业信用
+                    level_match = re.search(r'(?:信用等级|等级)[：:]\s*(\S+)', content)
+                    org_match = re.search(r'(?:评定机构|认证机构)[：:]\s*(.+?)(?:\n|$)', content)
+                    extracted_info.update({
+                        '信用等级': level_match.group(1) if level_match else '',
+                        '评定机构': org_match.group(1).strip() if org_match else ''
+                    })
+                
+                elif cert_type == 'legal_person_id':
+                    # 法人身份证 - 复用身份证识别逻辑
+                    image_stream.seek(0)
+                    id_request = ocr_models.RecognizeIdcardRequest(body=image_stream)
+                    id_response = client.recognize_idcard_with_options(id_request, runtime)
+                    
+                    if id_response.body and id_response.body.data:
+                        import json
+                        id_data = json.loads(id_response.body.data) if isinstance(id_response.body.data, str) else id_response.body.data
+                        face = id_data.get('data', {}).get('face', {}) if 'data' in id_data else id_data.get('face', {})
+                        
+                        if face:
+                            name = face.get('name', '')
+                            id_number = face.get('idNumber', '')
+                            
+                            extracted_info.update({
+                                '姓名': name,
+                                '身份证号': id_number[:6] + '****' + id_number[-4:] if len(id_number) >= 10 else id_number
+                            })
+                            
+                            return CertOCRResponse(
+                                success=True,
+                                extracted_info=extracted_info
+                            )
+                    
+                    # 身份证识别失败，从通用 OCR 结果提取
+                    name_match = re.search(r'(?:姓名)[：:]\s*([\u4e00-\u9fa5]{2,4})', content)
+                    id_match = re.search(r'(\d{15}|\d{17}[\dXx])', content)
+                    extracted_info.update({
+                        '姓名': name_match.group(1) if name_match else '',
+                        '身份证号': id_match.group(1)[:6] + '****' + id_match.group(1)[-4:] if id_match and len(id_match.group(1)) >= 10 else ''
+                    })
+                
+                # 过滤空值
+                extracted_info = {k: v for k, v in extracted_info.items() if v}
+                extracted_info['审核状态'] = '已上传'
+                
+                return CertOCRResponse(
+                    success=True,
+                    extracted_info=extracted_info
+                )
+            else:
+                return CertOCRResponse(
+                    success=False,
+                    reason=f'**证件识别失败**\n\n无法识别图片内容，请确保图片清晰。'
                 )
         
         else:

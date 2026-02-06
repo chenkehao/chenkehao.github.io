@@ -2564,3 +2564,277 @@ async def auto_fill_profile_from_resume(
         print(f"自动填充失败: {e}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"自动填充失败: {str(e)}")
+
+
+# ============ 岗位发布（公开接口） ============
+
+from pydantic import BaseModel as PydanticBaseModel, Field as PydanticField
+from typing import List as TypingList
+
+class PublicJobCreate(PydanticBaseModel):
+    """公开创建岗位请求"""
+    user_id: int
+    title: str
+    company: str
+    location: str
+    description: str
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    tags: TypingList[str] = []
+
+@router.post("/jobs")
+async def create_public_job(
+    job_in: PublicJobCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    公开接口创建岗位（通过 user_id 鉴权）
+    """
+    from app.models.user import User
+    
+    # 验证用户
+    result = await db.execute(select(User).where(User.id == job_in.user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 创建岗位
+    job = Job(
+        title=job_in.title,
+        company=job_in.company,
+        location=job_in.location,
+        description=job_in.description,
+        salary_min=job_in.salary_min,
+        salary_max=job_in.salary_max,
+        owner_id=user.id,
+        status=JobStatus.ACTIVE
+    )
+    
+    # 处理标签
+    if job_in.tags:
+        for tag_name in job_in.tags:
+            tag_result = await db.execute(select(JobTag).where(JobTag.name == tag_name))
+            tag = tag_result.scalar_one_or_none()
+            if not tag:
+                tag = JobTag(name=tag_name)
+                db.add(tag)
+            job.tags.append(tag)
+    
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+    
+    return {
+        "id": job.id,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "description": job.description,
+        "salary_min": job.salary_min,
+        "salary_max": job.salary_max,
+        "status": job.status.value if job.status else "active",
+        "created_at": job.created_at.isoformat() if job.created_at else None
+    }
+
+
+@router.get("/my-jobs")
+async def list_my_jobs(
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取用户发布的岗位列表"""
+    result = await db.execute(
+        select(Job).options(selectinload(Job.tags))
+        .where(Job.owner_id == user_id)
+        .order_by(Job.created_at.desc())
+    )
+    jobs = result.scalars().all()
+    
+    return [
+        {
+            "id": j.id,
+            "title": j.title,
+            "company": j.company,
+            "location": j.location,
+            "description": j.description,
+            "salary_min": j.salary_min,
+            "salary_max": j.salary_max,
+            "status": j.status.value if j.status else "active",
+            "tags": [t.name for t in j.tags] if j.tags else [],
+            "view_count": j.view_count or 0,
+            "apply_count": j.apply_count or 0,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+        }
+        for j in jobs
+    ]
+
+
+class PublicJobUpdate(PydanticBaseModel):
+    """公开更新岗位请求"""
+    user_id: int
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+    salary_min: Optional[int] = None
+    salary_max: Optional[int] = None
+    status: Optional[str] = None
+    tags: Optional[TypingList[str]] = None
+
+
+@router.put("/jobs/{job_id}")
+async def update_public_job(
+    job_id: int,
+    job_in: PublicJobUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """更新岗位"""
+    result = await db.execute(
+        select(Job).options(selectinload(Job.tags)).where(Job.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    if job.owner_id != job_in.user_id:
+        raise HTTPException(status_code=403, detail="无权修改此岗位")
+    
+    if job_in.title is not None: job.title = job_in.title
+    if job_in.company is not None: job.company = job_in.company
+    if job_in.location is not None: job.location = job_in.location
+    if job_in.description is not None: job.description = job_in.description
+    if job_in.salary_min is not None: job.salary_min = job_in.salary_min
+    if job_in.salary_max is not None: job.salary_max = job_in.salary_max
+    if job_in.status is not None:
+        job.status = JobStatus(job_in.status) if job_in.status in [s.value for s in JobStatus] else job.status
+    if job_in.tags is not None:
+        job.tags.clear()
+        for tag_name in job_in.tags:
+            tag_result = await db.execute(select(JobTag).where(JobTag.name == tag_name))
+            tag = tag_result.scalar_one_or_none()
+            if not tag:
+                tag = JobTag(name=tag_name)
+                db.add(tag)
+            job.tags.append(tag)
+    
+    await db.commit()
+    await db.refresh(job)
+    return {"ok": True, "id": job.id}
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_public_job(
+    job_id: int,
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """删除岗位"""
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    if job.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="无权删除此岗位")
+    
+    await db.delete(job)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/job-detail/{job_id}")
+async def get_job_detail_with_applications(
+    job_id: int,
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取岗位详情及投递列表"""
+    from app.models.user import User
+    
+    # 获取岗位信息
+    result = await db.execute(
+        select(Job).options(selectinload(Job.tags)).where(Job.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    if job.owner_id != user_id:
+        raise HTTPException(status_code=403, detail="无权查看此岗位")
+    
+    # 获取该岗位的所有投递流程
+    flows_result = await db.execute(
+        select(Flow)
+        .options(selectinload(Flow.steps), selectinload(Flow.timeline))
+        .where(Flow.job_id == job_id)
+        .order_by(Flow.created_at.desc())
+    )
+    flows = flows_result.scalars().all()
+    
+    # 获取候选人信息
+    applications = []
+    for flow in flows:
+        # 获取候选人
+        cand_result = await db.execute(
+            select(Candidate).where(Candidate.id == flow.candidate_id)
+        )
+        candidate = cand_result.scalar_one_or_none()
+        
+        # 获取候选人 profile
+        profile = None
+        user_info = None
+        if candidate:
+            prof_result = await db.execute(
+                select(CandidateProfile).where(CandidateProfile.candidate_id == candidate.id)
+            )
+            profile = prof_result.scalar_one_or_none()
+            # 获取用户基本信息
+            user_result = await db.execute(
+                select(User).where(User.id == candidate.user_id)
+            )
+            user_info = user_result.scalar_one_or_none()
+        
+        applications.append({
+            "flow_id": flow.id,
+            "candidate_id": flow.candidate_id,
+            "status": flow.status.value if flow.status else "unknown",
+            "current_stage": flow.current_stage.value if flow.current_stage else "unknown",
+            "current_step": flow.current_step,
+            "match_score": flow.match_score or 0,
+            "tokens_consumed": flow.tokens_consumed or 0,
+            "next_action": flow.next_action,
+            "details": flow.details,
+            "last_action": flow.last_action,
+            "created_at": flow.created_at.isoformat() if flow.created_at else None,
+            "updated_at": flow.updated_at.isoformat() if flow.updated_at else None,
+            "candidate_name": profile.display_name if profile else (user_info.name if user_info else f"候选人#{flow.candidate_id}"),
+            "candidate_role": profile.current_role if profile else None,
+            "candidate_avatar": user_info.avatar_url if user_info else None,
+            "candidate_experience": profile.experience_years if profile else None,
+            "candidate_summary": profile.summary if profile else None,
+        })
+    
+    # 统计数据
+    status_counts = {}
+    for app in applications:
+        s = app["status"]
+        status_counts[s] = status_counts.get(s, 0) + 1
+    
+    return {
+        "job": {
+            "id": job.id,
+            "title": job.title,
+            "company": job.company,
+            "location": job.location,
+            "description": job.description,
+            "salary_min": job.salary_min,
+            "salary_max": job.salary_max,
+            "status": job.status.value if job.status else "active",
+            "tags": [t.name for t in job.tags] if job.tags else [],
+            "view_count": job.view_count or 0,
+            "apply_count": job.apply_count or 0,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+        },
+        "applications": applications,
+        "stats": {
+            "total": len(applications),
+            "status_counts": status_counts,
+        }
+    }

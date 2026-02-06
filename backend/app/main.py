@@ -3,15 +3,21 @@ FastAPI Application Entry Point
 Devnors - AI Multi-Agent Recruitment Platform
 """
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import close_db, init_db
 from app.routers import ai, auth, candidates, flows, jobs, users, public
 from app.routers import settings as settings_router
+
+# 确保上传目录存在
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(os.path.join(UPLOADS_DIR, "avatars"), exist_ok=True)
 
 
 @asynccontextmanager
@@ -75,6 +81,9 @@ app.include_router(flows.router, prefix="/api/v1/flows", tags=["工作流"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI 智能体"])
 app.include_router(public.router, prefix="/api/v1/public", tags=["公开接口"])
 app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["系统设置"])
+
+# 静态文件服务 - 上传的头像等
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
 
 @app.get("/", tags=["健康检查"])
