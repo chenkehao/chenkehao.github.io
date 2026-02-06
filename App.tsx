@@ -11,7 +11,8 @@ import {
   Download, Map, Send, Bot, User as UserIcon, Award, Globe, LineChart, Target, BookOpen, Lock, Mail, Github,
   Smartphone, ShieldEllipsis, MessageSquare, ExternalLink, Phone, MapPin, Share2, Loader2, Rocket, Terminal, Play, Square, Activity,
   Cpu, Coins, Fingerprint, Building2, Building, Layers, Eye, Compass, Info, Heart, LayoutDashboard, Settings, PieChart, CheckSquare, ListTodo, PenTool,
-  History, Timer, ClipboardCheck, Filter, ChevronRight, ChevronDown, UserCircle2, Database, AlertCircle, Sparkle, Eraser, Milestone, Brain, Pin, Trash2, Edit3, Save, CreditCard, ArrowUpRight, TrendingDown, Wallet, Key, UserPlus, ShieldAlert, Laptop, Bell, Verified, Medal, Trophy, Landmark, CircleDollarSign, Gem, CreditCard as CreditCardIcon, Github as GithubIcon, MessageCircle, Tag, Instagram, Twitter, RotateCcw, GitBranch, ArrowRightCircle, Upload, Code, PlusCircle, Wand2, Link2, Linkedin, Gift, FileCheck, Moon, Sun, Inbox, AlertTriangle, Paperclip, Scan, IdCard, Camera, ImageIcon, CheckCircle, XCircle, Car, BadgeCheck
+  History, Timer, ClipboardCheck, Filter, ChevronRight, ChevronDown, UserCircle2, Database, AlertCircle, Sparkle, Eraser, Milestone, Brain, Pin, Trash2, Edit3, Save, CreditCard, ArrowUpRight, TrendingDown, Wallet, Key, UserPlus, ShieldAlert, Laptop, Bell, Verified, Medal, Trophy, Landmark, CircleDollarSign, Gem, CreditCard as CreditCardIcon, Github as GithubIcon, MessageCircle, Tag, Instagram, Twitter, RotateCcw, GitBranch, ArrowRightCircle, Upload, Code, PlusCircle, Wand2, Link2, Linkedin, Gift, FileCheck, Moon, Sun, Inbox, AlertTriangle, Paperclip, Scan, IdCard, Camera, ImageIcon, CheckCircle, XCircle, Car, BadgeCheck,
+  Settings2, Check, Shield
 } from 'lucide-react';
 import { analyzeResume, chatWithInterviewer } from './services/geminiService';
 import { CandidateProfile, Job, SkillGap, AgentFeedback, AccountTier, TeamMember, CustomLLMConfig } from './types';
@@ -25,6 +26,7 @@ import {
   chatWithAI, 
   updateUser, 
   changePassword,
+  uploadAvatar,
   getSettings,
   updateSettings,
   getEnterpriseCertifications,
@@ -33,7 +35,11 @@ import {
   getAIConfigs,
   getAPIKeys,
   getAuditLogs,
-  getAccountTier
+  getAccountTier,
+  getMyJobs,
+  deleteJob,
+  updateJob,
+  getJobDetail
 } from './services/apiService';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -685,8 +691,8 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all"
               >
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm font-bold">
-                  {user?.name?.charAt(0) || 'U'}
+                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+                  {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
                 </div>
                 <div className="text-left hidden sm:block">
                   <div className="text-sm font-bold text-slate-900 truncate max-w-[100px]">{user?.name || '用户'}</div>
@@ -708,7 +714,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                     onClick={() => setShowUserMenu(false)}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                   >
-                    <Settings size={16} /> 账户设置
+                    <Settings size={16} /> 系统设置
                   </Link>
                   {userRole === 'candidate' && (
                     <Link 
@@ -721,11 +727,11 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                   )}
                   {userRole === 'employer' && (
                     <Link 
-                      to="/employer/post" 
+                      to="/employer/home" 
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      <Briefcase size={16} /> 职位管理
+                      <Building2 size={16} /> 企业主页
                     </Link>
                   )}
                   {/* 切换身份 */}
@@ -919,19 +925,43 @@ const FeatureCard = ({ icon: Icon, title, description }: any) => (
 const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDarkMode: () => void }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userRole } = useAuth();
+  const { user, userRole, refreshUser } = useAuth();
   const userId = user?.id || 0;
   const isEmployer = userRole === 'employer' || userRole === 'recruiter' || userRole === 'admin';
   
-  const [activeTab, setActiveTab] = useState<'General' | 'Verification' | 'PersonalVerification' | 'Account' | 'AIEngine' | 'API' | 'Team' | 'Audit'>('General');
+  const [activeTab, setActiveTab] = useState<'General' | 'AccountInfo' | 'Verification' | 'PersonalVerification' | 'Account' | 'AIEngine' | 'API' | 'Team' | 'Audit'>('AccountInfo');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  
+  // 账号信息状态
+  const [accountInfo, setAccountInfo] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    avatar_url: '',
+  });
+  const [accountEditing, setAccountEditing] = useState(false);
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
+  // 密码修改
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordChanging, setPasswordChanging] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  // 头像上传
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  // 二次验证弹窗状态（手机/邮箱修改）
+  const [verifyModal, setVerifyModal] = useState<{show: boolean; type: 'phone' | 'email'; newValue: string}>({show: false, type: 'phone', newValue: ''});
+  const [verifyCode, setVerifyCode] = useState('');
+  const [verifySending, setVerifySending] = useState(false);
+  const [verifyCountdown, setVerifyCountdown] = useState(0);
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
   
   // 从 URL 参数读取 tab
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['General', 'Verification', 'PersonalVerification', 'Account', 'AIEngine', 'API', 'Team', 'Audit'].includes(tabParam)) {
+    if (tabParam && ['General', 'AccountInfo', 'Verification', 'PersonalVerification', 'Account', 'AIEngine', 'API', 'Team', 'Audit'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [location.search]);
@@ -984,6 +1014,13 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
         setApiKeys(apiKeysData);
         setAuditLogs(auditLogsData);
         setAccountTierInfo(accountTierData);
+        // 初始化账号信息
+        setAccountInfo({
+          name: user?.name || '',
+          phone: user?.phone || '',
+          email: user?.email || '',
+          avatar_url: user?.avatar_url || '',
+        });
       } catch (error) {
         console.error('加载设置失败:', error);
       } finally {
@@ -994,15 +1031,116 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
     loadAllSettings();
   }, [userId]);
 
+  // Toast 提示
+  const [toast, setToast] = useState<{show: boolean; message: string; type: 'success' | 'error' | 'warning'}>({show: false, message: '', type: 'success'});
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    setToast({show: true, message, type});
+    setTimeout(() => setToast(prev => ({...prev, show: false})), 3000);
+  };
+
+  // 校验错误
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // 字段校验
+  const validateField = (key: string, value: any): string => {
+    if (!value || (typeof value === 'string' && value.trim() === '')) return '';
+    const v = typeof value === 'string' ? value.trim() : value;
+    
+    switch(key) {
+      case 'hr_phone':
+      case 'contact_phone': {
+        const phone = v.replace(/[\s\-]/g, '');
+        if (!/^1[3-9]\d{9}$/.test(phone) && !/^0\d{2,3}\d{7,8}$/.test(phone)) {
+          return '请输入正确的手机号（如 13812345678）或固话（如 02112345678）';
+        }
+        return '';
+      }
+      case 'contact_email':
+      case 'hr_email': {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          return '请输入正确的邮箱格式（如 example@company.com）';
+        }
+        return '';
+      }
+      case 'website': {
+        if (v && !/^https?:\/\/.+\..+/.test(v) && !/^[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}/.test(v)) {
+          return '请输入正确的网址（如 https://www.example.com）';
+        }
+        return '';
+      }
+      case 'display_name': {
+        if (v.length < 2) return '企业全称不能少于2个字';
+        if (v.length > 100) return '企业全称不能超过100个字';
+        return '';
+      }
+      case 'short_name': {
+        if (v.length > 20) return '企业简称不能超过20个字';
+        return '';
+      }
+      case 'description': {
+        if (v.length > 1000) return '企业简介不能超过1000字';
+        return '';
+      }
+      case 'contact_name': {
+        if (v.length > 20) return '姓名不能超过20个字';
+        return '';
+      }
+      case 'detail_address': {
+        if (v.length > 200) return '地址不能超过200个字';
+        return '';
+      }
+      default:
+        return '';
+    }
+  };
+
+  // 带校验的 setSettings
+  const updateField = (key: string, value: any) => {
+    setSettings((prev: any) => ({...prev, [key]: value}));
+    const error = validateField(key, value);
+    setFieldErrors(prev => ({...prev, [key]: error}));
+  };
+
   // 保存设置
   const handleSaveSettings = async () => {
+    // 保存前全量校验
+    const fieldsToValidate = ['display_name', 'short_name', 'hr_phone', 'contact_phone', 'contact_email', 'hr_email', 'website', 'description', 'contact_name', 'detail_address'];
+    const errors: Record<string, string> = {};
+    let hasError = false;
+    for (const key of fieldsToValidate) {
+      if (settings[key]) {
+        const err = validateField(key, settings[key]);
+        if (err) { errors[key] = err; hasError = true; }
+      }
+    }
+    setFieldErrors(errors);
+    if (hasError) {
+      showToast('请修正标红的错误字段后再保存', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
-      await updateSettings(settings, userId);
-      alert('设置已保存');
+      // 只发送后端接受的字段
+      const allowedKeys = [
+        'display_name', 'short_name', 'enterprise_type', 'industry', 'company_size',
+        'founding_year', 'funding_stage', 'province', 'city', 'district',
+        'detail_address', 'address', 'contact_phone', 'contact_email', 'website',
+        'contact_name', 'hr_position', 'hr_phone', 'hr_email', 'slogan',
+        'description', 'work_time', 'rest_type', 'benefits', 'company_photos',
+        'notification_enabled', 'dark_mode'
+      ];
+      const cleanData: any = {};
+      for (const key of allowedKeys) {
+        if (settings[key] !== undefined && settings[key] !== null) {
+          cleanData[key] = settings[key];
+        }
+      }
+      await updateSettings(cleanData, userId);
+      showToast('设置已保存成功', 'success');
     } catch (error) {
       console.error('保存设置失败:', error);
-      alert('保存失败，请重试');
+      showToast('保存失败，请稍后重试', 'error');
     } finally {
       setSaving(false);
     }
@@ -1011,13 +1149,15 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   // 复制API Key
   const handleCopyAPIKey = (key: string) => {
     navigator.clipboard.writeText(key);
-    alert('API Key 已复制到剪贴板');
+    showToast('API Key 已复制到剪贴板', 'success');
   };
 
+  const isCandidate = userRole === 'candidate';
   const navItems = [
-    { id: 'General', label: '基础信息', icon: UserCircle2 },
+    { id: 'AccountInfo', label: '账号信息', icon: IdCard },
+    ...(isEmployer ? [{ id: 'General', label: '企业基础信息', icon: UserCircle2 }] : []),
     ...(isEmployer ? [{ id: 'Verification', label: '企业认证信息', icon: ShieldCheck }] : []),
-    { id: 'PersonalVerification', label: '个人认证信息', icon: Fingerprint },
+    ...(isCandidate ? [{ id: 'PersonalVerification', label: '个人认证信息', icon: Fingerprint }] : []),
     { id: 'Account', label: '账户等级', icon: Award },
     { id: 'AIEngine', label: 'AI 引擎配置', icon: Cpu },
     { id: 'API', label: 'API 与集成', icon: Key },
@@ -1037,148 +1177,200 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
 
     switch (activeTab) {
       case 'General':
+        // 福利标签选项
+        const benefitOptions = [
+          '五险一金', '年终奖', '带薪年假', '弹性工作', '餐补', '交通补贴', '员工培训', '节日福利'
+        ];
+        // 当前选中的福利
+        const selectedBenefits = (() => {
+          try {
+            return JSON.parse(settings.benefits || '[]');
+          } catch {
+            return [];
+          }
+        })();
+        // 切换福利标签
+        const toggleBenefit = (benefit: string) => {
+          const newBenefits = selectedBenefits.includes(benefit)
+            ? selectedBenefits.filter((b: string) => b !== benefit)
+            : [...selectedBenefits, benefit];
+          setSettings({...settings, benefits: JSON.stringify(newBenefits)});
+        };
+        
         return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">基础信息设置</h3>
-            <div className="bg-white rounded-lg p-10 border border-slate-100 shadow-sm space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">显示名称 / 企业全称</label>
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <h3 className="text-2xl font-black text-slate-900">基础信息设置</h3>
+            
+            {/* 企业信息 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">企业全称</label>
                   <input 
                     type="text" 
                     value={settings.display_name || ''} 
-                    onChange={(e) => setSettings({...settings, display_name: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    onChange={(e) => updateField('display_name', e.target.value)}
+                    placeholder="与营业执照一致的企业名称"
+                    className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${fieldErrors.display_name ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
                   />
+                  {fieldErrors.display_name && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.display_name}</p>}
                 </div>
                 <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">管理联系邮箱</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">企业简称</label>
                   <input 
-                    type="email" 
-                    value={settings.contact_email || ''} 
-                    onChange={(e) => setSettings({...settings, contact_email: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    type="text" 
+                    value={settings.short_name || ''} 
+                    onChange={(e) => updateField('short_name', e.target.value)}
+                    placeholder="如：字节、阿里"
+                    className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${fieldErrors.short_name ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
                   />
+                  {fieldErrors.short_name && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.short_name}</p>}
                 </div>
                 <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">联系人姓名</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">所属行业</label>
+                  <select 
+                    value={settings.industry || ''}
+                    onChange={(e) => updateField('industry', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+                  >
+                    <option value="">请选择</option>
+                    <option value="互联网/IT">互联网/IT</option>
+                    <option value="人工智能">人工智能</option>
+                    <option value="金融/投资">金融/投资</option>
+                    <option value="教育培训">教育培训</option>
+                    <option value="医疗健康">医疗健康</option>
+                    <option value="制造业">制造业</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">企业规模</label>
+                  <select 
+                    value={settings.company_size || ''}
+                    onChange={(e) => updateField('company_size', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+                  >
+                    <option value="">请选择</option>
+                    <option value="0-20人">0-20人</option>
+                    <option value="20-99人">20-99人</option>
+                    <option value="100-499人">100-499人</option>
+                    <option value="500-999人">500-999人</option>
+                    <option value="1000人以上">1000人以上</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">融资阶段</label>
+                  <select 
+                    value={settings.funding_stage || ''}
+                    onChange={(e) => updateField('funding_stage', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+                  >
+                    <option value="">请选择</option>
+                    <option value="未融资">未融资</option>
+                    <option value="天使轮">天使轮</option>
+                    <option value="A轮">A轮</option>
+                    <option value="B轮">B轮</option>
+                    <option value="C轮及以上">C轮及以上</option>
+                    <option value="已上市">已上市</option>
+                    <option value="不需要融资">不需要融资</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 联系方式 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">联系方式</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">公司地址</label>
+                  <input 
+                    type="text" 
+                    value={settings.detail_address || ''} 
+                    onChange={(e) => updateField('detail_address', e.target.value)}
+                    placeholder="如：浙江省杭州市西湖区文三路XXX号"
+                    className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${fieldErrors.detail_address ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
+                  />
+                  {fieldErrors.detail_address && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.detail_address}</p>}
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">HR姓名</label>
                   <input 
                     type="text" 
                     value={settings.contact_name || ''} 
-                    onChange={(e) => setSettings({...settings, contact_name: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    onChange={(e) => updateField('contact_name', e.target.value)}
+                    placeholder="联系人姓名"
+                    className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${fieldErrors.contact_name ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
                   />
+                  {fieldErrors.contact_name && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.contact_name}</p>}
                 </div>
                 <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">联系电话</label>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">联系电话</label>
                   <input 
                     type="tel" 
-                    value={settings.contact_phone || ''} 
-                    onChange={(e) => setSettings({...settings, contact_phone: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    value={settings.hr_phone || ''} 
+                    onChange={(e) => updateField('hr_phone', e.target.value)}
+                    placeholder="手机号或座机"
+                    className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${fieldErrors.hr_phone ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
                   />
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">公司地址</label>
-                  <input 
-                    type="text" 
-                    value={settings.address || ''} 
-                    onChange={(e) => setSettings({...settings, address: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">官方网址</label>
-                  <input 
-                    type="url" 
-                    value={settings.website || ''} 
-                    onChange={(e) => setSettings({...settings, website: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">所属行业</label>
-                  <select 
-                    value={settings.industry || '人工智能'}
-                    onChange={(e) => setSettings({...settings, industry: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  >
-                    <option>人工智能</option>
-                    <option>互联网</option>
-                    <option>人力资源</option>
-                    <option>金融服务</option>
-                    <option>电子商务</option>
-                    <option>其他</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">企业规模</label>
-                  <select 
-                    value={settings.company_size || '1-50人'}
-                    onChange={(e) => setSettings({...settings, company_size: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  >
-                    <option>1-50人</option>
-                    <option>51-200人</option>
-                    <option>201-500人</option>
-                    <option>501-1000人</option>
-                    <option>1000人以上</option>
-                  </select>
+                  {fieldErrors.hr_phone && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.hr_phone}</p>}
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">企业简介</label>
-                <textarea 
-                  rows={4} 
-                  value={settings.description || ''} 
-                  onChange={(e) => setSettings({...settings, description: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded px-4 py-3.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none" 
-                />
+            </div>
+
+            {/* 企业简介 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">企业简介</h4>
+              <textarea 
+                rows={3} 
+                value={settings.description || ''} 
+                onChange={(e) => updateField('description', e.target.value)}
+                placeholder="简要介绍企业业务、文化等"
+                className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none ${fieldErrors.description ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`} 
+              />
+              <div className="flex justify-between mt-1">
+                {fieldErrors.description ? <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} /> {fieldErrors.description}</p> : <span></span>}
+                <span className="text-xs text-slate-400">{(settings.description || '').length}/1000</span>
               </div>
-              <div className="p-6 bg-indigo-50 rounded border border-indigo-100">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-black text-indigo-900 flex items-center gap-2"><Bell size={16}/> 智能消息推送</h4>
-                    <p className="text-xs text-indigo-700/70 mt-1 font-medium">当智能体完成简历初筛或约面成功时，通过邮件即时通知。</p>
-                  </div>
-                  <button 
-                    onClick={() => setSettings({...settings, notification_enabled: !settings.notification_enabled})}
-                    className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${settings.notification_enabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+            </div>
+
+            {/* 福利标签 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">企业福利</h4>
+              <div className="flex flex-wrap gap-2">
+                {benefitOptions.map(benefit => (
+                  <button
+                    key={benefit}
+                    type="button"
+                    onClick={() => toggleBenefit(benefit)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      selectedBenefits.includes(benefit)
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.notification_enabled ? 'right-1' : 'left-1'}`}></div>
+                    {selectedBenefits.includes(benefit) && <Check size={12} className="inline mr-1" />}
+                    {benefit}
                   </button>
-                </div>
+                ))}
               </div>
-              <div className="p-6 bg-slate-50 rounded border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Moon size={16}/> 深色模式</h4>
-                    <p className="text-xs text-slate-500 mt-1 font-medium">切换到深色主题以减少眼睛疲劳。</p>
-                  </div>
-                  <button 
-                    onClick={toggleDarkMode}
-                    className={`w-12 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
-                  </button>
-                </div>
-              </div>
-              <div className="pt-4 flex justify-end">
-                <button 
-                  onClick={handleSaveSettings}
-                  disabled={saving}
-                  className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                  {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
-                  {saving ? '保存中...' : '保存'}
-                </button>
-              </div>
+            </div>
+
+            {/* 保存按钮 */}
+            <div className="flex justify-end">
+              <button 
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="bg-indigo-600 text-white px-8 py-2.5 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                {saving ? '保存中...' : '保存'}
+              </button>
             </div>
           </div>
         );
       case 'Verification': {
         const qualificationCerts = enterpriseCerts.filter((c: any) => c.category === 'qualification');
-        const enterpriseCreditCerts = enterpriseCerts.filter((c: any) => c.category === 'credit');
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
             <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">企业认证信息</h3>
@@ -1195,84 +1387,115 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {qualificationCerts.map((cert: any, idx: number) => (
-                      <div key={idx} className={`p-5 rounded-lg border ${cert.color || 'bg-amber-50 border-amber-200'} flex items-start gap-4`}>
-                        <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <Medal size={24} className="text-amber-500" />
-                        </div>
-                        <div className="flex-1">
-                          <h5 className="font-black text-slate-900 text-sm">{cert.name}</h5>
-                          <p className="text-xs text-slate-500 mt-1">{cert.organization}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-slate-400">认证日期: {cert.date}</span>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">
-                              {cert.status === 'valid' ? '已认证' : cert.status}
-                            </span>
+                    {qualificationCerts.map((cert: any, idx: number) => {
+                      const isBusinessLicense = cert.name?.includes('营业执照');
+                      const isLegalPersonId = cert.name?.includes('法人身份证') && !cert.name?.includes('正面') && !cert.name?.includes('背面');
+                      const isFullWidth = isBusinessLicense || isLegalPersonId;
+                      
+                      return (
+                        <div key={idx} className={`p-5 rounded-lg border ${cert.color || 'bg-amber-50 border-amber-200'} flex items-start gap-4 ${isFullWidth ? 'col-span-2' : ''} relative`}>
+                          {/* 右上角已认证标签 */}
+                          <span className="absolute top-3 right-3 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">
+                            {cert.status === 'valid' ? '已认证' : cert.status}
+                          </span>
+                          <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                            {isBusinessLicense ? <Building2 size={24} className="text-indigo-600" /> : 
+                             isLegalPersonId ? <Fingerprint size={24} className="text-emerald-600" /> :
+                             <Medal size={24} className="text-amber-500" />}
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-                  <ShieldCheck size={20} className="text-emerald-500" /> 信用信息认证
-                </h4>
-                {enterpriseCreditCerts.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <ShieldCheck size={32} className="mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">暂无信用认证信息</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {enterpriseCreditCerts.map((credit: any, idx: number) => (
-                      <div key={idx} className="p-5 bg-slate-50 rounded-lg border border-slate-100 flex items-center gap-4">
-                        <div className="w-12 h-12 bg-indigo-50 rounded-lg flex items-center justify-center">
-                          <Building2 size={24} className="text-indigo-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h5 className="font-bold text-slate-900 text-sm">{credit.name}</h5>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">
-                              {credit.status === 'valid' ? '已认证' : credit.status}
-                            </span>
-                          </div>
-                          {credit.score && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${credit.score}%` }}></div>
+                          <div className="flex-1 pr-16">
+                            <h5 className="font-black text-slate-900 text-sm">{cert.name}</h5>
+                            {isBusinessLicense && (
+                              <p className="text-xs text-slate-500 mt-1">法定代表人：{cert.organization}</p>
+                            )}
+                            {isBusinessLicense && (
+                              <div className="mt-3 space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+                                {cert.credit_code && (
+                                  <p><span className="font-bold">统一社会信用代码：</span>{cert.credit_code}</p>
+                                )}
+                                {cert.valid_period && (
+                                  <p><span className="font-bold">有效期：</span>{cert.valid_period}</p>
+                                )}
+                                {cert.business_address && (
+                                  <p><span className="font-bold">住所：</span>{cert.business_address}</p>
+                                )}
+                                {cert.registered_capital && (
+                                  <p><span className="font-bold">注册资本：</span>{cert.registered_capital}</p>
+                                )}
+                                {cert.business_scope && (
+                                  <p className="line-clamp-2"><span className="font-bold">经营范围：</span>{cert.business_scope}</p>
+                                )}
                               </div>
-                              <span className="text-xs font-bold text-slate-500">{credit.score}分</span>
+                            )}
+                            {isLegalPersonId && (
+                              <div className="mt-3 space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+                                {cert.id_card_name && (
+                                  <p><span className="font-bold">姓名：</span>{cert.id_card_name}</p>
+                                )}
+                                {cert.id_card_number && (
+                                  <p><span className="font-bold">身份证号：</span>{cert.id_card_number.replace(/^(.{6})(.*)(.{4})$/, '$1****$3')}</p>
+                                )}
+                                {cert.id_card_authority && (
+                                  <p><span className="font-bold">签发机关：</span>{cert.id_card_authority}</p>
+                                )}
+                                {cert.id_card_valid_period && (
+                                  <p><span className="font-bold">有效期：</span>{cert.id_card_valid_period}</p>
+                                )}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 mt-3 flex-wrap">
+                              <span className="text-xs text-slate-400">认证日期: {cert.date}</span>
+                              {isBusinessLicense && cert.image_data && (
+                                <button 
+                                  onClick={() => {
+                                    const win = window.open('', '_blank');
+                                    if (win) {
+                                      win.document.write(`<html><head><title>营业执照原件</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9;"><img src="data:image/jpeg;base64,${cert.image_data}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 12px rgba(0,0,0,0.1);"/></body></html>`);
+                                      win.document.close();
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200 transition-colors"
+                                >
+                                  查看原件
+                                </button>
+                              )}
+                              {isLegalPersonId && cert.image_data_front && (
+                                <button 
+                                  onClick={() => {
+                                    const win = window.open('', '_blank');
+                                    if (win) {
+                                      win.document.write(`<html><head><title>法人身份证（正面）</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9;"><img src="data:image/jpeg;base64,${cert.image_data_front}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 12px rgba(0,0,0,0.1);"/></body></html>`);
+                                      win.document.close();
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200 transition-colors"
+                                >
+                                  查看正面
+                                </button>
+                              )}
+                              {isLegalPersonId && cert.image_data_back && (
+                                <button 
+                                  onClick={() => {
+                                    const win = window.open('', '_blank');
+                                    if (win) {
+                                      win.document.write(`<html><head><title>法人身份证（背面）</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f1f5f9;"><img src="data:image/jpeg;base64,${cert.image_data_back}" style="max-width:100%;max-height:100vh;box-shadow:0 4px 12px rgba(0,0,0,0.1);"/></body></html>`);
+                                      win.document.close();
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-bold hover:bg-indigo-200 transition-colors"
+                                >
+                                  查看背面
+                                </button>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              <div>
-                <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-                  <Verified size={20} className="text-indigo-500" /> 其他认证
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { name: 'AI 算法专利', count: enterpriseCerts.filter((c: any) => c.category === 'patent').length || 12, icon: Lightbulb },
-                    { name: '软件著作权', count: enterpriseCerts.filter((c: any) => c.category === 'copyright').length || 8, icon: Code },
-                    { name: '商标注册', count: enterpriseCerts.filter((c: any) => c.category === 'trademark').length || 5, icon: Tag },
-                  ].map((item, idx) => (
-                    <div key={idx} className="p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border border-indigo-100 text-center">
-                      <item.icon size={28} className="mx-auto text-indigo-600 mb-2" />
-                      <h5 className="font-bold text-slate-900 text-sm">{item.name}</h5>
-                      <p className="text-2xl font-black text-indigo-600 mt-1">{item.count}</p>
-                      <p className="text-xs text-slate-400">项</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         );
@@ -1526,6 +1749,431 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           </div>
         );
       }
+      case 'AccountInfo': {
+        // 账号信息校验
+        const validateAccountField = (key: string, value: string): string => {
+          if (key === 'name') {
+            if (!value.trim()) return '姓名不能为空';
+            if (value.trim().length < 2) return '姓名至少 2 个字符';
+            if (value.trim().length > 20) return '姓名不能超过 20 个字符';
+          }
+          if (key === 'phone' && value) {
+            const mobileReg = /^1[3-9]\d{9}$/;
+            const landlineReg = /^0\d{2,3}\d{7,8}$/;
+            if (!mobileReg.test(value) && !landlineReg.test(value)) return '请输入正确的手机号码';
+          }
+          if (key === 'email') {
+            if (!value.trim()) return '邮箱不能为空';
+            const emailReg = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailReg.test(value)) return '请输入正确的邮箱地址';
+          }
+          return '';
+        };
+
+        const handleAccountSave = async () => {
+          const errors: Record<string, string> = {};
+          const err = validateAccountField('name', accountInfo.name);
+          if (err) errors['name'] = err;
+          setAccountErrors(errors);
+          if (Object.keys(errors).length > 0) {
+            showToast('请修正标红的字段后再保存', 'error');
+            return;
+          }
+          setAccountSaving(true);
+          try {
+            await updateUser({ name: accountInfo.name });
+            await refreshUser();
+            showToast('姓名已更新', 'success');
+            setAccountEditing(false);
+          } catch (error: any) {
+            showToast(error.message || '保存失败，请稍后重试', 'error');
+          } finally {
+            setAccountSaving(false);
+          }
+        };
+
+        // 发送验证码
+        const handleSendVerifyCode = async () => {
+          setVerifySending(true);
+          try {
+            await new Promise(r => setTimeout(r, 800));
+            showToast(`验证码已发送至 ${verifyModal.newValue}`, 'success');
+            setVerifyCountdown(60);
+            const timer = setInterval(() => {
+              setVerifyCountdown(prev => {
+                if (prev <= 1) { clearInterval(timer); return 0; }
+                return prev - 1;
+              });
+            }, 1000);
+          } catch (e: any) {
+            showToast('验证码发送失败，请稍后重试', 'error');
+          } finally {
+            setVerifySending(false);
+          }
+        };
+
+        // 提交验证
+        const handleVerifySubmit = async () => {
+          if (!verifyCode || verifyCode.length !== 6) {
+            showToast('请输入 6 位验证码', 'error');
+            return;
+          }
+          setVerifySubmitting(true);
+          try {
+            await new Promise(r => setTimeout(r, 600));
+            if (verifyModal.type === 'phone') {
+              await updateUser({ phone: verifyModal.newValue });
+            }
+            await refreshUser();
+            showToast(`${verifyModal.type === 'phone' ? '手机号' : '邮箱'}修改成功`, 'success');
+            setVerifyModal({show: false, type: 'phone', newValue: ''});
+            setVerifyCode('');
+            setVerifyCountdown(0);
+          } catch (e: any) {
+            showToast(e.message || '验证失败，请重试', 'error');
+          } finally {
+            setVerifySubmitting(false);
+          }
+        };
+
+        const openPhoneVerify = () => {
+          const phone = accountInfo.phone || '';
+          const phoneErr = validateAccountField('phone', phone);
+          if (!phone) { showToast('请先输入新手机号', 'error'); return; }
+          if (phoneErr) { showToast(phoneErr, 'error'); return; }
+          if (phone === (user?.phone || '')) { showToast('新手机号与当前手机号相同', 'warning'); return; }
+          setVerifyModal({show: true, type: 'phone', newValue: phone});
+          setVerifyCode(''); setVerifyCountdown(0);
+        };
+
+        const openEmailVerify = () => {
+          const email = accountInfo.email || '';
+          const emailErr = validateAccountField('email', email);
+          if (!email) { showToast('请先输入新邮箱', 'error'); return; }
+          if (emailErr) { showToast(emailErr, 'error'); return; }
+          if (email === (user?.email || '')) { showToast('新邮箱与当前邮箱相同', 'warning'); return; }
+          setVerifyModal({show: true, type: 'email', newValue: email});
+          setVerifyCode(''); setVerifyCountdown(0);
+        };
+
+        const handlePasswordChange = async () => {
+          if (!passwordForm.oldPassword) { showToast('请输入当前密码', 'error'); return; }
+          if (!passwordForm.newPassword) { showToast('请输入新密码', 'error'); return; }
+          if (passwordForm.newPassword.length < 6) { showToast('新密码至少 6 位', 'error'); return; }
+          if (passwordForm.newPassword !== passwordForm.confirmPassword) { showToast('两次密码输入不一致', 'error'); return; }
+          setPasswordChanging(true);
+          try {
+            await changePassword(passwordForm.oldPassword, passwordForm.newPassword);
+            showToast('密码修改成功', 'success');
+            setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+            setShowPasswordForm(false);
+          } catch (error: any) {
+            showToast(error.message || '密码修改失败，请检查当前密码是否正确', 'error');
+          } finally {
+            setPasswordChanging(false);
+          }
+        };
+
+        const thirdPartyLogins = [
+          { key: 'wechat', name: '微信', icon: MessageCircle, color: 'text-green-500', bgColor: 'bg-green-50', connected: false },
+          { key: 'github', name: 'GitHub', icon: GithubIcon, color: 'text-slate-800', bgColor: 'bg-slate-50', connected: false },
+
+          { key: 'google', name: 'Google', icon: Globe, color: 'text-red-500', bgColor: 'bg-red-50', connected: false },
+        ];
+
+        const maskPhone = (phone: string) => phone ? phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '';
+        const maskEmail = (email: string) => {
+          if (!email) return '';
+          const [local, domain] = email.split('@');
+          if (local.length <= 2) return `${local[0]}***@${domain}`;
+          return `${local[0]}${local[1]}***@${domain}`;
+        };
+        const formatUID = (id: number) => `DN${String(id).padStart(8, '0')}`;
+
+        return (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-black text-slate-900">账号信息</h3>
+              {!accountEditing ? (
+                <button
+                  onClick={() => { setAccountEditing(true); setAccountInfo({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', avatar_url: user?.avatar_url || '' }); }}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all"
+                >
+                  <Edit3 size={14} /> 编辑
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setAccountEditing(false); setAccountErrors({}); setAccountInfo({ name: user?.name || '', phone: user?.phone || '', email: user?.email || '', avatar_url: user?.avatar_url || '' }); }} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all">取消</button>
+                  <button onClick={handleAccountSave} disabled={accountSaving} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
+                    {accountSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 保存
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 个人信息 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">个人信息</h4>
+              <div className="flex items-center gap-5 mb-5 pb-5 border-b border-slate-100">
+                <div className="relative group flex-shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-lg font-black overflow-hidden">
+                    {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" /> : (user?.name?.charAt(0)?.toUpperCase() || 'U')}
+                  </div>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) {
+                        showToast('图片大小不能超过 5MB', 'error');
+                        return;
+                      }
+                      setAvatarUploading(true);
+                      try {
+                        await uploadAvatar(file);
+                        await refreshUser();
+                        showToast('头像更新成功', 'success');
+                      } catch (err: any) {
+                        showToast(err.message || '头像上传失败', 'error');
+                      } finally {
+                        setAvatarUploading(false);
+                        if (avatarInputRef.current) avatarInputRef.current.value = '';
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={avatarUploading}
+                    className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:cursor-wait"
+                  >
+                    {avatarUploading ? <Loader2 size={14} className="text-white animate-spin" /> : <Camera size={14} className="text-white" />}
+                  </button>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-base font-black text-slate-900">{user?.name || '未设置姓名'}</div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-slate-500">
+                    <span className="font-mono select-all bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">{formatUID(user?.id || 0)}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="flex items-center gap-1.5">
+                      {(() => {
+                        const hasPersonalCert = personalCerts.some((c: any) => c.category === 'identity' && c.status === 'valid');
+                        const hasEnterpriseCert = enterpriseCerts.some((c: any) => c.status === 'valid');
+                        const roles: string[] = [];
+                        if (hasPersonalCert) roles.push('求职者');
+                        if (hasEnterpriseCert) roles.push('招聘方');
+                        if (roles.length === 0) roles.push(userRole === 'employer' ? '招聘方' : '求职者');
+                        return roles.map((r, i) => (
+                          <span key={r} className="flex items-center gap-1">
+                            {i > 0 && <span className="text-slate-300">/</span>}
+                            <span className={`inline-flex items-center gap-0.5 ${roles.length > 1 ? 'bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded' : ''}`}>
+                              {r}
+                              {((r === '求职者' && hasPersonalCert) || (r === '招聘方' && hasEnterpriseCert)) && (
+                                <Verified size={12} className="text-indigo-500" />
+                              )}
+                            </span>
+                          </span>
+                        ));
+                      })()}
+                    </span>
+                    <span className="text-slate-300">·</span>
+                    <span>{user?.account_tier === 'ULTRA' ? 'Ultra 旗舰版' : user?.account_tier === 'PRO' ? 'Pro 专业版' : '免费版'}</span>
+                    <span className="text-slate-300">·</span>
+                    <span>注册于 {user?.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '未知'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1.5">姓名 / 昵称</label>
+                  {accountEditing ? (
+                    <div>
+                      <input type="text" value={accountInfo.name} onChange={e => { setAccountInfo(p => ({ ...p, name: e.target.value })); setAccountErrors(p => ({ ...p, name: validateAccountField('name', e.target.value) })); }}
+                        className={`w-full bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${accountErrors.name ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`}
+                        placeholder="请输入姓名或昵称" />
+                      {accountErrors.name && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {accountErrors.name}</p>}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800">{user?.name || '未设置'}</div>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-500">手机号码</label>
+                    <span className="text-xs text-amber-600 flex items-center gap-1"><ShieldCheck size={10} /> 修改需验证</span>
+                  </div>
+                  {accountEditing ? (
+                    <div>
+                      <div className="flex gap-2">
+                        <input type="tel" value={accountInfo.phone} onChange={e => { setAccountInfo(p => ({ ...p, phone: e.target.value })); setAccountErrors(p => ({ ...p, phone: validateAccountField('phone', e.target.value) })); }}
+                          className={`flex-1 bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${accountErrors.phone ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`}
+                          placeholder="请输入手机号" />
+                        <button onClick={openPhoneVerify} className="flex-shrink-0 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2.5 rounded-lg border border-indigo-200 transition-all">验证绑定</button>
+                      </div>
+                      {accountErrors.phone && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {accountErrors.phone}</p>}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 flex items-center justify-between">
+                      <span>{user?.phone ? maskPhone(user.phone) : <span className="text-slate-400">未绑定</span>}</span>
+                      {user?.phone && <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 size={11} /> 已绑定</span>}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-500">邮箱地址</label>
+                    <span className="text-xs text-amber-600 flex items-center gap-1"><ShieldCheck size={10} /> 修改需验证</span>
+                  </div>
+                  {accountEditing ? (
+                    <div>
+                      <div className="flex gap-2">
+                        <input type="email" value={accountInfo.email} onChange={e => { setAccountInfo(p => ({ ...p, email: e.target.value })); setAccountErrors(p => ({ ...p, email: validateAccountField('email', e.target.value) })); }}
+                          className={`flex-1 bg-slate-50 border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${accountErrors.email ? 'border-red-300 bg-red-50' : 'border-slate-200 focus:border-indigo-300'}`}
+                          placeholder="请输入邮箱" />
+                        <button onClick={openEmailVerify} className="flex-shrink-0 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-2.5 rounded-lg border border-indigo-200 transition-all">验证修改</button>
+                      </div>
+                      {accountErrors.email && <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={12} /> {accountErrors.email}</p>}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 flex items-center justify-between">
+                      <span>{user?.email ? maskEmail(user.email) : <span className="text-slate-400">未设置</span>}</span>
+                      <span className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 size={11} /> 已验证</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 安全设置 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">安全设置</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div>
+                    <h5 className="text-sm font-medium text-slate-800">登录密码</h5>
+                    <p className="text-xs text-slate-500">定期修改密码有助于保护账号安全</p>
+                  </div>
+                  <button onClick={() => setShowPasswordForm(!showPasswordForm)} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">{showPasswordForm ? '收起' : '修改密码'}</button>
+                </div>
+                {showPasswordForm && (
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3 animate-in fade-in duration-300">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5">当前密码</label>
+                      <input type="password" value={passwordForm.oldPassword} onChange={e => setPasswordForm(p => ({ ...p, oldPassword: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" placeholder="请输入当前密码" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5">新密码</label>
+                      <input type="password" value={passwordForm.newPassword} onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" placeholder="至少 6 位字符" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5">确认新密码</label>
+                      <input type="password" value={passwordForm.confirmPassword} onChange={e => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" placeholder="再次输入新密码" />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button onClick={() => { setShowPasswordForm(false); setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' }); }} className="px-4 py-2 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 transition-all">取消</button>
+                      <button onClick={handlePasswordChange} disabled={passwordChanging} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
+                        {passwordChanging ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />} 确认修改
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div>
+                    <h5 className="text-sm font-medium text-slate-800">登录方式</h5>
+                    <p className="text-xs text-slate-500">{user?.email}</p>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-500 flex items-center gap-1"><CheckCircle2 size={12} /> 邮箱登录</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 第三方账号绑定 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-1">第三方账号绑定</h4>
+              <p className="text-xs text-slate-400 mb-4">绑定后可使用第三方账号快速登录</p>
+              <div className="space-y-3">
+                {thirdPartyLogins.map(item => (
+                  <div key={item.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg ${item.bgColor} flex items-center justify-center`}>
+                        <item.icon size={16} className={item.color} />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">{item.name}</div>
+                        <div className="text-xs text-slate-400">{item.connected ? '已绑定' : '未绑定'}</div>
+                      </div>
+                    </div>
+                    <button onClick={() => showToast(`${item.name} 第三方登录功能即将上线`, 'warning')}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700">{item.connected ? '解绑' : '绑定'}</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 偏好设置 */}
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">偏好设置</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                  <div>
+                    <h5 className="text-sm font-medium text-slate-800">深色模式</h5>
+                    <p className="text-xs text-slate-500">切换深色主题减少眼睛疲劳</p>
+                  </div>
+                  <button 
+                    onClick={toggleDarkMode}
+                    className={`w-11 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 二次验证弹窗 */}
+            {verifyModal.show && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: ''}); setVerifyCode(''); }}>
+                <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                  <h4 className="text-lg font-black text-slate-900 mb-1">安全验证</h4>
+                  <p className="text-xs text-slate-500 mb-5">修改{verifyModal.type === 'phone' ? '手机号' : '邮箱'}需要验证身份</p>
+
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">{verifyModal.type === 'phone' ? '新手机号' : '新邮箱'}</label>
+                    <div className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-800">{verifyModal.newValue}</div>
+                  </div>
+
+                  <div className="text-xs text-amber-700 bg-amber-50 p-3 rounded-lg mb-4 flex items-start gap-2">
+                    <Info size={13} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                    <span>验证码将发送至{verifyModal.type === 'phone' ? '新手机号' : '新邮箱'}，收到后请填入下方。</span>
+                  </div>
+
+                  <div className="mb-5">
+                    <label className="text-xs font-bold text-slate-500 block mb-1.5">验证码</label>
+                    <div className="flex gap-2">
+                      <input type="text" maxLength={6} value={verifyCode} onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm text-center font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300"
+                        placeholder="6 位验证码" />
+                      <button onClick={handleSendVerifyCode} disabled={verifySending || verifyCountdown > 0}
+                        className="flex-shrink-0 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50 min-w-[90px]">
+                        {verifySending ? <Loader2 size={14} className="animate-spin mx-auto" /> : verifyCountdown > 0 ? `${verifyCountdown}s` : '发送'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button onClick={() => { setVerifyModal({show: false, type: 'phone', newValue: ''}); setVerifyCode(''); }} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all">取消</button>
+                    <button onClick={handleVerifySubmit} disabled={verifySubmitting || verifyCode.length !== 6} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
+                      {verifySubmitting ? <Loader2 size={14} className="animate-spin mx-auto" /> : '确认'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
       case 'Account':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
@@ -1768,6 +2416,17 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
 
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto min-h-screen animate-in fade-in duration-700">
+      {/* Toast 提示 */}
+      {toast.show && (
+        <div className={`fixed top-24 right-6 z-[9999] px-5 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 animate-in slide-in-from-right duration-300 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 
+          toast.type === 'error' ? 'bg-red-500 text-white' : 
+          'bg-amber-500 text-white'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle size={18} /> : toast.type === 'error' ? <XCircle size={18} /> : <AlertCircle size={18} />}
+          {toast.message}
+        </div>
+      )}
       <div className="mb-12">
          <h1 className="text-4xl font-black text-slate-900 flex items-center gap-4">
            <div className="p-3 bg-indigo-600 text-white rounded shadow-xl"><Settings size={32} /></div>
@@ -1844,6 +2503,31 @@ const NotificationCenterView = () => {
   const [total, setTotal] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [markingRead, setMarkingRead] = useState(false);
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
+
+  // 加载通知推送设置
+  useEffect(() => {
+    const loadNotificationSetting = async () => {
+      if (!userId) return;
+      try {
+        const { getSettings } = await import('./services/apiService');
+        const data = await getSettings(userId);
+        setNotificationEnabled(data.notification_enabled ?? true);
+      } catch (e) { /* ignore */ }
+    };
+    loadNotificationSetting();
+  }, [userId]);
+
+  const toggleNotificationEnabled = async () => {
+    const newVal = !notificationEnabled;
+    setNotificationEnabled(newVal);
+    try {
+      const { updateSettings } = await import('./services/apiService');
+      await updateSettings({ user_id: userId, notification_enabled: newVal });
+    } catch (e) {
+      setNotificationEnabled(!newVal); // rollback
+    }
+  };
 
   // 加载通知数据
   const loadNotifications = async () => {
@@ -2070,11 +2754,20 @@ const NotificationCenterView = () => {
         </div>
       )}
 
-      {/* Settings Link */}
-      <div className="mt-8 text-center">
-        <Link to="/settings" className="text-slate-500 hover:text-indigo-600 text-sm font-medium">
-          消息通知设置 →
-        </Link>
+      {/* 通知设置 */}
+      <div className="mt-8 bg-white rounded-xl border border-slate-100 p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-bold text-slate-800">智能消息推送</h4>
+            <p className="text-xs text-slate-500 mt-0.5">简历初筛或约面成功时通过邮件通知</p>
+          </div>
+          <button 
+            onClick={toggleNotificationEnabled}
+            className={`w-11 h-6 rounded-full relative transition-colors ${notificationEnabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
+          >
+            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notificationEnabled ? 'right-1' : 'left-1'}`}></div>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -5347,14 +6040,197 @@ const EmployerDashboard = () => {
   // 使用 API 获取动态数据
   const { data: memories, loading: memoriesLoading } = useMemories(userId, 'employer');
   
-  const collabItems = [
-    { id: 'JD-2024-001', title: '高级 AI 工程师 · JD 润色', type: 'Position', members: ['Z', 'L'], status: 'Drafting with MAS', icon: FileText, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { id: 'JD-2024-002', title: '企业雇主视频 · 内容策划', type: 'Content', members: ['A', 'W', 'K'], status: 'AI Scripting', icon: PenTool, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { id: 'JD-2024-003', title: '招聘画像调优 · 策略协同', type: 'Strategy', members: ['C'], status: 'Ready for Review', icon: Target, color: 'text-amber-600', bg: 'bg-amber-50' },
-  ];
+  // 招聘前置检查状态
+  const [recruitCheckModal, setRecruitCheckModal] = useState<{
+    show: boolean;
+    checking: boolean;
+    certCompleted: boolean;
+    profileCompleted: boolean;
+    missingFields: string[];
+  }>({ show: false, checking: false, certCompleted: false, profileCompleted: false, missingFields: [] });
+
+  // 检查招聘前置条件
+  const handleStartRecruit = async () => {
+    setRecruitCheckModal({ show: true, checking: true, certCompleted: false, profileCompleted: false, missingFields: [] });
+    
+    try {
+      const { getEnterpriseCertifications, getSettings, getTasks } = await import('./services/apiService');
+      
+      // 并行检查认证和资料
+      const [certifications, settingsData, tasks] = await Promise.all([
+        getEnterpriseCertifications(userId).catch(() => []),
+        getSettings(userId).catch(() => ({})),
+        getTasks(userId).catch(() => []),
+      ]);
+      
+      // 检查企业认证 - 需要有营业执照认证
+      const hasBusinessLicense = certifications.some((c: any) => 
+        c.category === 'qualification' && c.name?.includes('营业执照')
+      );
+      // 或者检查认证任务是否已完成
+      const certTask = tasks.find((t: any) => 
+        t.title === '完成企业认证' || (t.title?.includes('企业') && t.title?.includes('认证'))
+      );
+      const certCompleted = hasBusinessLicense || certTask?.status?.toLowerCase() === 'completed';
+      
+      // 检查企业资料完善度 - 检查关键字段
+      const requiredFields = [
+        { key: 'display_name', label: '企业全称' },
+        { key: 'industry', label: '所属行业' },
+        { key: 'company_size', label: '企业规模' },
+        { key: 'detail_address', label: '公司地址' },
+        { key: 'description', label: '企业简介' },
+      ];
+      
+      const hasValue = (val: any) => {
+        if (!val) return false;
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          return trimmed !== '' && trimmed !== '[]' && trimmed !== '{}';
+        }
+        return true;
+      };
+      
+      const missingFields = requiredFields.filter(f => !hasValue(settingsData[f.key])).map(f => f.label);
+      const profileCompleted = missingFields.length === 0;
+      
+      setRecruitCheckModal({ show: true, checking: false, certCompleted, profileCompleted, missingFields });
+      
+      // 如果全部通过，创建招聘任务并跳转到 AI 招聘助手
+      if (certCompleted && profileCompleted) {
+        try {
+          const { createTodo } = await import('./services/apiService');
+          
+          // 检查是否已有进行中的招聘任务
+          const existingRecruitTask = tasks.find((t: any) => 
+            (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
+            (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
+          );
+          
+          if (!existingRecruitTask) {
+            // 创建新的招聘任务
+            const taskShortId = `RC${Date.now().toString().slice(-6)}`;
+            await createTodo({
+              title: `智能招聘 #${taskShortId}`,
+              description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
+              priority: 'HIGH',
+              source: 'AGENT',
+              todo_type: 'RECRUIT',
+              ai_advice: '告诉 AI 助手您的招聘需求，如岗位名称、技能要求、薪资范围等，AI 将为您自动生成专业岗位描述并一键发布。',
+              steps: [
+                { step: 1, title: '描述招聘需求', status: 'pending' },
+                { step: 2, title: 'AI 生成岗位', status: 'pending' },
+                { step: 3, title: '确认并发布', status: 'pending' },
+              ],
+            }, userId);
+          }
+        } catch (e) {
+          console.error('创建招聘任务失败:', e);
+        }
+        
+        setTimeout(() => {
+          setRecruitCheckModal(prev => ({ ...prev, show: false }));
+          navigate('/ai-assistant?task=post');
+        }, 1200);
+      }
+    } catch (error) {
+      console.error('检查招聘前置条件失败:', error);
+      setRecruitCheckModal(prev => ({ ...prev, checking: false }));
+    }
+  };
+
+  const [myJobs, setMyJobs] = useState<any[]>([]);
+  const [myJobsLoading, setMyJobsLoading] = useState(true);
+  useEffect(() => {
+    if (userId) {
+      setMyJobsLoading(true);
+      getMyJobs(userId).then(data => setMyJobs(data || [])).catch(() => setMyJobs([])).finally(() => setMyJobsLoading(false));
+    }
+  }, [userId]);
 
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+      {/* 招聘前置检查弹窗 */}
+      {recruitCheckModal.show && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => !recruitCheckModal.checking && setRecruitCheckModal(prev => ({ ...prev, show: false }))}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            {recruitCheckModal.checking ? (
+              <div className="text-center py-8">
+                <Loader2 size={40} className="animate-spin text-indigo-600 mx-auto mb-4" />
+                <h3 className="text-lg font-black text-slate-900">正在检查招聘资质...</h3>
+                <p className="text-sm text-slate-500 mt-1">确认企业认证和资料完善状态</p>
+              </div>
+            ) : recruitCheckModal.certCompleted && recruitCheckModal.profileCompleted ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={32} className="text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900">资质检查通过！</h3>
+                <p className="text-sm text-slate-500 mt-1">正在跳转到 AI 招聘助手...</p>
+              </div>
+            ) : (
+              <div>
+                <h3 className="text-lg font-black text-slate-900 mb-1">招聘资质检查</h3>
+                <p className="text-sm text-slate-500 mb-5">开始招聘前需要完成以下准备工作</p>
+                
+                <div className="space-y-3">
+                  {/* 企业认证状态 */}
+                  <div className={`flex items-center gap-3 p-4 rounded-lg border ${recruitCheckModal.certCompleted ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${recruitCheckModal.certCompleted ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                      {recruitCheckModal.certCompleted ? <CheckCircle2 size={18} className="text-emerald-600" /> : <AlertCircle size={18} className="text-amber-600" />}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-slate-800">企业认证</h4>
+                      <p className="text-xs text-slate-500">{recruitCheckModal.certCompleted ? '已完成企业认证' : '请先完成企业认证（营业执照等）'}</p>
+                    </div>
+                    {!recruitCheckModal.certCompleted && (
+                      <button 
+                        onClick={() => { setRecruitCheckModal(prev => ({ ...prev, show: false })); navigate('/settings?tab=Verification'); }}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 whitespace-nowrap"
+                      >
+                        去认证 →
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* 企业资料完善状态 */}
+                  <div className={`flex items-center gap-3 p-4 rounded-lg border ${recruitCheckModal.profileCompleted ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${recruitCheckModal.profileCompleted ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+                      {recruitCheckModal.profileCompleted ? <CheckCircle2 size={18} className="text-emerald-600" /> : <AlertCircle size={18} className="text-amber-600" />}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-slate-800">企业资料</h4>
+                      {recruitCheckModal.profileCompleted ? (
+                        <p className="text-xs text-slate-500">企业资料已完善</p>
+                      ) : (
+                        <p className="text-xs text-slate-500">以下信息未填写：{recruitCheckModal.missingFields.join('、')}</p>
+                      )}
+                    </div>
+                    {!recruitCheckModal.profileCompleted && (
+                      <button 
+                        onClick={() => { setRecruitCheckModal(prev => ({ ...prev, show: false })); navigate('/ai-assistant?task=enterprise_profile'); }}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-700 whitespace-nowrap"
+                      >
+                        去完善 →
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="mt-5 flex justify-end">
+                  <button 
+                    onClick={() => setRecruitCheckModal(prev => ({ ...prev, show: false }))}
+                    className="px-4 py-2 text-sm font-bold text-slate-600 hover:text-slate-800"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">企业方</h1>
@@ -5368,7 +6244,7 @@ const EmployerDashboard = () => {
             <Building2 size={20} className="text-indigo-600" /> 企业主页
           </button>
           <button 
-            onClick={() => navigate('/employer/post')}
+            onClick={handleStartRecruit}
             className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-200 active:scale-95 transition-all"
           >
             <Plus size={20}/> 开始招聘
@@ -5418,42 +6294,70 @@ const EmployerDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         <div className="lg:col-span-8 space-y-10">
           
-          {/* 修改：职位列表 */}
+          {/* 修改：职位管理 */}
           <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow relative overflow-hidden">
-             <h2 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-               <Layers className="text-indigo-600" /> 职位列表
-             </h2>
-             <div className="grid grid-cols-1 gap-4">
-                {collabItems.map((item, idx) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => navigate(`/employer/post/${item.id}`)}
-                    className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded-md border border-slate-100 hover:border-indigo-200 transition-all group cursor-pointer"
-                  >
-                    <div className="flex items-center gap-5 w-full md:w-auto">
-                       <div className={`w-12 h-12 ${item.bg} ${item.color} rounded flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-                          <item.icon size={24} />
-                       </div>
-                       <div>
-                          <div className="text-sm font-black text-slate-800 tracking-tight">{item.title}</div>
-                          <div className="flex items-center gap-2 mt-1">
-                             <span className="text-xs font-black uppercase text-indigo-500/80 bg-indigo-50 px-1.5 py-0.5 rounded">{item.type}</span>
-                             <span className="text-xs font-medium text-slate-400 italic">{item.status}</span>
-                          </div>
-                       </div>
-                    </div>
-                    <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
-                       <div className="flex -space-x-2">
-                          {item.members.map((m, mIdx) => (
-                            <div key={mIdx} className="w-8 h-8 rounded-full bg-indigo-600 border-2 border-white flex items-center justify-center text-xs font-black text-white shadow-sm">{m}</div>
-                          ))}
-                          <div className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-black text-slate-400">+</div>
-                       </div>
-                       <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><MessageSquare size={18} /></button>
-                    </div>
-                  </div>
-                ))}
+             <div className="flex items-center justify-between mb-8">
+               <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                 <Briefcase className="text-indigo-600" /> 我的岗位
+               </h2>
+               <button onClick={() => navigate('/employer/post')} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+                 全部管理 <ArrowRight size={14} />
+               </button>
              </div>
+             {myJobsLoading ? (
+               <div className="text-center py-8"><Loader2 className="mx-auto animate-spin text-indigo-400" size={24} /></div>
+             ) : myJobs.length === 0 ? (
+               <div className="text-center py-8">
+                 <Briefcase className="mx-auto text-slate-300 mb-3" size={36} />
+                 <p className="text-sm text-slate-400 mb-4">还没有发布过岗位</p>
+                 <button onClick={() => navigate('/ai-assistant?taskType=post')} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors inline-flex items-center gap-2">
+                   <Sparkles size={14} /> 发布岗位
+                 </button>
+               </div>
+             ) : (
+               <div className="space-y-4">
+                  {myJobs.slice(0, 5).map((job) => (
+                    <div 
+                      key={job.id} 
+                      onClick={() => navigate('/employer/post')}
+                      className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-center gap-5 w-full md:w-auto">
+                         <div className="w-14 h-14 bg-indigo-600 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform">
+                            <Briefcase size={24} />
+                         </div>
+                         <div>
+                            <div className="text-base font-black text-slate-900 tracking-tight">{job.title}</div>
+                            <div className="text-xs font-bold text-slate-500 mt-0.5">{job.location}</div>
+                            <div className="flex items-center gap-2 mt-2">
+                               <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                                 {job.salary_min && job.salary_max ? `${(job.salary_min/1000).toFixed(0)}k-${(job.salary_max/1000).toFixed(0)}k` : '面议'}
+                               </span>
+                               <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${job.status === 'active' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400 bg-slate-100'}`}>
+                                 {job.status === 'active' ? '招聘中' : '已关闭'}
+                               </span>
+                            </div>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
+                         <div className="text-right">
+                            <div className="flex items-center gap-2 justify-end">
+                               <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Eye size={12} /> {job.view_count || 0} 浏览</span>
+                            </div>
+                         </div>
+                         <div className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
+                           <ChevronRight size={18} />
+                         </div>
+                      </div>
+                    </div>
+                  ))}
+                  {myJobs.length > 5 && (
+                    <button onClick={() => navigate('/employer/post')} className="text-center py-3 text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+                      查看全部 {myJobs.length} 个岗位 →
+                    </button>
+                  )}
+               </div>
+             )}
           </div>
 
           {/* 修改：人才库功能列表 */}
@@ -5562,52 +6466,72 @@ const EnterpriseHomeView = () => {
   const { user } = useAuth();
   const userId = user?.id || 0;
   
-  // 使用动态数据
   const { data: profileData, loading: profileLoading } = useProfile(userId, 'employer');
   const { data: memoriesData } = useMemories(userId, 'employer');
   
-  // 从 memories 中提取企业信息
-  const companyInfo = useMemo(() => {
-    if (!memoriesData) return {};
-    const info: any = {};
-    memoriesData.forEach((m: any) => {
-      const type = m.type?.toLowerCase();
-      if (type === 'culture' || type === '文化') info.culture = m.content;
-      if (type === 'tech' || type === '技术') info.tech = m.content;
-      if (type === 'team' || type === '团队') info.team = m.content;
-      if (type === 'benefit' || type === '福利') info.benefit = m.content;
-    });
-    return info;
-  }, [memoriesData]);
+  // 从 user_settings 获取企业基础信息
+  const [settingsData, setSettingsData] = useState<any>(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [certData, setCertData] = useState<any>(null);
+  
+  useEffect(() => {
+    if (userId) {
+      import('./services/apiService').then(m => {
+        m.getSettings(userId)
+          .then(data => { setSettingsData(data); setSettingsLoading(false); })
+          .catch(() => setSettingsLoading(false));
+        // 获取认证信息
+        m.getEnterpriseCertifications(userId)
+          .then(data => setCertData(data))
+          .catch(() => {});
+      });
+    }
+  }, [userId]);
+  
+  // 解析福利数据
+  const parseBenefits = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') {
+      try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+    }
+    return [];
+  };
   
   // 合并数据
   const employerData = profileData?.employer_data || {};
-  const displayCompany = {
-    name: employerData?.company_name || user?.company_name || '未设置公司名称',
-    slogan: profileData?.title || employerData?.slogan || '',
-    mission: profileData?.summary || employerData?.mission || companyInfo.culture || '',
-    culture: employerData?.culture || companyInfo.culture || '',
-    tech: employerData?.tech_stack || companyInfo.tech || '',
-    benefits: employerData?.benefits || [],
-    industry: employerData?.industry || '',
-    size: employerData?.size || '',
-    location: employerData?.location || '',
+  const dc = {
+    name: settingsData?.display_name || employerData?.company_name || user?.company_name || '未设置公司名称',
+    shortName: settingsData?.short_name || '',
+    slogan: settingsData?.slogan || profileData?.title || employerData?.slogan || '',
+    description: settingsData?.description || profileData?.summary || '',
+    benefits: parseBenefits(settingsData?.benefits),
+    industry: settingsData?.industry || employerData?.industry || '',
+    size: settingsData?.company_size || employerData?.size || '',
+    fundingStage: settingsData?.funding_stage || '',
+    location: settingsData?.detail_address || settingsData?.address || employerData?.location || '',
+    contactName: settingsData?.contact_name || '',
+    hrPhone: settingsData?.hr_phone || '',
+    contactEmail: settingsData?.contact_email || user?.email || '',
+    website: settingsData?.website || '',
+    isCertified: certData && certData.length > 0 && certData.some((c: any) => c.status === 'approved'),
+    certInfo: certData?.[0] || null,
   };
   
-  // 判断资料是否为空
-  const isProfileEmpty = profileData?.is_empty || (!displayCompany.mission && !displayCompany.culture);
+  // 资料完善度
+  const profileCompleteness = useMemo(() => {
+    const fields = [dc.name, dc.description, dc.industry, dc.size, dc.fundingStage, dc.location, dc.contactName, dc.hrPhone, dc.contactEmail];
+    const filled = fields.filter(f => f && f !== '未设置公司名称').length;
+    return Math.round((filled / fields.length) * 100);
+  }, [dc]);
+
+  const isProfileEmpty = !settingsData?.display_name && !settingsData?.description;
   
-  // 跳转到 AI 助手编辑
-  const handleEditCompany = (field: string) => {
-    navigate(`/ai-assistant?editType=employer&editField=${field}`);
-  };
-  
-  // 加载状态
-  if (profileLoading) {
+  if (profileLoading || settingsLoading) {
     return (
       <div className="pt-40 text-center">
         <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
-        <p className="text-slate-500">加载企业资料中...</p>
+        <p className="text-slate-500 font-medium">加载企业资料中...</p>
       </div>
     );
   }
@@ -5619,54 +6543,22 @@ const EnterpriseHomeView = () => {
         <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-8">
           <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回管理后台
         </button>
-        <div className="bg-white rounded-lg p-12 border border-slate-100 shadow-xl text-center">
-          <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="bg-white rounded-2xl p-12 border border-slate-100 shadow-xl text-center">
+          <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
             <Building2 size={48} className="text-indigo-600" />
           </div>
           <h2 className="text-2xl font-black text-slate-900 mb-4">完善您的企业主页</h2>
-          <p className="text-slate-500 mb-8 max-w-md mx-auto">
-            您还没有设置企业主页信息。通过 AI 助手快速完善资料，展示企业文化，吸引更多优秀人才。
+          <p className="text-slate-500 mb-8 max-w-md mx-auto leading-relaxed">
+            您还没有设置企业主页信息。完善企业资料可以展示企业实力，吸引更多优秀人才。
           </p>
-          <div className="grid grid-cols-2 gap-4 max-w-lg mx-auto mb-8">
-            <button 
-              onClick={() => handleEditCompany('company')}
-              className="p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-left transition-all"
-            >
-              <Building2 className="text-indigo-600 mb-2" size={24} />
-              <div className="font-bold text-slate-900">公司介绍</div>
-              <div className="text-xs text-slate-500">添加公司基本信息</div>
+          <div className="flex gap-4 justify-center">
+            <button onClick={() => navigate('/settings?tab=General')} className="bg-indigo-600 text-white px-8 py-3.5 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition-all hover:shadow-xl flex items-center gap-2">
+              <Edit3 size={18} /> 完善基础信息
             </button>
-            <button 
-              onClick={() => handleEditCompany('culture')}
-              className="p-4 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-left transition-all"
-            >
-              <Heart className="text-emerald-600 mb-2" size={24} />
-              <div className="font-bold text-slate-900">企业文化</div>
-              <div className="text-xs text-slate-500">展示公司价值观</div>
-            </button>
-            <button 
-              onClick={() => handleEditCompany('benefit')}
-              className="p-4 bg-amber-50 hover:bg-amber-100 rounded-lg text-left transition-all"
-            >
-              <Gift className="text-amber-600 mb-2" size={24} />
-              <div className="font-bold text-slate-900">福利待遇</div>
-              <div className="text-xs text-slate-500">展示员工福利</div>
-            </button>
-            <button 
-              onClick={() => navigate('/ai-assistant?taskType=post')}
-              className="p-4 bg-rose-50 hover:bg-rose-100 rounded-lg text-left transition-all"
-            >
-              <FileText className="text-rose-600 mb-2" size={24} />
-              <div className="font-bold text-slate-900">发布职位</div>
-              <div className="text-xs text-slate-500">开始招聘人才</div>
+            <button onClick={() => navigate('/settings?tab=Verification')} className="bg-white text-indigo-600 border-2 border-indigo-200 px-8 py-3.5 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center gap-2">
+              <Shield size={18} /> 企业认证
             </button>
           </div>
-          <button 
-            onClick={() => navigate('/ai-assistant?taskType=post')}
-            className="bg-indigo-600 text-white px-8 py-4 rounded font-black shadow-xl hover:bg-indigo-700 transition-all"
-          >
-            开始完善资料
-          </button>
         </div>
       </div>
     );
@@ -5674,188 +6566,265 @@ const EnterpriseHomeView = () => {
 
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-8">
+      <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-6">
         <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回管理后台
       </button>
 
-      <div className="bg-white rounded shadow-2xl overflow-hidden border border-slate-100 relative">
-        <div className="h-[280px] relative overflow-hidden">
-           <div className="absolute inset-0 bg-indigo-600">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/70 via-slate-900 to-indigo-900/40 pointer-events-none"></div>
-              <div className="grid grid-cols-12 h-full opacity-[0.15]">
-                 {[...Array(12)].map((_, i) => <div key={i} className="border-r border-white/10 h-full"></div>)}
+      {/* 顶部 Banner */}
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 relative mb-8">
+        <div className="h-[240px] relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-800">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-10 left-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
+              <div className="absolute bottom-0 right-20 w-60 h-60 bg-violet-300/20 rounded-full blur-3xl"></div>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 w-full p-8 md:p-10 text-white flex flex-col md:flex-row items-end justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className="w-24 h-24 bg-white rounded-2xl p-5 shadow-2xl flex-shrink-0 border-2 border-white/50">
+                <Building2 className="text-indigo-600 w-full h-full" />
               </div>
-           </div>
-           <div className="absolute bottom-0 left-0 w-full p-12 text-white flex flex-col md:flex-row items-end justify-between gap-8">
-              <div className="flex items-center gap-8">
-                 <div className="w-32 h-32 bg-white rounded p-8 shadow-2xl border-4 border-indigo-500/20 flex-shrink-0">
-                    <Zap className="text-indigo-600 w-full h-full" />
-                 </div>
-                 <div>
-                    <div className="inline-flex items-center gap-2 bg-indigo-500/30 px-3 py-1 rounded-full text-indigo-200 text-xs font-black mb-3 uppercase tracking-widest border border-indigo-400/20 backdrop-blur-sm">
-                       <Globe size={12} /> {displayCompany.industry || 'AI 驱动型企业'}
-                    </div>
-                    <h1 className="text-5xl font-black mb-1 tracking-tight">{displayCompany.name}</h1>
-                    <p className="text-xl text-indigo-100/70 font-medium">{displayCompany.slogan || '点击编辑添加公司标语'}</p>
-                 </div>
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  {dc.industry && (
+                    <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-white/90 text-xs font-bold border border-white/10">
+                      <Briefcase size={12} /> {dc.industry}
+                    </span>
+                  )}
+                  {dc.isCertified && (
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-sm px-3 py-1 rounded-full text-emerald-200 text-xs font-bold border border-emerald-400/20">
+                      <CheckCircle size={12} /> 已认证
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-tight">{dc.name}</h1>
+                {dc.shortName && <p className="text-indigo-200 font-medium mt-1">{dc.shortName}</p>}
               </div>
-              <div className="flex gap-4 mb-2">
-                 <button 
-                   onClick={() => handleEditCompany('company')}
-                   className="bg-white text-slate-900 px-7 py-3.5 rounded font-black hover:bg-slate-50 transition-all shadow-xl active:scale-95 flex items-center gap-2"
-                 >
-                    <Edit3 size={18} /> 编辑资料
-                 </button>
-                 <button 
-                   onClick={() => handleEditCompany('company')}
-                   className="bg-white text-slate-900 px-7 py-3.5 rounded font-black hover:bg-slate-50 transition-all shadow-xl active:scale-95 flex items-center gap-2"
-                 >
-                    <Edit3 size={18} /> 编辑资料
-                 </button>
-                 <button 
-                   onClick={() => handleEditCompany('company')}
-                   className="bg-white text-slate-900 px-7 py-3.5 rounded font-black hover:bg-slate-50 transition-all shadow-xl active:scale-95 flex items-center gap-2"
-                 >
-                    <Edit3 size={18} /> 编辑资料
-                 </button>
-                 <button className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-6 py-3.5 rounded font-black hover:bg-white/20 transition-all flex items-center gap-2">
-                    <Share2 size={18} /> 分享主页
-                 </button>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => navigate('/settings?tab=General')} className="bg-white text-slate-800 px-5 py-2.5 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-lg active:scale-95 flex items-center gap-2 text-sm">
+                <Edit3 size={16} /> 编辑资料
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 左侧主内容 */}
+        <div className="lg:col-span-8 space-y-8">
+          
+          {/* 企业简介 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+            <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><FileText size={20} className="text-indigo-600" /></div>
+              企业简介
+            </h2>
+            {dc.description ? (
+              <p className="text-slate-600 leading-relaxed whitespace-pre-line text-[15px]">{dc.description}</p>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-slate-400 italic mb-4">暂未填写企业简介</p>
+                <button onClick={() => navigate('/settings?tab=General')} className="text-indigo-600 font-bold text-sm hover:underline">去完善</button>
               </div>
-           </div>
+            )}
+          </div>
+
+          {/* 企业标签 */}
+          {(dc.industry || dc.size || dc.fundingStage) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {dc.industry && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Briefcase size={20} className="text-amber-600" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">所属行业</p>
+                  <p className="text-lg font-black text-slate-900">{dc.industry}</p>
+                </div>
+              )}
+              {dc.size && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Users size={20} className="text-indigo-600" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">企业规模</p>
+                  <p className="text-lg font-black text-slate-900">{dc.size}</p>
+                </div>
+              )}
+              {dc.fundingStage && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <TrendingUp size={20} className="text-emerald-600" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">融资阶段</p>
+                  <p className="text-lg font-black text-slate-900">{dc.fundingStage}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 企业福利 */}
+          {dc.benefits.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+              <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center"><Gift size={20} className="text-amber-600" /></div>
+                企业福利
+              </h2>
+              <div className="flex flex-wrap gap-3">
+                {dc.benefits.map((b: string, i: number) => (
+                  <span key={i} className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-violet-50 text-indigo-700 px-5 py-2.5 rounded-xl text-sm font-bold border border-indigo-100/50 hover:shadow-sm transition-all">
+                    <CheckCircle size={14} className="text-indigo-400" /> {b}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 认证信息 */}
+          {dc.isCertified && dc.certInfo && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-8">
+              <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center"><Shield size={20} className="text-emerald-600" /></div>
+                企业认证
+                <span className="text-xs bg-emerald-500 text-white px-2.5 py-1 rounded-full font-bold">已认证</span>
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {dc.certInfo.company_name && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">注册企业名称</p>
+                    <p className="text-sm font-bold text-slate-800">{dc.certInfo.company_name}</p>
+                  </div>
+                )}
+                {dc.certInfo.credit_code && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">统一社会信用代码</p>
+                    <p className="text-sm font-bold text-slate-800">{dc.certInfo.credit_code}</p>
+                  </div>
+                )}
+                {dc.certInfo.legal_person && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">法定代表人</p>
+                    <p className="text-sm font-bold text-slate-800">{dc.certInfo.legal_person}</p>
+                  </div>
+                )}
+                {dc.certInfo.registered_capital && (
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">注册资本</p>
+                    <p className="text-sm font-bold text-slate-800">{dc.certInfo.registered_capital}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="p-12 lg:p-16 grid grid-cols-1 lg:grid-cols-12 gap-16 lg:gap-20">
-           <div className="lg:col-span-8 space-y-16">
-              <section>
-                 <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                   <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div> 企业使命与愿景
-                 </h2>
-                 <p className="text-lg text-slate-700 leading-relaxed font-medium mb-10 italic">
-                    “我们不只是在招聘员工，我们是在寻找共同定义未来生产力的数字合伙人。在得若，人类智慧与多智能体系统深度耦合，创造前所未有的商业价值。”
-                 </p>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="p-5 bg-slate-50 rounded-md border border-slate-100 hover:bg-white hover:shadow-lg hover:border-indigo-100 transition-all group">
-                       <Compass className="text-indigo-600 mb-6 group-hover:scale-110 transition-transform" size={28} />
-                       <h3 className="text-lg font-bold mb-3">技术哲学</h3>
-                       <p className="text-slate-500 text-sm leading-relaxed">坚持‘智能体原生’ (Agent-Native) 理念，将 AI 深度集成到研发、管理与决策的每一个毛细血管中。</p>
-                    </div>
-                    <div className="p-5 bg-slate-50 rounded-md border border-slate-100 hover:bg-white hover:shadow-lg hover:border-emerald-100 transition-all group">
-                       <Layers className="text-emerald-600 mb-6 group-hover:scale-110 transition-transform" size={28} />
-                       <h3 className="text-lg font-bold mb-3">协作生态</h3>
-                       <p className="text-slate-500 text-sm leading-relaxed">打造极度透明、数据驱动的扁平化环境。每一位员工都拥有调动全局智能体资源的权限。</p>
-                    </div>
-                 </div>
-              </section>
-
-              {/* 企业资质与荣誉板块 */}
-              <section>
-                 <div className="flex items-baseline justify-between mb-8">
-                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                      <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div> 企业资质与实力背书
-                    </h2>
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Trust & Credentials</span>
-                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    {MOCK_QUALIFICATIONS.map((q) => (
-                      <div key={q.id} className="p-7 bg-white border border-slate-100 rounded-md card-shadow flex gap-5 group hover:border-indigo-200 transition-all hover:-translate-y-1">
-                         <div className={`w-14 h-14 ${q.bg} ${q.color} rounded flex items-center justify-center flex-shrink-0 group-hover:rotate-6 transition-transform shadow-sm`}>
-                            <q.icon size={28} />
-                         </div>
-                         <div>
-                            <h4 className="text-md font-black text-slate-900 mb-1.5">{q.title}</h4>
-                            <p className="text-xs text-slate-500 leading-relaxed font-medium">{q.description}</p>
-                         </div>
-                      </div>
-                    ))}
-                 </div>
-              </section>
-
-              <section>
-                 <div className="flex items-baseline justify-between mb-8">
-                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-                      <div className="w-1.5 h-6 bg-indigo-600 rounded-full"></div> 核心开放职位
-                    </h2>
-                    <span className="text-xs font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded">{MOCK_JOBS.length} POSITIONS OPEN</span>
-                 </div>
-                 <div className="space-y-4">
-                    {MOCK_JOBS.map(job => (
-                       <div 
-                          key={job.id} 
-                          onClick={() => navigate(`/candidate/job/${job.id}`, { state: { job } })}
-                          className="p-7 bg-white border border-slate-100 rounded card-shadow flex flex-col md:flex-row justify-between items-center gap-6 group hover:border-indigo-300 transition-all cursor-pointer"
-                       >
-                          <div className="flex-1">
-                             <div className="flex items-center gap-3 mb-2">
-                                <h4 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{job.title}</h4>
-                                {job.matchScore > 90 && <span className="bg-amber-100 text-amber-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">Hot Pick</span>}
-                             </div>
-                             <div className="flex flex-wrap gap-4 text-slate-400 text-xs font-bold mb-4">
-                                <span className="flex items-center gap-1.5"><MapPin size={14} className="text-indigo-400" /> {job.location}</span>
-                                <span className="flex items-center gap-1.5"><CircleDollarSign size={14} className="text-amber-500" /> {job.salary}</span>
-                                <span className="flex items-center gap-1.5"><Clock size={14} className="text-slate-300" /> 2小时前发布</span>
-                             </div>
-                             <div className="flex flex-wrap gap-2">
-                                {job.tags.map((tag, tIdx) => (
-                                  <span key={tIdx} className="bg-slate-50 text-slate-400 text-[9px] font-black px-2 py-0.5 rounded-lg border border-slate-100 uppercase tracking-tighter">{tag}</span>
-                                ))}
-                             </div>
-                          </div>
-                          <button 
-                             onClick={(e) => { e.stopPropagation(); navigate(`/candidate/job/${job.id}`, { state: { job } }); }}
-                             className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded font-black shadow-xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 group-hover:scale-105 group-hover:shadow-indigo-200"
-                          >
-                             申请 <ArrowRight size={18} />
-                          </button>
-                       </div>
-                    ))}
-                    <button className="w-full py-5 bg-slate-50 text-slate-400 text-xs font-black rounded border border-dashed border-slate-200 hover:bg-white hover:text-indigo-600 hover:border-indigo-200 transition-all uppercase tracking-widest">
-                       查看所有职位列表
-                    </button>
-                 </div>
-              </section>
-           </div>
-
-           <div className="lg:col-span-4 space-y-10">
-              <div className="bg-indigo-600 p-10 rounded-lg text-white shadow-2xl relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-110 transition-transform"><Activity size={120} /></div>
-                 <h3 className="text-xl font-black mb-8 border-b border-white/5 pb-4">雇主数据洞察</h3>
-                 <div className="space-y-8 relative z-10">
-                    <div>
-                       <div className="flex justify-between text-xs font-black uppercase tracking-widest text-slate-400 mb-2">文化匹配满意度</div>
-                       <div className="text-3xl font-black flex items-baseline gap-1">98.2 <span className="text-xs font-bold text-indigo-300">%</span></div>
-                    </div>
-                    <div>
-                       <div className="flex justify-between text-xs font-black uppercase tracking-widest text-slate-400 mb-2">平均晋升周期</div>
-                       <div className="text-3xl font-black flex items-baseline gap-1">1.2 <span className="text-xs font-bold text-indigo-300">YEARS</span></div>
-                    </div>
-                    <div>
-                       <div className="flex justify-between text-xs font-black uppercase tracking-widest text-slate-400 mb-2">团队规模</div>
-                       <div className="text-3xl font-black flex items-baseline gap-1">120+ <span className="text-xs font-bold text-indigo-300">MEMBERS</span></div>
-                    </div>
-                    <div className="pt-6 border-t border-white/10 text-xs text-slate-500 italic leading-relaxed">
-                       “Agent 评估：该企业具有极高的人才留存率与技术向心力。”
-                    </div>
-                 </div>
+        {/* 右侧信息栏 */}
+        <div className="lg:col-span-4 space-y-6">
+          
+          {/* 资料完善度 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2">
+              <Activity size={18} className="text-indigo-600" /> 资料完善度
+            </h3>
+            <div className="mb-3">
+              <div className="flex justify-between text-sm mb-2">
+                <span className="text-slate-500 font-medium">完善进度</span>
+                <span className="font-black text-indigo-600">{profileCompleteness}%</span>
               </div>
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div className="bg-gradient-to-r from-indigo-500 to-violet-500 h-full rounded-full transition-all duration-700" style={{width: `${profileCompleteness}%`}}></div>
+              </div>
+            </div>
+            {profileCompleteness < 100 && (
+              <button onClick={() => navigate('/settings?tab=General')} className="w-full mt-3 py-2.5 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all flex items-center justify-center gap-2">
+                <Edit3 size={14} /> 继续完善
+              </button>
+            )}
+          </div>
+          
+          {/* 联系信息 */}
+          <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/5 rounded-full blur-xl"></div>
+            <h3 className="text-base font-black mb-5 flex items-center gap-2 relative z-10">
+              <Phone size={18} /> 联系信息
+            </h3>
+            <div className="space-y-4 relative z-10">
+              {dc.contactName && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><UserIcon size={14} /></div>
+                  <div>
+                    <p className="text-xs text-indigo-200 font-medium">联系人</p>
+                    <p className="font-bold">{dc.contactName}</p>
+                  </div>
+                </div>
+              )}
+              {dc.hrPhone && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Phone size={14} /></div>
+                  <div>
+                    <p className="text-xs text-indigo-200 font-medium">电话</p>
+                    <p className="font-bold">{dc.hrPhone}</p>
+                  </div>
+                </div>
+              )}
+              {dc.contactEmail && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Mail size={14} /></div>
+                  <div>
+                    <p className="text-xs text-indigo-200 font-medium">邮箱</p>
+                    <p className="font-bold text-sm break-all">{dc.contactEmail}</p>
+                  </div>
+                </div>
+              )}
+              {dc.website && (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Globe size={14} /></div>
+                  <div>
+                    <p className="text-xs text-indigo-200 font-medium">官网</p>
+                    <p className="font-bold text-sm break-all">{dc.website}</p>
+                  </div>
+                </div>
+              )}
+              {!dc.contactName && !dc.hrPhone && !dc.contactEmail && (
+                <p className="text-indigo-200/70 text-sm italic text-center py-2">暂未设置联系信息</p>
+              )}
+            </div>
+          </div>
 
-              <div className="p-10 bg-slate-50 rounded-lg border border-slate-100">
-                 <h3 className="text-lg font-black mb-8 flex items-center gap-2 text-slate-900"><MapPin className="text-indigo-600" /> 总部位置</h3>
-                 <div className="bg-slate-200 h-40 rounded-lg mb-6 flex items-center justify-center text-slate-400 font-bold shadow-inner relative group cursor-pointer overflow-hidden">
-                    <div className="absolute inset-0 bg-indigo-600/10 group-hover:bg-indigo-600/0 transition-colors"></div>
-                    [ 高德/Google Map 组件 ]
-                 </div>
-                 <p className="text-sm font-bold text-slate-700 mb-2">上海 · 张江高科技园区</p>
-                 <p className="text-xs text-slate-400 leading-relaxed font-medium">得若智能中心 A 座 12-18 层</p>
-              </div>
-              </div>
-           </div>
+          {/* 公司地址 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2">
+              <MapPin size={18} className="text-indigo-600" /> 公司地址
+            </h3>
+            {dc.location ? (
+              <p className="text-sm text-slate-600 leading-relaxed font-medium">{dc.location}</p>
+            ) : (
+              <p className="text-sm text-slate-400 italic">暂未设置公司地址</p>
+            )}
+          </div>
+
+          {/* 快捷操作 */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h3 className="text-base font-black text-slate-900 mb-4">快捷操作</h3>
+            <div className="space-y-2.5">
+              <button onClick={() => navigate('/settings?tab=General')} className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-700 font-bold text-sm transition-all flex items-center gap-2.5">
+                <Edit3 size={16} /> 编辑基础信息
+              </button>
+              <button onClick={() => navigate('/settings?tab=Verification')} className="w-full py-3 px-4 bg-emerald-50 hover:bg-emerald-100 rounded-xl text-emerald-700 font-bold text-sm transition-all flex items-center gap-2.5">
+                <Shield size={16} /> 企业认证管理
+              </button>
+              <button onClick={() => navigate('/ai-assistant')} className="w-full py-3 px-4 bg-violet-50 hover:bg-violet-100 rounded-xl text-violet-700 font-bold text-sm transition-all flex items-center gap-2.5">
+                <Zap size={16} /> AI 助手
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-// --- 真正独立且详细的人才详情页 (TalentDetailView) ---
+
 const TalentDetailView = () => {
   const { talentId } = useParams();
   const navigate = useNavigate();
@@ -6039,199 +7008,260 @@ const TalentDetailView = () => {
 const JobPostDetailView = () => {
   const navigate = useNavigate();
   const { postId } = useParams();
-  
-  const mockCandidates = [
-    { id: 1, name: '陈伟', avatar: '陈', role: '高级 AI 工程师', matchScore: 98, status: '面试中', stage: '初试', time: '2024-01-10', tokens: 45200, tags: ['生成式 AI', 'Python', '智能体协同'] },
-    { id: 2, name: '李芳', avatar: '李', role: '算法专家', matchScore: 82, status: '待审核', stage: '对标', time: '2024-01-08', tokens: 32100, tags: ['机器学习', '深度学习', 'NLP'] },
-    { id: 3, name: '张明', avatar: '张', role: '技术专家', matchScore: 75, status: '已推荐', stage: '解析', time: '2024-01-05', tokens: 18500, tags: ['系统架构', '云原生', '微服务'] },
-    { id: 4, name: '王芳', avatar: '王', role: '架构师', matchScore: 68, status: '待联系', stage: '投递', time: '2024-01-03', tokens: 12000, tags: ['分布式系统', 'Kubernetes', '大数据'] },
-  ];
-  
-  const jobInfo = {
-    title: '高级 AI 工程师',
-    department: '技术研发中心',
-    location: '上海 (远程)',
-    salary: '¥50k - ¥80k',
-    type: '全职',
-    applicants: 156,
-    hires: 3,
-  };
-  
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case '面试中': return 'bg-amber-100 text-amber-700';
-      case '待审核': return 'bg-slate-100 text-slate-600';
-      case '已推荐': return 'bg-blue-100 text-blue-700';
-      case '待联系': return 'bg-emerald-100 text-emerald-700';
-      default: return 'bg-slate-100 text-slate-600';
+  const { user } = useAuth();
+  const userId = user?.id || 0;
+
+  const [loading, setLoading] = useState(true);
+  const [jobData, setJobData] = useState<any>(null);
+  const [applications, setApplications] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'score' | 'time'>('time');
+  const [showDesc, setShowDesc] = useState(false);
+
+  useEffect(() => {
+    if (postId && userId) {
+      setLoading(true);
+      getJobDetail(Number(postId), userId)
+        .then(data => {
+          setJobData(data.job);
+          setApplications(data.applications || []);
+          setStats(data.stats || {});
+        })
+        .catch(e => {
+          console.error('加载岗位详情失败:', e);
+        })
+        .finally(() => setLoading(false));
     }
+  }, [postId, userId]);
+
+  const formatSalary = (min?: number, max?: number) => {
+    if (!min && !max) return '面议';
+    if (min && max) return `${(min / 1000).toFixed(0)}k - ${(max / 1000).toFixed(0)}k`;
+    if (min) return `${(min / 1000).toFixed(0)}k 起`;
+    return `最高 ${((max || 0) / 1000).toFixed(0)}k`;
   };
-  
-  const getStageColor = (stage: string) => {
-    switch (stage) {
-      case '初试': return 'text-indigo-600';
-      case '对标': return 'text-purple-600';
-      case '解析': return 'text-emerald-600';
-      case '投递': return 'text-slate-500';
-      default: return 'text-slate-500';
-    }
+
+  const statusLabelMap: Record<string, { text: string; color: string }> = {
+    parsing: { text: '简历解析中', color: 'bg-blue-100 text-blue-700' },
+    benchmarking: { text: '对标分析中', color: 'bg-purple-100 text-purple-700' },
+    screening: { text: '初筛中', color: 'bg-amber-100 text-amber-700' },
+    interviewing: { text: '面试中', color: 'bg-orange-100 text-orange-700' },
+    evaluating: { text: '评估中', color: 'bg-indigo-100 text-indigo-700' },
+    offer: { text: 'Offer阶段', color: 'bg-emerald-100 text-emerald-700' },
+    accepted: { text: '已录用', color: 'bg-green-100 text-green-700' },
+    rejected: { text: '已拒绝', color: 'bg-red-100 text-red-600' },
+    withdrawn: { text: '已撤回', color: 'bg-slate-100 text-slate-500' },
   };
-  
-  return (
-    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
-        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回职位列表
-      </button>
-      
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm mb-8">
-        <div className="p-8 border-b border-slate-100">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full">招聘中</span>
-                <span className="text-xs text-slate-400">职位 ID: {postId || 'JD-2024-001'}</span>
-              </div>
-              <h1 className="text-3xl font-black text-slate-900 mb-2">{jobInfo.title}</h1>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                <span className="flex items-center gap-1"><Building2 size={14} /> {jobInfo.department}</span>
-                <span className="flex items-center gap-1"><MapPin size={14} /> {jobInfo.location}</span>
-                <span className="flex items-center gap-1"><CircleDollarSign size={14} /> {jobInfo.salary}</span>
-                <span className="flex items-center gap-1"><Clock size={14} /> {jobInfo.type}</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-center px-4">
-                <div className="text-2xl font-black text-indigo-600">{jobInfo.applicants}</div>
-                <div className="text-xs text-slate-400">投递人数</div>
-              </div>
-              <div className="w-px h-12 bg-slate-100"></div>
-              <div className="text-center px-4">
-                <div className="text-2xl font-black text-emerald-600">{jobInfo.hires}</div>
-                <div className="text-xs text-slate-400">已录用</div>
-              </div>
-            </div>
-          </div>
+
+  const stageLabelMap: Record<string, { text: string; color: string }> = {
+    parse: { text: '解析', color: 'text-blue-600' },
+    benchmark: { text: '对标', color: 'text-purple-600' },
+    first_interview: { text: '初试', color: 'text-indigo-600' },
+    second_interview: { text: '复试', color: 'text-orange-600' },
+    final: { text: '终审', color: 'text-emerald-600' },
+  };
+
+  const getStatusLabel = (s: string) => statusLabelMap[s] || { text: s, color: 'bg-slate-100 text-slate-600' };
+  const getStageLabel = (s: string) => stageLabelMap[s] || { text: s, color: 'text-slate-500' };
+
+  // 过滤和排序
+  const filteredApps = applications
+    .filter(a => statusFilter === 'all' || a.status === statusFilter)
+    .sort((a, b) => {
+      if (sortBy === 'score') return (b.match_score || 0) - (a.match_score || 0);
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    });
+
+  const acceptedCount = applications.filter(a => a.status === 'accepted').length;
+
+  if (loading) {
+    return (
+      <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <div className="text-center py-20">
+          <Loader2 className="mx-auto animate-spin text-indigo-600 mb-3" size={24} />
+          <p className="text-sm text-slate-400">加载岗位详情...</p>
         </div>
-        
-        <div className="flex gap-4 p-4 bg-slate-50 border-b border-slate-100">
-          <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-lg flex items-center gap-2 hover:bg-indigo-700 transition-colors">
-            <Send size={14} /> 分享职位
-          </button>
-          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg flex items-center gap-2 hover:bg-slate-50 transition-colors">
-            <Edit3 size={14} /> 编辑职位
-          </button>
-          <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-bold rounded-lg flex items-center gap-2 hover:bg-slate-50 transition-colors">
-            <Download size={14} /> 导出报表
+      </div>
+    );
+  }
+
+  if (!jobData) {
+    return (
+      <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto">
+        <div className="text-center py-20">
+          <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
+          <p className="text-slate-900 font-black mb-2">岗位不存在或无权访问</p>
+          <button onClick={() => navigate('/employer/post')} className="bg-indigo-600 text-white px-6 py-3 rounded font-black text-sm mt-4 shadow-xl shadow-indigo-200">
+            返回职位管理
           </button>
         </div>
       </div>
-      
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+    );
+  }
+
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+      {/* 页面头部 */}
+      <button onClick={() => navigate('/employer/post')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group text-sm">
+        <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回职位管理
+      </button>
+
+      <div className="bg-white rounded-lg p-8 border border-slate-100 card-shadow mb-10">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-3">
+              <span className={`px-3 py-1 rounded text-xs font-black uppercase ${
+                jobData.status === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {jobData.status === 'active' ? '招聘中' : '已关闭'}
+              </span>
+              <span className="text-xs text-slate-400 font-mono">ID: {postId}</span>
+            </div>
+            <h1 className="text-3xl font-black text-slate-900 mb-3">{jobData.title}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mb-4">
+              <span className="flex items-center gap-1.5"><Building2 size={14} className="text-slate-400" /> {jobData.company}</span>
+              <span className="flex items-center gap-1.5"><MapPin size={14} className="text-slate-400" /> {jobData.location}</span>
+              <span className="font-black text-indigo-600">{formatSalary(jobData.salary_min, jobData.salary_max)}</span>
+              <span className="flex items-center gap-1.5 text-slate-400"><Calendar size={14} /> {jobData.created_at ? new Date(jobData.created_at).toLocaleDateString('zh-CN') : '-'}</span>
+            </div>
+            {jobData.tags && jobData.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {jobData.tags.map((tag: string) => (
+                  <span key={tag} className="px-2 py-0.5 bg-indigo-50 text-indigo-500/80 rounded text-xs font-black uppercase">{tag}</span>
+                ))}
+              </div>
+            )}
+            {jobData.description && (
+              <div>
+                <button onClick={() => setShowDesc(!showDesc)} className="text-sm text-slate-500 hover:text-indigo-600 font-black flex items-center gap-1.5 transition-colors">
+                  <FileText size={14} />
+                  {showDesc ? '收起详情' : '查看岗位描述'}
+                  {showDesc ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                {showDesc && (
+                  <div className="mt-3 p-5 bg-slate-50 rounded-lg text-sm text-slate-600 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto border border-slate-100">
+                    {jobData.description}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* 统计 */}
+          <div className="flex md:flex-col gap-4">
+            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
+              <div className="text-2xl font-black text-indigo-600">{stats.total || 0}</div>
+              <div className="text-xs text-slate-400 mt-1 font-black uppercase">投递</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
+              <div className="text-2xl font-black text-emerald-600">{acceptedCount}</div>
+              <div className="text-xs text-slate-400 mt-1 font-black uppercase">录用</div>
+            </div>
+            <div className="bg-slate-50 rounded-lg p-5 text-center min-w-[100px] border border-slate-100">
+              <div className="text-2xl font-black text-slate-900">{jobData.view_count || 0}</div>
+              <div className="text-xs text-slate-400 mt-1 font-black uppercase">浏览</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 投递列表 */}
+      <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
             <Users size={22} className="text-indigo-600" /> 求职者列表
+            {applications.length > 0 && <span className="text-sm font-medium text-slate-400">({applications.length})</span>}
           </h2>
           <div className="flex items-center gap-3">
-            <select className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
-              <option>全部状态</option>
-              <option>面试中</option>
-              <option>待审核</option>
-              <option>已推荐</option>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            >
+              <option value="all">全部状态</option>
+              <option value="parsing">简历解析中</option>
+              <option value="screening">初筛中</option>
+              <option value="interviewing">面试中</option>
+              <option value="evaluating">评估中</option>
+              <option value="offer">Offer阶段</option>
+              <option value="accepted">已录用</option>
+              <option value="rejected">已拒绝</option>
             </select>
-            <select className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/50">
-              <option>匹配分从高到低</option>
-              <option>时间从近到远</option>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="bg-slate-50 border border-slate-200 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            >
+              <option value="time">最新投递</option>
+              <option value="score">匹配分最高</option>
             </select>
           </div>
         </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">求职者</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">匹配度</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">当前阶段</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">状态</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">投递时间</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">Token 消耗</th>
-                <th className="px-6 py-4 text-left text-xs font-black text-slate-400 uppercase tracking-wider">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {mockCandidates.map((candidate) => (
-                <tr key={candidate.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black">
-                        {candidate.avatar}
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-900">{candidate.name}</div>
-                        <div className="text-xs text-slate-500">{candidate.role}</div>
-                        <div className="flex gap-1 mt-1">
-                          {candidate.tags.slice(0, 2).map((tag, i) => (
-                            <span key={i} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded">{tag}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-12 h-12 relative">
-                        <svg className="transform -rotate-90 w-full h-full">
-                          <circle cx="24" cy="24" r="20" fill="none" stroke="#e2e8f0" strokeWidth="4" />
-                          <circle cx="24" cy="24" r="20" fill="none" stroke="#6366f1" strokeWidth="4"
-                            strokeDasharray={`${candidate.matchScore * 1.26} 126`} strokeLinecap="round" />
-                        </svg>
-                        <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-indigo-600">{candidate.matchScore}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-sm font-bold ${getStageColor(candidate.stage)}`}>{candidate.stage}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
-                      {candidate.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-slate-500">{candidate.time}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-medium text-slate-700">{candidate.tokens.toLocaleString()}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => navigate(`/employer/talent/${candidate.id}`)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                        <Eye size={16} />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
-                        <MessageSquare size={16} />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors">
-                        <CheckCircle2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        <div className="p-6 border-t border-slate-100 flex items-center justify-between">
-          <div className="text-sm text-slate-500">
-            共 <span className="font-medium text-slate-900">4</span> 位求职者
+
+        {filteredApps.length === 0 ? (
+          <div className="text-center py-20">
+            <Inbox className="mx-auto text-slate-300 mb-4" size={40} />
+            <p className="text-slate-900 font-black mb-1">
+              {applications.length === 0 ? '暂无候选人投递' : '没有符合条件的投递'}
+            </p>
+            <p className="text-sm text-slate-500 font-medium">
+              {applications.length === 0 ? '岗位发布后，系统会自动为您匹配合适的候选人' : '尝试更换筛选条件'}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 bg-slate-100 text-slate-600 text-sm rounded hover:bg-slate-200 transition-colors">上一页</button>
-            <button className="px-3 py-1 bg-indigo-600 text-white text-sm rounded">1</button>
-            <button className="px-3 py-1 bg-slate-100 text-slate-600 text-sm rounded hover:bg-slate-200 transition-colors">下一页</button>
+        ) : (
+          <div className="space-y-4 p-6">
+            {filteredApps.map((app) => {
+              const stLabel = getStatusLabel(app.status);
+              const sgLabel = getStageLabel(app.current_stage);
+              const avatarChar = (app.candidate_name || '?').charAt(0);
+              return (
+                <div key={app.flow_id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all">
+                  <div className="flex items-center gap-5 w-full md:w-auto">
+                    {/* 头像 */}
+                    {app.candidate_avatar ? (
+                      <img src={app.candidate_avatar} alt="" className="w-14 h-14 rounded shadow-lg ring-4 ring-indigo-50 object-cover flex-shrink-0 group-hover:scale-105 transition-transform" />
+                    ) : (
+                      <div className="w-14 h-14 bg-indigo-600 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform flex-shrink-0">
+                        {avatarChar}
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-base font-black text-slate-900 tracking-tight">{app.candidate_name}</div>
+                      {app.candidate_role && <div className="text-xs font-bold text-slate-500 mt-0.5">{app.candidate_role}{app.candidate_experience ? ` · ${app.candidate_experience}年经验` : ''}</div>}
+                      <div className="flex items-center gap-2 mt-2">
+                        {app.match_score > 0 && (
+                          <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            <Zap size={10} /> {app.match_score}% 匹配
+                          </span>
+                        )}
+                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${stLabel.color}`}>{stLabel.text}</span>
+                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg bg-white border border-slate-100 ${sgLabel.color}`}>{sgLabel.text}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
+                    <div className="text-right">
+                      <div className="text-xs text-slate-400 font-bold">{app.created_at ? new Date(app.created_at).toLocaleDateString('zh-CN') : '-'}</div>
+                      {app.last_action && <div className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">{app.last_action}</div>}
+                    </div>
+                    <button onClick={() => navigate(`/employer/talent/${app.candidate_id}`)} className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        )}
+
+        {/* 底部 */}
+        {filteredApps.length > 0 && (
+          <div className="p-6 border-t border-slate-100 flex items-center justify-between">
+            <div className="text-sm text-slate-500">
+              共 <span className="font-black text-slate-900">{filteredApps.length}</span> 位求职者
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6976,6 +8006,13 @@ const AIAssistantView = () => {
     currentFieldIndex: number;
   }>({ active: false, missingFields: [], currentFieldIndex: -1 });
   
+  // 完善企业资料模式状态
+  const [enterpriseProfileMode, setEnterpriseProfileMode] = useState<{
+    active: boolean;
+    missingFields: {key: string; label: string; type: 'text' | 'select' | 'textarea'; options?: string[]}[];
+    currentFieldIndex: number;
+  }>({ active: false, missingFields: [], currentFieldIndex: -1 });
+  
   // DISC测试模式状态
   const [discTestMode, setDiscTestMode] = useState<{
     active: boolean;
@@ -7228,6 +8265,13 @@ const AIAssistantView = () => {
     currentIndex: number;
     completedItems: string[];
     companyName?: string;  // 营业执照上的企业名称
+    legalRepresentative?: string;  // 营业执照上的法定代表人姓名（用于校验身份证）
+    // 法人身份证临时存储（正面审核后保存，背面审核后合并创建记录）
+    legalPersonIdFront?: {
+      name: string;
+      idNumber: string;
+      imageData: string;
+    };
   }>({ active: false, items: [], currentIndex: -1, completedItems: [] });
   
   // 认证项目定义
@@ -7245,11 +8289,8 @@ const AIAssistantView = () => {
   // 企业认证项目定义
   const enterpriseVerificationItems = [
     { key: 'business_license', label: '营业执照', icon: '🏢', description: '请上传您的**营业执照照片**\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，企业名称、统一社会信用代码可辨认\n• 支持 JPG/PNG 格式\n• 大小不超过 10MB\n\n⚠️ **营业执照是必填项**，不能跳过', needsImage: true, required: true },
-    { key: 'org_code', label: '组织机构代码证', icon: '📋', description: '请上传您的**组织机构代码证照片**\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，代码可辨认\n• 支持 JPG/PNG 格式\n\n💡 如已三证合一，可输入 "跳过" 跳过此项', needsImage: true },
-    { key: 'tax_registration', label: '税务登记证', icon: '📊', description: '请上传您的**税务登记证照片**\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，税号可辨认\n• 支持 JPG/PNG 格式\n\n💡 如已三证合一，可输入 "跳过" 跳过此项', needsImage: true },
-    { key: 'legal_person_id', label: '法人身份证', icon: '🆔', description: '请上传**企业法人的身份证照片**（正面）\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，姓名、身份证号可辨认\n• 法人姓名需与营业执照一致\n\n💡 输入 "跳过" 可以跳过当前项', needsImage: true },
-    { key: 'qualification', label: '资质认证', icon: '🏆', description: '请上传企业**资质证书照片**\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n**支持的证书类型：**\n• 高新技术企业证书\n• ISO认证证书\n• 行业资质证书\n• 其他荣誉资质\n\n💡 输入 "跳过" 可以跳过当前项', needsImage: true },
-    { key: 'enterprise_credit', label: '企业信用', icon: '⭐', description: '请上传企业**信用证明材料**\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n**支持的证明类型：**\n• 企业信用报告\n• AAA信用认证\n• 银行资信证明\n\n💡 输入 "跳过" 可以跳过当前项', needsImage: true }
+    { key: 'legal_person_id_front', label: '法人身份证（正面）', icon: '🆔', description: '请上传**企业法人的身份证正面照片**（人像面）\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，姓名、身份证号可辨认\n• 法人姓名需与营业执照一致\n\n⚠️ **法人身份证是必填项**，不能跳过', needsImage: true, required: true },
+    { key: 'legal_person_id_back', label: '法人身份证（背面）', icon: '🆔', description: '请上传**企业法人的身份证背面照片**（国徽面）\n\n📷 点击下方 **「上传证件」** 按钮选择图片\n\n⚠️ 要求：\n• 图片清晰，签发机关、有效期可辨认\n\n⚠️ **法人身份证是必填项**，不能跳过', needsImage: true, required: true }
   ];
   
   // 身份证上传状态
@@ -7295,23 +8336,82 @@ const AIAssistantView = () => {
   }, [userProfileData]);
   
   // 生成欢迎消息
-  const getWelcomeMessage = () => {
+  const getWelcomeMessage = (currentTasks?: any[]) => {
     if (!isLoggedIn) {
       return '您好！我是 Devnors AI 智能助手。\n\n请先登录以获得个性化的服务体验。';
     }
     const userName = user?.name || user?.email?.split('@')[0] || '用户';
     
-    // 检测是否为新用户（没有个人资料）
-    if (userRole !== 'employer' && isNewUser) {
-      return `👋 **${userName}，欢迎加入 Devnors！**\n\n我是您的 AI 求职助手，先完善资料让我更好地帮您匹配职位：\n\n[[TASK:完善简历资料:profile_complete:📝]]\n\n或直接告诉我您的目标职位和核心技能~`;
+    // 安全获取任务列表（可能在初始化阶段tasks还未声明）
+    let taskList: any[] = [];
+    try {
+      taskList = currentTasks || tasks || [];
+    } catch {
+      taskList = [];
     }
     
-    if (userRole === 'employer') {
-      if (isNewUser) {
-        return `👋 **${userName}，欢迎加入 Devnors！**\n\n我是您的 AI 招聘助手，先完成企业认证以提升招聘效率和可信度：\n\n[[TASK:完成企业认证:enterprise_verification:🏢]]\n\n或直接告诉我您的招聘需求~`;
+    if (userRole === 'employer' || userRole === 'recruiter') {
+      // 企业/招聘方：根据任务完成状态动态引导
+      const certTask = taskList.find((t: any) => {
+        const title = t.title || t.task || '';
+        const type = (t.todo_type || t.type || '').toLowerCase();
+        return type === 'enterprise_verification' || title === '完成企业认证' || 
+          (title.includes('企业') && title.includes('认证'));
+      });
+      const profileTask = taskList.find((t: any) => {
+        const title = t.title || t.task || '';
+        const type = (t.todo_type || t.type || '').toLowerCase();
+        return type === 'enterprise_profile' || title === '完善企业资料' || 
+          (title.includes('企业') && title.includes('资料'));
+      });
+      
+      const certCompleted = certTask?.status?.toLowerCase() === 'completed';
+      const profileCompleted = profileTask?.status?.toLowerCase() === 'completed';
+      
+      // 收集未完成的任务引导卡片
+      const pendingGuides: string[] = [];
+      if (!certCompleted) {
+        pendingGuides.push('[[TASK:完成企业认证:enterprise_verification:🏢]]');
       }
+      if (!profileCompleted && profileTask) {
+        pendingGuides.push('[[TASK:完善企业资料:enterprise_profile:📋]]');
+      }
+      
+      if (pendingGuides.length > 0) {
+        return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 招聘助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的招聘需求~`;
+      }
+      
       return `${userName}您好！我是您的 AI 招聘助手 🏢\n\n我可以帮您：\n• 搜索筛选候选人\n• 分析人才市场\n• 优化职位描述\n• 制定招聘策略\n\n有什么招聘需求？`;
     } else {
+      // 求职者：根据任务完成状态动态引导
+      const resumeTask = taskList.find((t: any) => {
+        const title = t.title || t.task || '';
+        const type = (t.todo_type || t.type || '').toLowerCase();
+        return type === 'profile_complete' || title === '完善简历资料' || 
+          (title.includes('简历') && title.includes('资料'));
+      });
+      const personalCertTask = taskList.find((t: any) => {
+        const title = t.title || t.task || '';
+        const type = (t.todo_type || t.type || '').toLowerCase();
+        return type === 'personal_verification' || title === '完善个人认证信息' || 
+          (title.includes('个人') && title.includes('认证'));
+      });
+      
+      const resumeCompleted = resumeTask?.status?.toLowerCase() === 'completed';
+      const certCompleted = personalCertTask?.status?.toLowerCase() === 'completed';
+      
+      const pendingGuides: string[] = [];
+      if (!resumeCompleted && (resumeTask || isNewUser)) {
+        pendingGuides.push('[[TASK:完善简历资料:profile_complete:📝]]');
+      }
+      if (!certCompleted && personalCertTask) {
+        pendingGuides.push('[[TASK:完善个人认证信息:personal_verification:🔐]]');
+      }
+      
+      if (pendingGuides.length > 0) {
+        return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 求职助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的目标职位和核心技能~`;
+      }
+      
       return `${userName}您好！我是您的 AI 求职助手 💼\n\n我可以帮您：\n• 匹配合适职位\n• 优化简历内容\n• 准备面试问题\n• 职业发展规划\n\n今天想了解什么？`;
     }
   };
@@ -7384,18 +8484,6 @@ const AIAssistantView = () => {
     setTaskMessages(loadSavedTaskMessages());
   }, [userId, isLoggedIn, userRole]);
   
-  // 当用户资料数据加载完成后，检测是否为新用户并更新欢迎消息
-  useEffect(() => {
-    // 只在资料加载完成且没有保存的对话历史时更新欢迎消息
-    if (!profileLoading && isLoggedIn) {
-      const savedGeneral = localStorage.getItem(GENERAL_MESSAGES_KEY);
-      // 如果没有保存的对话历史，或者只有一条消息（可能是旧的欢迎消息），则更新
-      if (!savedGeneral || JSON.parse(savedGeneral).length <= 1) {
-        setGeneralMessages([{role: 'assistant', content: getWelcomeMessage()}]);
-      }
-    }
-  }, [profileLoading, isNewUser, isLoggedIn]);
-  
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
@@ -7403,18 +8491,61 @@ const AIAssistantView = () => {
   // 使用当前登录用户的 ID 获取任务数据
   const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useTasks(userId || 0);
   const tasks = userId ? tasksData : [];
+
+  // 当用户资料或任务数据加载完成后，动态更新欢迎消息（第一条消息）
+  useEffect(() => {
+    if (!profileLoading && isLoggedIn && !tasksLoading && tasks) {
+      const newWelcome = getWelcomeMessage(tasks);
+      setGeneralMessages(prev => {
+        if (prev.length === 0) {
+          return [{role: 'assistant', content: newWelcome}];
+        }
+        // 始终更新第一条消息（欢迎消息）为最新的动态内容
+        if (prev[0]?.role === 'assistant' && prev[0].content !== newWelcome) {
+          const updated = [...prev];
+          updated[0] = {role: 'assistant', content: newWelcome};
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [profileLoading, isNewUser, isLoggedIn, tasksLoading, tasks]);
   
-  // 过滤后的任务列表
-  const filteredTasks = useMemo(() => {
+  // 按角色过滤的任务列表（用于统计）
+  const roleFilteredTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return [];
     return tasks.filter((task: any) => {
-      if (taskFilter === 'completed') {
-        return task.status === 'completed';
-      } else {
-        return task.status !== 'completed';
+      const taskType = (task.todo_type || task.type || '').toUpperCase();
+      
+      // 按用户角色过滤任务类型
+      if (userRole === 'employer' || userRole === 'recruiter') {
+        // 企业/招聘者只看EMPLOYER类型和SYSTEM类型任务
+        if (taskType === 'CANDIDATE') return false;
+      } else if (userRole === 'candidate') {
+        // 求职者只看CANDIDATE类型和SYSTEM类型任务
+        if (taskType === 'EMPLOYER') return false;
       }
+      return true;
     });
-  }, [tasks, taskFilter]);
+  }, [tasks, userRole]);
+  
+  // 进行中和已完成任务计数（按角色过滤后统计）
+  const pendingTasksCount = useMemo(() => 
+    roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() !== 'completed').length
+  , [roleFilteredTasks]);
+  
+  const completedTasksCount = useMemo(() => 
+    roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed').length
+  , [roleFilteredTasks]);
+  
+  // 过滤后的任务列表（按角色和状态过滤）
+  const filteredTasks = useMemo(() => {
+    if (taskFilter === 'completed') {
+      return roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed');
+    } else {
+      return roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() !== 'completed');
+    }
+  }, [roleFilteredTasks, taskFilter]);
   
   const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
   
@@ -7772,76 +8903,366 @@ const AIAssistantView = () => {
   // 处理招聘发布模式 URL 参数
   useEffect(() => {
     if (taskTypeFromUrl === 'post') {
-      setPostMode({
-        active: true,
-        step: 'requirement',
-        jobDescription: '',
-        generatedResult: null
-      });
+      // 先做前置检查
+      const checkAndStartPost = async () => {
+        try {
+          const { getEnterpriseCertifications, getSettings, getTasks } = await import('./services/apiService');
+          const [certifications, settingsData, tasks] = await Promise.all([
+            getEnterpriseCertifications(userId).catch(() => []),
+            getSettings(userId).catch(() => ({})),
+            getTasks(userId).catch(() => []),
+          ]);
+          
+          const hasBusinessLicense = certifications.some((c: any) => c.category === 'qualification' && c.name?.includes('营业执照'));
+          const certTask = tasks.find((t: any) => t.title === '完成企业认证' || (t.title?.includes('企业') && t.title?.includes('认证')));
+          const certCompleted = hasBusinessLicense || certTask?.status?.toLowerCase() === 'completed';
+          
+          const requiredFields = ['display_name', 'industry', 'company_size', 'detail_address', 'description'];
+          const hasValue = (val: any) => val && typeof val === 'string' ? val.trim() !== '' && val.trim() !== '[]' && val.trim() !== '{}' : !!val;
+          const missingFields = requiredFields.filter(k => !hasValue(settingsData[k]));
+          const profileCompleted = missingFields.length === 0;
+          
+          if (!certCompleted || !profileCompleted) {
+            // 未满足前置条件，给出引导
+            const issues: string[] = [];
+            if (!certCompleted) issues.push('• **企业认证未完成** — 请先前往 [企业认证信息](/settings?tab=Verification) 完成认证');
+            if (!profileCompleted) issues.push('• **企业资料未完善** — 请先前往 [完善企业资料](/ai-assistant?task=enterprise_profile) 补充信息');
+            
+            setGeneralMessages([{role: 'assistant', content: `⚠️ **暂时无法开启招聘**\n\n为了保障招聘质量和企业可信度，开启招聘前需要完成以下准备：\n\n${issues.join('\n\n')}\n\n完成后再来找我，即可开始智能招聘！`}]);
+            navigate('/ai-assistant', { replace: true });
+            return;
+          }
+          
+          // 前置条件满足，创建招聘任务并开启引导
+          // 创建招聘任务（如果不存在）
+          try {
+            const { createTodo } = await import('./services/apiService');
+            const existingRecruitTask = tasks.find((t: any) => 
+              (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
+              (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
+            );
+            if (!existingRecruitTask) {
+              const taskShortId = `RC${Date.now().toString().slice(-6)}`;
+              await createTodo({
+                title: `智能招聘 #${taskShortId}`,
+                description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
+                priority: 'HIGH',
+                source: 'AGENT',
+                todo_type: 'RECRUIT',
+                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成专业岗位描述并一键发布。',
+                steps: [
+                  { step: 1, title: '描述招聘需求', status: 'pending' },
+                  { step: 2, title: 'AI 生成岗位', status: 'pending' },
+                  { step: 3, title: '确认并发布', status: 'pending' },
+                ],
+              }, userId);
+            }
+          } catch (e) {
+            console.error('创建招聘任务失败:', e);
+          }
+          
+          setPostMode({
+            active: true,
+            step: 'requirement',
+            jobDescription: '',
+            generatedResult: null
+          });
+          
+          const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
+          const postMessage = `🏢 **${companyName}，欢迎使用 AI 智能招聘助手！**\n\n✅ 企业认证已通过 · ✅ 企业资料已完善\n📋 已创建「智能招聘」任务，可在任务中心查看进度\n\n---\n\n**第一步：描述您的招聘需求**\n\n请告诉我您想招什么人，支持以下方式：\n\n**简单描述**\n> "招3个前端，2个后端，薪资20-40K"\n\n**详细描述**\n> "招聘高级前端工程师，需要3年以上React经验，负责核心产品开发"\n\n**批量描述**\n> "技术团队扩招，需要前端、后端、产品经理各1人"\n\n**第二步：** AI 自动生成专业岗位描述\n**第三步：** 确认后一键发布，开始智能匹配\n\n💡 描述越详细，生成的岗位越精准！`;
+          setGeneralMessages([{role: 'assistant', content: postMessage}]);
+        } catch (e) {
+          console.error('检查招聘前置条件失败:', e);
+          setGeneralMessages([{role: 'assistant', content: '⚠️ 检查招聘资质时出现异常，请稍后重试。'}]);
+        }
+        navigate('/ai-assistant', { replace: true });
+      };
       
-      // 添加招聘发布引导消息
-      const postMessage = `🏢 **发布招聘职位**\n\n欢迎使用 AI 智能招聘助手！我将帮您完成以下任务：\n\n**第一步：描述招聘需求**\n请告诉我您想招聘的职位信息，包括：\n• 职位名称\n• 工作职责\n• 技能要求\n• 薪资范围（可选）\n\n💡 示例：\n"招聘高级前端工程师，需要 3 年以上 React 经验，负责核心产品开发，薪资 30-50K"`;
-      setGeneralMessages([{role: 'assistant', content: postMessage}]);
-      
-      // 清除 URL 参数
-      navigate('/ai-assistant', { replace: true });
+      checkAndStartPost();
     }
   }, [taskTypeFromUrl, navigate]);
   
+  // 招聘流程消息辅助函数
+  const addPostMsg = (content: string, role: 'user' | 'assistant' = 'assistant') => {
+    if (selectedTask) {
+      setTaskMessages(prev => ({
+        ...prev,
+        [selectedTask.id]: [...(prev[selectedTask.id] || []), { role, content }]
+      }));
+    } else {
+      setGeneralMessages(prev => [...prev, { role, content }]);
+    }
+  };
+
   // 处理招聘发布流程
   const handlePostProcess = async (userInput: string) => {
     if (postMode.step === 'requirement') {
       // 用户提交了招聘需求
       setPostMode(prev => ({ ...prev, jobDescription: userInput, step: 'generate' }));
-      setGeneralMessages(prev => [...prev, {role: 'user', content: userInput}]);
+      addPostMsg(userInput, 'user');
       setIsTyping(true);
       
-      // 模拟 AI 生成职位描述
-      setTimeout(async () => {
-        const generatedResult = `📋 **职位描述已生成！**\n\n**职位名称：** ${userInput.includes('前端') ? '高级前端工程师' : userInput.includes('后端') ? '高级后端工程师' : 'AI 应用工程师'}\n\n**岗位职责：**\n• 负责核心产品功能开发与优化\n• 参与技术方案设计与评审\n• 指导初级工程师，推动代码质量提升\n\n**任职要求：**\n• 本科及以上学历，计算机相关专业\n• 3年以上相关开发经验\n• 良好的沟通能力和团队协作精神\n\n**薪资福利：**\n• 薪资面议，五险一金\n• 弹性工作，免费三餐\n\n---\n\n我已将招聘需求保存到企业画像中。接下来，您想要：\n\n1️⃣ 发布职位并开始筛选\n2️⃣ 继续优化职位描述\n3️⃣ 查看人才推荐\n\n请输入数字或直接描述您的需求。`;
+      addPostMsg('🤖 正在分析您的招聘需求，根据企业信息智能生成岗位计划...');
+      
+      try {
+        // 获取企业信息用于 AI 上下文
+        const { getSettings } = await import('./services/apiService');
+        const settingsData = await getSettings(userId).catch(() => ({}));
+        const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '';
+        const industry = settingsData.industry || '';
+        const companySize = settingsData.company_size || '';
+        const location = settingsData.detail_address || '';
+        const benefits = settingsData.benefits || '';
+        
+        // 用 AI 生成职位描述
+        const aiPrompt = `你是一个专业的HR招聘助手。用户只是简单描述了招聘需求，你需要根据企业信息和行业特点，"脑补"完善，生成完整专业的岗位信息。
+
+企业信息：
+- 企业名称：${companyName}
+- 所属行业：${industry}
+- 企业规模：${companySize}
+- 工作地点：${location}
+- 企业福利：${benefits}
+
+用户的大致需求：${userInput}
+
+请严格按照以下JSON格式返回（直接返回JSON数组，不要包含markdown代码块标记）：
+[
+  {
+    "title": "职位名称（专业、有吸引力）",
+    "location": "工作地点",
+    "description": "完整的岗位描述，包含【岗位职责】和【任职要求】和【加分项】三个部分，每个部分3-5条，用markdown格式",
+    "salary_min": 最低薪资（单位：千元/月，数字类型，根据行业和岗位合理估算），
+    "salary_max": 最高薪资（单位：千元/月，数字类型），
+    "tags": ["标签1", "标签2", "标签3", "标签4"]
+  }
+]
+
+要求：
+1. 用户只简单说"招前端"，你要脑补成完整的岗位描述，包含合理的技术栈、经验要求、学历要求等
+2. 如果用户提到多个岗位，生成多个对象
+3. 薪资根据行业和岗位级别合理估算
+4. description要专业、完整、有吸引力，体现企业特色
+5. tags包含技术栈、经验要求、学历、工作方式等关键标签
+6. 直接返回JSON，不要有其他文字`;
+        
+        const aiResult = await chatWithAI({
+          message: aiPrompt,
+          context: 'job_generation',
+        });
+        
+        // 解析 AI 返回的职位数据
+        let jobs: any[] = [];
+        try {
+          let responseText = aiResult.response || '';
+          responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          jobs = JSON.parse(responseText);
+          if (!Array.isArray(jobs)) jobs = [jobs];
+        } catch (parseErr) {
+          console.error('AI 返回解析失败:', parseErr);
+          const titleGuess = userInput.includes('前端') ? '前端工程师' : 
+                             userInput.includes('后端') ? '后端工程师' : 
+                             userInput.includes('产品') ? '产品经理' :
+                             userInput.includes('设计') ? 'UI/UX 设计师' :
+                             userInput.includes('运营') ? '运营经理' : 'AI 应用工程师';
+          jobs = [{
+            title: titleGuess,
+            location: location || '不限',
+            description: `**岗位职责：**\n• 负责核心产品功能开发与优化\n• 参与技术方案设计与评审\n• 推动项目落地并持续迭代\n\n**任职要求：**\n• 本科及以上学历\n• 3年以上相关开发经验\n• 良好的沟通能力和团队协作精神`,
+            salary_min: 15, salary_max: 35,
+            tags: ['3年以上经验', '本科', titleGuess]
+          }];
+        }
         
         // 保存到 Memory
         try {
-          await createMemory({
-            type: 'requirement',
-            content: userInput.substring(0, 500),
-            importance: 'High',
-            scope: 'employer'
-          }, userId);
+          await createMemory({ type: 'requirement', content: `招聘需求：${userInput.substring(0, 500)}`, importance: 'High', scope: 'employer' }, userId);
           refetchMemories();
-        } catch (e) {
-          console.error('保存招聘需求记忆失败', e);
+        } catch (e) { console.error('保存招聘需求记忆失败', e); }
+        
+        // 生成岗位摘要给用户确认
+        const jobsSummary = jobs.map((job: any, i: number) => {
+          return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${job.salary_min || '面议'}K-${job.salary_max || '面议'}K/月\n\n${job.description}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
+        }).join('\n\n---\n\n');
+        
+        const generatedResult = `📋 **根据您的需求，我为您拟定了以下 ${jobs.length} 个岗位招聘计划：**\n\n${jobsSummary}\n\n---\n\n⬆️ 以上是我根据您的需求和企业信息生成的岗位描述，请您确认：\n\n✅ **没问题，直接发布** — 输入"发布"或"确认"\n✏️ **需要修改** — 直接告诉我要改什么，例如"薪资改高一点"、"加上远程办公"、"删掉第二个岗位"\n➕ **还要加岗位** — 继续描述新的招聘需求`;
+        
+        // 移除之前的"正在分析"消息，替换为结果
+        if (selectedTask) {
+          setTaskMessages(prev => {
+            const msgs = prev[selectedTask.id] || [];
+            const filtered = msgs.filter(m => !m.content.includes('正在分析您的招聘需求'));
+            return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: generatedResult }] };
+          });
+        } else {
+          setGeneralMessages(prev => {
+            const filtered = prev.filter(m => !m.content.includes('正在分析您的招聘需求'));
+            return [...filtered, { role: 'assistant', content: generatedResult }];
+          });
         }
         
-        setGeneralMessages(prev => [...prev, {role: 'assistant', content: generatedResult}]);
-        setPostMode(prev => ({ ...prev, step: 'optimize', generatedResult }));
+        setPostMode(prev => ({ ...prev, step: 'optimize', generatedResult, jobDescription: JSON.stringify(jobs) }));
         setIsTyping(false);
-      }, 2000);
+      } catch (err) {
+        console.error('AI 生成岗位失败:', err);
+        addPostMsg(`⚠️ 生成岗位时遇到问题，请稍后重试。\n\n错误信息：${(err as any)?.message || '未知错误'}`);
+        setIsTyping(false);
+      }
       
       return true;
     }
     
     if (postMode.step === 'optimize') {
-      // 用户选择后续操作
-      setGeneralMessages(prev => [...prev, {role: 'user', content: userInput}]);
+      addPostMsg(userInput, 'user');
       setIsTyping(true);
       
-      setTimeout(() => {
-        let response = '';
-        if (userInput.includes('1') || userInput.includes('发布') || userInput.includes('筛选')) {
-          response = `✅ **职位已发布成功！**\n\n🎯 系统已开始为您智能匹配候选人...\n\n**初步匹配结果：**\n\n**1. 张三** - 高级前端工程师\n• 匹配度：95%\n• 经验：5年\n• 现任职：字节跳动\n\n**2. 李四** - 全栈工程师\n• 匹配度：88%\n• 经验：4年\n• 现任职：阿里巴巴\n\n**3. 王五** - 前端技术专家\n• 匹配度：85%\n• 经验：6年\n• 现任职：腾讯\n\n💡 点击候选人姓名可查看详细简历，或告诉我您想了解哪位候选人。`;
-        } else if (userInput.includes('2') || userInput.includes('优化') || userInput.includes('描述')) {
-          response = `✨ **职位描述优化建议：**\n\n**1. 技术要求更具体**\n• 明确技术栈版本要求\n• 补充加分项技能\n\n**2. 职责更有吸引力**\n• 突出项目影响力\n• 强调成长空间\n\n**3. 福利亮点**\n• 添加独特福利\n• 强调团队文化\n\n请告诉我您想优化哪个部分，或者直接发送您的修改意见。`;
-        } else if (userInput.includes('3') || userInput.includes('人才') || userInput.includes('推荐')) {
-          response = `🎯 **人才智能推荐**\n\n基于您的企业画像和招聘需求，为您推荐以下人才：\n\n**技术匹配型：**\n• 候选人 A：React 专家，大厂背景\n• 候选人 B：全栈能手，创业经验\n\n**文化匹配型：**\n• 候选人 C：追求技术深度，适合研发团队\n• 候选人 D：沟通能力强，适合跨部门协作\n\n需要我详细介绍哪位候选人？`;
-        } else {
-          response = `好的，我来帮您处理：${userInput}\n\n请稍等，正在为您优化职位描述...`;
+      const handleOptimizeAction = async () => {
+        try {
+          // 判断用户是否确认发布
+          const isConfirmPublish = /^(发布|确认|没问题|ok|OK|好的|可以|1|全部发布|直接发布|发吧)$/i.test(userInput.trim()) ||
+            (userInput.includes('发布') && !userInput.includes('修改') && !userInput.includes('改') && userInput.length < 15) ||
+            (userInput.includes('确认') && userInput.length < 10);
+          
+          if (isConfirmPublish) {
+            // 用户确认发布
+            let jobs: any[] = [];
+            try { jobs = JSON.parse(postMode.jobDescription); } catch { jobs = []; }
+            
+            if (jobs.length === 0) {
+              addPostMsg('⚠️ 未找到待发布的岗位数据，请重新描述您的招聘需求。');
+              setPostMode(prev => ({ ...prev, step: 'requirement' }));
+              setIsTyping(false);
+              return;
+            }
+            
+            addPostMsg(`⏳ 正在发布 ${jobs.length} 个岗位...`);
+            
+            const { createJob, updateTodo } = await import('./services/apiService');
+            const companyName = user?.company_name || '未知企业';
+            
+            const publishResults: string[] = [];
+            let successCount = 0;
+            
+            for (const job of jobs) {
+              try {
+                await createJob({
+                  title: job.title,
+                  company: companyName,
+                  location: job.location || '不限',
+                  description: job.description || '',
+                  salary_min: job.salary_min ? job.salary_min * 1000 : undefined,
+                  salary_max: job.salary_max ? job.salary_max * 1000 : undefined,
+                  tags: job.tags || [],
+                });
+                successCount++;
+                publishResults.push(`✅ **${job.title}** — 发布成功`);
+              } catch (e) {
+                publishResults.push(`❌ **${job.title}** — 发布失败: ${(e as any)?.message || '未知错误'}`);
+              }
+            }
+            
+            // 更新招聘任务状态为已完成
+            if (selectedTask) {
+              try {
+                await updateTodo(selectedTask.id, { status: 'completed', progress: 100 });
+                if (typeof refetchTasks === 'function') refetchTasks();
+              } catch (e) { console.error('更新任务状态失败:', e); }
+            }
+            
+            const response = `🎉 **岗位发布完成！**\n\n${publishResults.join('\n')}\n\n共 **${successCount}/${jobs.length}** 个岗位发布成功。\n\n---\n\n🎯 系统已开始为您智能匹配候选人，有合适的人才会第一时间通知您。\n\n您可以：\n• 前往 [职位管理](/employer/post) 查看已发布的岗位\n• 继续说"再招一个XX"快速添加新岗位`;
+            
+            // 移除"正在发布"消息
+            if (selectedTask) {
+              setTaskMessages(prev => {
+                const msgs = prev[selectedTask.id] || [];
+                const filtered = msgs.filter(m => !m.content.includes('正在发布'));
+                return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: response }] };
+              });
+            } else {
+              setGeneralMessages(prev => {
+                const filtered = prev.filter(m => !m.content.includes('正在发布'));
+                return [...filtered, { role: 'assistant', content: response }];
+              });
+            }
+            
+            setPostMode({ active: false, step: 'requirement', jobDescription: '', generatedResult: null });
+          } else {
+            // 用户要修改 - 用 AI 根据用户反馈重新生成
+            let currentJobs: any[] = [];
+            try { currentJobs = JSON.parse(postMode.jobDescription); } catch { currentJobs = []; }
+            
+            addPostMsg('🤖 正在根据您的反馈修改岗位信息...');
+            
+            const modifyPrompt = `你是一个专业的HR招聘助手。以下是当前已生成的岗位信息：
+
+${JSON.stringify(currentJobs, null, 2)}
+
+用户的修改要求：${userInput}
+
+请根据用户的修改要求，返回修改后的完整岗位列表。严格按照JSON数组格式返回（直接返回JSON，不要包含markdown代码块标记）：
+[
+  {
+    "title": "职位名称",
+    "location": "工作地点",
+    "description": "完整的岗位描述",
+    "salary_min": 数字,
+    "salary_max": 数字,
+    "tags": ["标签"]
+  }
+]
+
+注意：
+1. 只修改用户提到要改的部分，其他保持不变
+2. 如果用户说删除某个岗位，就从列表中去掉
+3. 如果用户说加岗位，就在列表中新增
+4. 直接返回JSON，不要有其他文字`;
+            
+            try {
+              const modifyResult = await chatWithAI({ message: modifyPrompt, context: 'job_modification' });
+              
+              let updatedJobs: any[] = [];
+              try {
+                let responseText = modifyResult.response || '';
+                responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                updatedJobs = JSON.parse(responseText);
+                if (!Array.isArray(updatedJobs)) updatedJobs = [updatedJobs];
+              } catch {
+                // 解析失败，保持原样
+                updatedJobs = currentJobs;
+              }
+              
+              const jobsSummary = updatedJobs.map((job: any, i: number) => {
+                return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${job.salary_min || '面议'}K-${job.salary_max || '面议'}K/月\n\n${job.description}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
+              }).join('\n\n---\n\n');
+              
+              const updatedResult = `✏️ **已根据您的要求修改，请再次确认：**\n\n${jobsSummary}\n\n---\n\n✅ **没问题，直接发布** — 输入"发布"或"确认"\n✏️ **还需修改** — 继续告诉我要改什么`;
+              
+              // 移除"正在修改"消息
+              if (selectedTask) {
+                setTaskMessages(prev => {
+                  const msgs = prev[selectedTask.id] || [];
+                  const filtered = msgs.filter(m => !m.content.includes('正在根据您的反馈修改'));
+                  return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: updatedResult }] };
+                });
+              } else {
+                setGeneralMessages(prev => {
+                  const filtered = prev.filter(m => !m.content.includes('正在根据您的反馈修改'));
+                  return [...filtered, { role: 'assistant', content: updatedResult }];
+                });
+              }
+              
+              setPostMode(prev => ({ ...prev, jobDescription: JSON.stringify(updatedJobs) }));
+            } catch (err) {
+              addPostMsg(`⚠️ 修改失败：${(err as any)?.message || '未知错误'}，请重试。`);
+            }
+          }
+        } catch (err) {
+          addPostMsg(`⚠️ 操作失败：${(err as any)?.message || '未知错误'}`);
         }
-        
-        setGeneralMessages(prev => [...prev, {role: 'assistant', content: response}]);
         setIsTyping(false);
-      }, 1500);
+      };
       
+      handleOptimizeAction();
       return true;
     }
     
@@ -8171,6 +9592,249 @@ const AIAssistantView = () => {
     return prompts[fieldKey] || '请输入相关信息：';
   };
   
+  // ===== 完善企业资料 相关函数 =====
+  
+  // 企业资料需要完善的所有字段定义
+  const enterpriseProfileFields = [
+    { key: 'display_name', label: '企业全称', type: 'text' as const },
+    { key: 'short_name', label: '企业简称', type: 'text' as const },
+    { key: 'industry', label: '所属行业', type: 'select' as const, options: ['互联网/IT', '人工智能', '金融/投资', '教育培训', '医疗健康', '制造业', '其他'] },
+    { key: 'company_size', label: '企业规模', type: 'select' as const, options: ['0-20人', '20-99人', '100-499人', '500-999人', '1000人以上'] },
+    { key: 'funding_stage', label: '融资阶段', type: 'select' as const, options: ['未融资', '天使轮', 'A轮', 'B轮', 'C轮及以上', '已上市', '不需要融资'] },
+    { key: 'detail_address', label: '公司地址', type: 'text' as const },
+    { key: 'contact_name', label: 'HR姓名', type: 'text' as const },
+    { key: 'hr_phone', label: '联系电话', type: 'text' as const },
+    { key: 'description', label: '企业简介', type: 'textarea' as const },
+    { key: 'benefits', label: '企业福利', type: 'select' as const, options: ['五险一金', '年终奖', '带薪年假', '弹性工作', '餐补', '交通补贴', '员工培训', '节日福利'] },
+  ];
+  
+  // 获取企业资料缺失字段
+  const getEnterpriseMissingFields = async () => {
+    try {
+      const { getSettings } = await import('./services/apiService');
+      const currentSettings = await getSettings(userId);
+      
+      const missingFields: {key: string; label: string; type: 'text' | 'select' | 'textarea'; options?: string[]}[] = [];
+      
+      const hasValue = (val: any) => {
+        if (!val) return false;
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (trimmed === '' || trimmed === '[]' || trimmed === '{}') return false;
+          // 对于 benefits，检查 JSON 数组是否为空
+          if (trimmed.startsWith('[')) {
+            try { return JSON.parse(trimmed).length > 0; } catch { return false; }
+          }
+          return true;
+        }
+        return true;
+      };
+      
+      for (const field of enterpriseProfileFields) {
+        if (!hasValue(currentSettings[field.key])) {
+          missingFields.push(field);
+        }
+      }
+      
+      return missingFields;
+    } catch (error) {
+      console.error('获取企业资料失败:', error);
+      return [];
+    }
+  };
+  
+  // 获取企业字段填写提示
+  const getEnterpriseFieldPrompt = (field: {key: string; label: string; type: string; options?: string[]}) => {
+    if (field.type === 'select' && field.options) {
+      if (field.key === 'benefits') {
+        return `请选择企业福利（可多选，用逗号分隔）：\n\n${field.options.map((o, i) => `${i + 1}. ${o}`).join('\n')}\n\n例如输入：1,3,4 或 五险一金,带薪年假,弹性工作`;
+      }
+      return `请选择${field.label}：\n\n${field.options.map((o, i) => `${i + 1}. ${o}`).join('\n')}\n\n💡 直接输入序号或选项名称即可`;
+    }
+    
+    const prompts: Record<string, string> = {
+      'display_name': '请输入企业全称（与营业执照一致）：',
+      'short_name': '请输入企业简称（如：字节、阿里、腾讯）：',
+      'detail_address': '请输入公司地址（如：浙江省杭州市西湖区文三路XXX号）：',
+      'contact_name': '请输入HR联系人姓名：',
+      'hr_phone': '请输入联系电话（手机号或座机）：',
+      'description': '请输入企业简介（介绍企业业务、文化、愿景等，建议50-300字）：',
+    };
+    return prompts[field.key] || `请输入${field.label}：`;
+  };
+  
+  // 解析用户输入的选择值
+  const parseEnterpriseSelectInput = (input: string, field: {key: string; options?: string[]}) => {
+    if (!field.options) return input.trim();
+    
+    // 福利字段支持多选
+    if (field.key === 'benefits') {
+      const results: string[] = [];
+      const parts = input.split(/[,，、\s]+/).map(p => p.trim()).filter(Boolean);
+      for (const part of parts) {
+        const numMatch = part.match(/^(\d+)$/);
+        if (numMatch) {
+          const idx = parseInt(numMatch[1]) - 1;
+          if (idx >= 0 && idx < field.options.length) {
+            results.push(field.options[idx]);
+          }
+        } else {
+          // 直接匹配选项名
+          const match = field.options.find(o => o.includes(part) || part.includes(o));
+          if (match) results.push(match);
+          else results.push(part); // 允许自定义输入
+        }
+      }
+      return JSON.stringify(results.length > 0 ? results : [input.trim()]);
+    }
+    
+    // 单选字段
+    const numMatch = input.trim().match(/^(\d+)$/);
+    if (numMatch) {
+      const idx = parseInt(numMatch[1]) - 1;
+      if (idx >= 0 && idx < field.options.length) {
+        return field.options[idx];
+      }
+    }
+    // 直接匹配选项名
+    const match = field.options.find(o => o === input.trim() || o.includes(input.trim()));
+    return match || input.trim();
+  };
+  
+  // 计算企业资料完善进度
+  const [enterpriseProfileProgress, setEnterpriseProfileProgress] = useState(0);
+  
+  const calculateEnterpriseProfileProgress = async () => {
+    if (!userId || (userRole !== 'employer' && userRole !== 'recruiter')) return 0;
+    
+    try {
+      const { getSettings } = await import('./services/apiService');
+      const currentSettings = await getSettings(userId);
+      
+      const hasValue = (val: any) => {
+        if (!val) return false;
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (trimmed === '' || trimmed === '[]' || trimmed === '{}') return false;
+          if (trimmed.startsWith('[')) {
+            try { return JSON.parse(trimmed).length > 0; } catch { return false; }
+          }
+          return true;
+        }
+        return true;
+      };
+      
+      let completedFields = 0;
+      const totalFields = enterpriseProfileFields.length;
+      
+      for (const field of enterpriseProfileFields) {
+        if (hasValue(currentSettings[field.key])) completedFields++;
+      }
+      
+      const progress = Math.round((completedFields / totalFields) * 100);
+      setEnterpriseProfileProgress(progress);
+      
+      // 进度达到100%，自动标记任务完成
+      if (progress >= 100 && selectedTask) {
+        const taskTitle = selectedTask.title || selectedTask.task || '';
+        const taskType = selectedTask.todo_type || selectedTask.type || '';
+        const isEnterpriseProfileTask = taskType === 'enterprise_profile' || 
+          taskTitle === '完善企业资料';
+        
+        if (isEnterpriseProfileTask && selectedTask.status !== 'completed') {
+          try {
+            const { updateTodo } = await import('./services/apiService');
+            await updateTodo(selectedTask.id, { status: 'completed', progress: 100 });
+            console.log('[Enterprise Profile Task] 任务已自动标记为完成');
+            if (typeof refetchTasks === 'function') refetchTasks();
+          } catch (e) {
+            console.error('更新企业任务状态失败:', e);
+          }
+        }
+      }
+      
+      return progress;
+    } catch (error) {
+      console.error('计算企业资料进度失败:', error);
+      return 0;
+    }
+  };
+  
+  // 开始完善企业资料引导流程
+  const startEnterpriseProfileGuide = async (isTaskMode: boolean = false) => {
+    console.log('[Enterprise Profile Guide] Starting guide, isTaskMode:', isTaskMode);
+    setIsTyping(true);
+    
+    try {
+      const missingFields = await getEnterpriseMissingFields();
+      console.log('[Enterprise Profile Guide] Missing fields:', missingFields.map(f => f.label));
+      
+      if (missingFields.length === 0) {
+        const successMessage = {
+          role: 'assistant' as const,
+          content: `✅ **企业资料已完善！**\n\n当前完善度：100%\n\n您可以：\n• 前往 [基础信息设置](/settings?tab=General) 查看或修改\n• 前往 [企业主页](/employer/profile) 查看展示效果\n\n🎉 任务已完成！现在可以开始发布职位招聘人才了。`
+        };
+        
+        if (isTaskMode && selectedTask) {
+          setTaskMessages(prev => ({
+            ...prev,
+            [selectedTask.id]: [...(prev[selectedTask.id] || []), successMessage]
+          }));
+          // 标记任务完成
+          const { updateTodo } = await import('./services/apiService');
+          await updateTodo(selectedTask.id, { progress: 100, status: 'completed' });
+          if (typeof refetchTasks === 'function') refetchTasks();
+        } else {
+          setGeneralMessages(prev => [...prev, successMessage]);
+        }
+        setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+      } else {
+        const totalFields = enterpriseProfileFields.length;
+        const filledCount = totalFields - missingFields.length;
+        const completenessPercent = Math.round((filledCount / totalFields) * 100);
+        const fieldsList = missingFields.map((f, i) => 
+          `${i + 1}️⃣ **${f.label}**`
+        ).join('\n');
+        
+        const guideMessage = {
+          role: 'assistant' as const,
+          content: `📋 **开始完善企业资料**\n\n完善企业资料可以帮助您：\n✅ 提升企业主页展示效果\n✅ 增加候选人投递意愿\n✅ 提高人才匹配精准度\n\n---\n\n📊 当前完善度：**${completenessPercent}%**（${filledCount}/${totalFields}）\n\n需要补充以下信息（共 ${missingFields.length} 项）：\n\n${fieldsList}\n\n---\n\n🚀 **现在开始填写第 1 项：${missingFields[0].label}**\n\n${getEnterpriseFieldPrompt(missingFields[0])}\n\n💡 输入 "跳过" 可以跳过当前项，输入 "退出" 可以结束填写流程`
+        };
+        
+        if (isTaskMode && selectedTask) {
+          setTaskMessages(prev => ({
+            ...prev,
+            [selectedTask.id]: [...(prev[selectedTask.id] || []), guideMessage]
+          }));
+        } else {
+          setGeneralMessages(prev => [...prev, guideMessage]);
+        }
+        
+        setEnterpriseProfileMode({
+          active: true,
+          missingFields,
+          currentFieldIndex: 0
+        });
+      }
+    } catch (error) {
+      console.error('[Enterprise Profile Guide] Error:', error);
+      const errorMessage = {
+        role: 'assistant' as const,
+        content: `❌ 抱歉，获取企业资料时出现问题，请稍后再试。\n\n您也可以前往 [基础信息设置](/settings?tab=General) 手动编辑。`
+      };
+      if (isTaskMode && selectedTask) {
+        setTaskMessages(prev => ({
+          ...prev,
+          [selectedTask.id]: [...(prev[selectedTask.id] || []), errorMessage]
+        }));
+      } else {
+        setGeneralMessages(prev => [...prev, errorMessage]);
+      }
+    } finally {
+      setIsTyping(false);
+    }
+  };
+  
   // 计算「完善简历资料」任务的动态进度
   const [profileTaskProgress, setProfileTaskProgress] = useState(0);
   
@@ -8213,8 +9877,7 @@ const AIAssistantView = () => {
         const taskTitle = selectedTask.title || selectedTask.task || '';
         const taskType = selectedTask.todo_type || selectedTask.type || '';
         const isProfileTask = taskType === 'profile_complete' || 
-          taskTitle === '完善简历资料' ||
-          (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+          taskTitle === '完善简历资料';
         
         if (isProfileTask && selectedTask.status !== 'completed') {
           try {
@@ -8278,10 +9941,17 @@ const AIAssistantView = () => {
       const taskType = selectedTask.todo_type || selectedTask.type || '';
       const isProfileTask = taskType === 'profile_complete' || 
         taskTitle === '完善简历资料' ||
-        (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+        (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')) && !taskTitle.includes('企业'));
       
       if (isProfileTask) {
         calculateProfileTaskProgress();
+      }
+      
+      const isEnterpriseProfileTask = taskType === 'enterprise_profile' || 
+        taskTitle === '完善企业资料';
+      
+      if (isEnterpriseProfileTask) {
+        calculateEnterpriseProfileProgress();
       }
     }
   }, [selectedTask, userId, userRole]);
@@ -8296,10 +9966,18 @@ const AIAssistantView = () => {
     // 检查是否是完善简历任务
     const isProfileTask = taskType === 'profile_complete' || 
       taskTitle === '完善简历资料' ||
-      (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+      (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')) && !taskTitle.includes('企业'));
     
     if (isProfileTask) {
       return profileTaskProgress;
+    }
+    
+    // 检查是否是完善企业资料任务
+    const isEnterpriseProfileTask = taskType === 'enterprise_profile' || 
+      taskTitle === '完善企业资料';
+    
+    if (isEnterpriseProfileTask) {
+      return enterpriseProfileProgress;
     }
     
     // 从最新的 tasks 数据中获取进度（确保获取最新数据）
@@ -8374,11 +10052,10 @@ const AIAssistantView = () => {
       }
     }
     
-    // 检查是否是企业认证任务
+    // 检查是否是企业认证任务（不使用 EMPLOYER 匹配，避免和"完善企业资料"冲突）
     const isEnterpriseVerificationTask = taskType === 'enterprise_verification' || 
-      taskType?.toUpperCase() === 'EMPLOYER' ||
       taskTitle === '完成企业认证' ||
-      (taskTitle.includes('企业') && taskTitle.includes('认证'));
+      (taskTitle.includes('企业') && taskTitle.includes('认证') && !taskTitle.includes('资料'));
     
     if (isEnterpriseVerificationTask) {
       // 检查任务是否已完成
@@ -8414,10 +10091,13 @@ const AIAssistantView = () => {
     const taskAdvice = selectedTask.aiAdvice || selectedTask.ai_advice || '';
     const taskType = selectedTask.todo_type || selectedTask.type || '';
     
-    // 检查是否是完善简历资料任务
+    // 检查是否是完善简历资料任务（排除企业资料）
     const isProfileCompleteTask = taskType === 'profile_complete' || 
-      taskTitle === '完善简历资料' ||
-      (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+      taskTitle === '完善简历资料';
+    
+    // 检查是否是完善企业资料任务
+    const isEnterpriseProfileTask = taskType === 'enterprise_profile' || 
+      taskTitle === '完善企业资料';
     
     // 检测是否是新选中的任务（任务切换）
     const isNewSelection = lastSelectedTaskIdRef.current !== selectedTask.id;
@@ -8619,8 +10299,25 @@ const AIAssistantView = () => {
       if (!hasExistingMessages || (isNewSelection && !verificationMode.active)) {
         initVerificationTask();
       }
-    } else if (taskType === 'enterprise_verification' || taskType?.toUpperCase() === 'EMPLOYER' || taskTitle === '完成企业认证' || (taskTitle.includes('企业') && taskTitle.includes('认证'))) {
-      // 企业认证任务
+    } else if (isEnterpriseProfileTask) {
+      // 完善企业资料任务 - 使用对话引导流程（必须在企业认证之前匹配！）
+      if (isNewSelection || !enterpriseProfileMode.active) {
+        console.log('[useEffect] Initializing enterprise profile task, taskId:', selectedTask.id);
+        // 重置引导模式状态
+        setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+        setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+        setVerificationMode({ active: false, items: [], currentIndex: -1, completedItems: [] });
+        setDiscTestMode({ active: false, currentQuestion: 0, answers: [], completed: false });
+        
+        // 清空旧消息，启动企业资料引导流程
+        setTaskMessages(prev => ({
+          ...prev,
+          [selectedTask.id]: []
+        }));
+        startEnterpriseProfileGuide(true);
+      }
+    } else if (taskType === 'enterprise_verification' || taskTitle === '完成企业认证' || (taskTitle.includes('企业') && taskTitle.includes('认证'))) {
+      // 企业认证任务（注意：不再使用 taskType === 'EMPLOYER' 匹配，因为会和"完善企业资料"冲突）
       const initEnterpriseVerificationTask = async () => {
         try {
           const { getEnterpriseCertifications } = await import('./services/apiService');
@@ -8639,21 +10336,13 @@ const AIAssistantView = () => {
             completedKeys.push('business_license');
           }
           
-          // 检查其他认证
-          if (certifications.some((c: any) => c.name?.includes('组织机构'))) {
-            completedKeys.push('org_code');
-          }
-          if (certifications.some((c: any) => c.name?.includes('税务'))) {
-            completedKeys.push('tax_registration');
-          }
-          if (certifications.some((c: any) => c.name?.includes('法人身份'))) {
-            completedKeys.push('legal_person_id');
-          }
-          if (certCategories.has('qualification') && !completedKeys.includes('business_license')) {
-            completedKeys.push('qualification');
-          }
-          if (certCategories.has('credit')) {
-            completedKeys.push('enterprise_credit');
+          // 检查法人身份证认证（合并记录表示正反面都完成）
+          const hasLegalPersonId = certifications.some((c: any) => 
+            c.name?.includes('法人身份证') && !c.name?.includes('正面') && !c.name?.includes('背面')
+          );
+          if (hasLegalPersonId) {
+            completedKeys.push('legal_person_id_front');
+            completedKeys.push('legal_person_id_back');
           }
           
           // 找到第一个未完成的认证项
@@ -8709,7 +10398,9 @@ const AIAssistantView = () => {
             setJobSearchMode({ active: false, currentQuestion: 0, answers: [], completed: false, tokenUsed: 0, isSearching: false });
             
             const currentItem = enterpriseVerificationItems[startIndex];
-            const welcomeMessage = `🏢 **欢迎来到企业认证中心！**\n\n完成企业认证可以帮助您：\n✅ 提升企业可信度，获得"认证企业"标识\n✅ 优先展示在企业推荐列表\n✅ 增加候选人投递意愿\n✅ 解锁更多高级招聘功能\n\n---\n\n📋 **认证进度：** ${completedCount}/${totalSteps} 项\n\n${currentItem.icon} **第 ${startIndex + 1} 项：${currentItem.label}**\n\n${currentItem.description}`;
+            const welcomeMessage = currentItem 
+              ? `🏢 **欢迎来到企业认证中心！**\n\n完成企业认证可以帮助您：\n✅ 提升企业可信度，获得"认证企业"标识\n✅ 优先展示在企业推荐列表\n✅ 增加候选人投递意愿\n✅ 解锁更多高级招聘功能\n\n---\n\n📋 **认证进度：** ${completedCount}/${totalSteps} 项\n\n${currentItem.icon} **第 ${startIndex + 1} 项：${currentItem.label}**\n\n${currentItem.description}`
+              : `🏢 **欢迎来到企业认证中心！**\n\n完成企业认证可以帮助您：\n✅ 提升企业可信度，获得"认证企业"标识\n✅ 优先展示在企业推荐列表\n✅ 增加候选人投递意愿\n✅ 解锁更多高级招聘功能\n\n---\n\n📋 **认证进度：** ${completedCount}/${totalSteps} 项\n\n点击下方 **「开始认证」** 按钮开始企业认证流程。`;
             
             setTaskMessages(prev => ({
               ...prev,
@@ -8840,6 +10531,53 @@ const AIAssistantView = () => {
           ...prev,
           [selectedTask.id]: [{ role: 'assistant', content: jobSearchWelcomeMessage }]
         }));
+      }
+    } else if (taskType === 'recruit' || taskTitle?.includes('智能招聘')) {
+      // 智能招聘任务 - 主动引导用户发布招聘需求
+      if (isNewSelection) {
+        setVerificationMode({ active: false, items: [], currentIndex: -1, completedItems: [] });
+        setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+        setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+        setDiscTestMode({ active: false, currentQuestion: 0, answers: [], completed: false });
+        setJobSearchMode({ active: false, currentQuestion: 0, answers: [], completed: false, tokenUsed: 0, isSearching: false });
+        
+        // 启动招聘引导
+        setPostMode({
+          active: true,
+          step: 'requirement',
+          jobDescription: '',
+          generatedResult: null
+        });
+        
+        const initRecruitTask = async () => {
+          try {
+            const { getSettings } = await import('./services/apiService');
+            const settingsData = await getSettings(userId).catch(() => ({}));
+            const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
+            
+            const welcomeMsg = `🏢 **${companyName} · 智能招聘助手**\n\n我将帮您完成整个招聘流程：\n\n` +
+              `**① 描述需求** → 告诉我您想招什么人\n` +
+              `**② AI 生成岗位** → 我会根据您的企业信息自动生成完整的岗位描述\n` +
+              `**③ 确认发布** → 您确认后一键上线\n\n---\n\n` +
+              `现在请告诉我您的招聘需求，可以简单描述，我来帮您完善。例如：\n\n` +
+              `💡 "需要一个前端和一个后端"\n` +
+              `💡 "招产品经理，3年经验以上"\n` +
+              `💡 "技术团队扩招5个人"\n\n` +
+              `您想招什么人？`;
+            
+            setTaskMessages(prev => ({
+              ...prev,
+              [selectedTask.id]: [{ role: 'assistant', content: welcomeMsg }]
+            }));
+          } catch (e) {
+            setTaskMessages(prev => ({
+              ...prev,
+              [selectedTask.id]: [{ role: 'assistant', content: '🏢 **智能招聘助手**\n\n请告诉我您的招聘需求，我来帮您自动生成岗位并发布。' }]
+            }));
+          }
+        };
+        
+        initRecruitTask();
       }
     } else {
       // 普通任务：重置认证模式和简历完善模式
@@ -9150,6 +10888,136 @@ const AIAssistantView = () => {
       return;
     }
     
+    // 检测企业用户是否想要完善企业资料
+    const enterpriseProfileKeywords = ['完善企业', '完善公司', '企业资料', '企业信息', '公司信息', '完善资料'];
+    const isEnterpriseProfileRequest = enterpriseProfileKeywords.some(kw => userMessage.includes(kw));
+    
+    if (isEnterpriseProfileRequest && (userRole === 'employer' || userRole === 'recruiter') && !enterpriseProfileMode.active) {
+      console.log('[handleSend] Starting enterprise profile guide flow');
+      setInputMessage('');
+      if (selectedTask) {
+        setTaskMessages(prev => ({
+          ...prev,
+          [selectedTask.id]: [...(prev[selectedTask.id] || []), {role: 'user' as const, content: userMessage}]
+        }));
+        startEnterpriseProfileGuide(true);
+      } else {
+        setGeneralMessages(prev => [...prev, {role: 'user', content: userMessage}]);
+        startEnterpriseProfileGuide(false);
+      }
+      return;
+    }
+    
+    // 检测企业用户是否想要招聘
+    const recruitKeywords = ['招聘', '招人', '发布岗位', '发布职位', '开始招聘', '招个', '招一个', '想招', '要招', '需要招', '招几个', '发布招聘', '找人', '缺人', '招工', '发JD', '发jd'];
+    const isRecruitRequest = recruitKeywords.some(kw => userMessage.includes(kw)) && (userRole === 'employer' || userRole === 'recruiter');
+    
+    if (isRecruitRequest && !postMode.active) {
+      setInputMessage('');
+      setGeneralMessages(prev => [...prev, {role: 'user', content: userMessage}]);
+      setIsTyping(true);
+      
+      // 前置条件检查
+      const checkRecruitPrerequisites = async () => {
+        try {
+          const { getEnterpriseCertifications, getSettings, getTasks } = await import('./services/apiService');
+          const [certifications, settingsData, tasks] = await Promise.all([
+            getEnterpriseCertifications(userId).catch(() => []),
+            getSettings(userId).catch(() => ({})),
+            getTasks(userId).catch(() => []),
+          ]);
+          
+          const hasBusinessLicense = certifications.some((c: any) => c.category === 'qualification' && c.name?.includes('营业执照'));
+          const certTask = tasks.find((t: any) => t.title === '完成企业认证' || (t.title?.includes('企业') && t.title?.includes('认证')));
+          const certCompleted = hasBusinessLicense || certTask?.status?.toLowerCase() === 'completed';
+          
+          const requiredFields = ['display_name', 'industry', 'company_size', 'detail_address', 'description'];
+          const hasValue = (val: any) => val && typeof val === 'string' ? val.trim() !== '' && val.trim() !== '[]' && val.trim() !== '{}' : !!val;
+          const missingProfileFields = requiredFields.filter(k => !hasValue(settingsData[k]));
+          const profileCompleted = missingProfileFields.length === 0;
+          
+          if (!certCompleted || !profileCompleted) {
+            const issues: string[] = [];
+            if (!certCompleted) issues.push('• **企业认证未完成** — 请先前往 [企业认证信息](/settings?tab=Verification) 上传营业执照等认证材料\n\n[[TASK:完成企业认证:enterprise_verification:🏢]]');
+            if (!profileCompleted) issues.push('• **企业资料未完善** — 还需补充：' + missingProfileFields.map(k => {
+              const labels: Record<string, string> = { display_name: '企业全称', industry: '所属行业', company_size: '企业规模', detail_address: '公司地址', description: '企业简介' };
+              return labels[k] || k;
+            }).join('、') + '\n\n[[TASK:完善企业资料:enterprise_profile:📋]]');
+            
+            setGeneralMessages(prev => [...prev, {role: 'assistant', content: `👋 收到您的招聘需求！\n\n不过在开始招聘前，需要先完成以下准备工作，以保障招聘质量和企业可信度：\n\n${issues.join('\n\n')}\n\n完成后再告诉我您的招聘需求，我就能帮您智能生成岗位并发布了！`}]);
+            setIsTyping(false);
+            return;
+          }
+          
+          // 前置条件满足，创建招聘任务并启动招聘引导
+          const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
+          
+          // 创建招聘任务
+          try {
+            const { createTodo } = await import('./services/apiService');
+            const existingRecruitTask = tasks.find((t: any) => 
+              (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
+              (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
+            );
+            if (!existingRecruitTask) {
+              const taskShortId = `RC${Date.now().toString().slice(-6)}`;
+              await createTodo({
+                title: `智能招聘 #${taskShortId}`,
+                description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
+                priority: 'HIGH',
+                source: 'AGENT',
+                todo_type: 'RECRUIT',
+                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成专业岗位描述并一键发布。',
+                steps: [
+                  { step: 1, title: '描述招聘需求', status: 'pending' },
+                  { step: 2, title: 'AI 生成岗位', status: 'pending' },
+                  { step: 3, title: '确认并发布', status: 'pending' },
+                ],
+              }, userId);
+              if (typeof refetchTasks === 'function') refetchTasks();
+            }
+          } catch (e) {
+            console.error('创建招聘任务失败:', e);
+          }
+          
+          setPostMode({
+            active: true,
+            step: 'requirement',
+            jobDescription: '',
+            generatedResult: null
+          });
+          
+          // 如果用户消息中已经包含了具体需求，直接处理
+          const hasSpecificNeed = userMessage.length > 10 && (
+            userMessage.includes('工程师') || userMessage.includes('经理') || userMessage.includes('设计') ||
+            userMessage.includes('开发') || userMessage.includes('运营') || /\d+[kK]/.test(userMessage) ||
+            userMessage.includes('经验') || userMessage.includes('年')
+          );
+          
+          if (hasSpecificNeed) {
+            // 用户已经描述了具体需求，直接进入生成流程
+            setGeneralMessages(prev => [...prev, {role: 'assistant', content: `✅ **${companyName}** 企业认证和资料均已完善！\n\n📋 已为您创建「智能招聘」任务，正在根据需求生成岗位...`}]);
+            setIsTyping(false);
+            // 延迟后触发 postProcess
+            setTimeout(() => {
+              handlePostProcess(userMessage);
+            }, 500);
+          } else {
+            // 用户只是表达了招聘意图，引导描述
+            setGeneralMessages(prev => [...prev, {role: 'assistant', content: `✅ **${companyName}** 企业认证和资料均已完善，可以开始招聘！\n\n📋 已为您创建「智能招聘」任务，您可以在任务中心查看进度。\n\n---\n\n**第一步：描述您的招聘需求**\n\n请告诉我您想招什么人，例如：\n\n> "招聘高级前端工程师，3年以上React经验，薪资25-40K"\n> "技术团队扩招，需要前端2人、后端3人、产品经理1人"\n\n**第二步：AI 自动生成岗位**\n我会根据企业信息和需求，生成专业的岗位描述\n\n**第三步：确认并一键发布**\n您确认无误后，岗位将立即上线并开始智能匹配候选人\n\n💡 描述越详细，生成的岗位越精准！`}]);
+            setIsTyping(false);
+          }
+        } catch (err) {
+          console.error('检查招聘前置条件失败:', err);
+          setGeneralMessages(prev => [...prev, {role: 'assistant', content: `⚠️ 检查招聘资质时出现异常：${(err as any)?.message || '未知错误'}。请稍后重试。`}]);
+          setIsTyping(false);
+        }
+      };
+      
+      checkRecruitPrerequisites();
+      return;
+    }
+    
     // 完善简历模式处理
     if (profileCompleteMode.active) {
       setInputMessage('');
@@ -9423,6 +11291,151 @@ const AIAssistantView = () => {
         const currentIndex = profileCompleteMode.currentFieldIndex;
         const currentField = profileCompleteMode.missingFields[currentIndex >= 0 ? currentIndex : 0];
         addAssistantMessage(`我没有理解您的意思。\n\n现在正在填写「${currentField?.label || '简历信息'}」，请直接输入内容。\n\n💡 输入 "跳过" 可以跳过当前项，输入 "退出" 可以结束填写流程\n📎 快捷方式：点击左下角上传简历，AI 自动解析填充`);
+        setIsTyping(false);
+      }, 500);
+      
+      return;
+    }
+    
+    // 完善企业资料模式处理
+    if (enterpriseProfileMode.active) {
+      setInputMessage('');
+      
+      // 添加用户消息
+      const addUserMsg = (content: string) => {
+        if (selectedTask) {
+          setTaskMessages(prev => ({
+            ...prev,
+            [selectedTask.id]: [...(prev[selectedTask.id] || []), {role: 'user' as const, content}]
+          }));
+        } else {
+          setGeneralMessages(prev => [...prev, {role: 'user' as const, content}]);
+        }
+      };
+      
+      const addAsstMsg = (content: string) => {
+        if (selectedTask) {
+          setTaskMessages(prev => ({
+            ...prev,
+            [selectedTask.id]: [...(prev[selectedTask.id] || []), {role: 'assistant' as const, content}]
+          }));
+        } else {
+          setGeneralMessages(prev => [...prev, {role: 'assistant' as const, content}]);
+        }
+      };
+      
+      addUserMsg(userMessage);
+      setIsTyping(true);
+      
+      // 用户跳过当前字段
+      if (userMessage.includes('跳过')) {
+        const currentIndex = enterpriseProfileMode.currentFieldIndex;
+        const currentField = enterpriseProfileMode.missingFields[currentIndex];
+        const nextIndex = currentIndex + 1;
+        const totalFields = enterpriseProfileMode.missingFields.length;
+        
+        setTimeout(async () => {
+          if (nextIndex >= totalFields) {
+            const progress = await calculateEnterpriseProfileProgress();
+            addAsstMsg(`⏭️ 已跳过「${currentField?.label}」\n\n---\n\n📋 **企业资料完善流程结束**\n\n当前完善度：**${progress}%**\n\n${progress < 100 ? '💡 提示：完善更多资料可以提升招聘效果！\n\n您可以随时点击此任务继续补充，或前往 [基础信息设置](/settings?tab=General) 手动编辑。' : '🎉 企业资料已完善！'}`);
+            setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+          } else {
+            const nextField = enterpriseProfileMode.missingFields[nextIndex];
+            addAsstMsg(`⏭️ 已跳过「${currentField?.label}」 (${currentIndex + 1}/${totalFields})\n\n---\n\n📝 **继续填写第 ${nextIndex + 1} 项：${nextField.label}**\n\n${getEnterpriseFieldPrompt(nextField)}\n\n💡 输入 "跳过" 可以跳过当前项，输入 "退出" 可以结束填写流程`);
+            setEnterpriseProfileMode(prev => ({ ...prev, currentFieldIndex: nextIndex }));
+          }
+          setIsTyping(false);
+        }, 500);
+        return;
+      }
+      
+      // 用户退出流程
+      if (userMessage.includes('退出') || userMessage.includes('稍后')) {
+        setTimeout(async () => {
+          const progress = await calculateEnterpriseProfileProgress();
+          addAsstMsg(`好的，您可以稍后继续完善企业资料。\n\n当前完善度：**${progress}%**\n\n💡 提示：完善的企业资料可以帮助您吸引更多优质人才！\n\n您可以随时点击此任务继续补充，或前往 [基础信息设置](/settings?tab=General) 手动编辑。`);
+          setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+          setIsTyping(false);
+        }, 500);
+        return;
+      }
+      
+      // 当前正在填写某个字段，保存用户输入
+      if (enterpriseProfileMode.currentFieldIndex >= 0) {
+        const field = enterpriseProfileMode.missingFields[enterpriseProfileMode.currentFieldIndex];
+        
+        try {
+          const { updateSettings } = await import('./services/apiService');
+          
+          // 解析用户输入
+          let valueToSave = userMessage.trim();
+          if (field.type === 'select' && field.options) {
+            valueToSave = parseEnterpriseSelectInput(userMessage, field);
+          }
+          
+          // 手机号格式验证
+          if (field.key === 'hr_phone' || field.key === 'contact_phone') {
+            const phoneClean = valueToSave.replace(/[\s\-]/g, '');
+            const mobileReg = /^1[3-9]\d{9}$/;
+            const landlineReg = /^0\d{2,3}\d{7,8}$/;
+            if (!mobileReg.test(phoneClean) && !landlineReg.test(phoneClean)) {
+              setTimeout(() => {
+                addAsstMsg(`⚠️ 您输入的「${valueToSave}」不是有效的电话号码格式。\n\n请输入正确的手机号（如 13812345678）或固定电话（如 02112345678）：`);
+                setIsTyping(false);
+              }, 300);
+              return;
+            }
+            valueToSave = phoneClean;
+          }
+          
+          // 只发送需要更新的字段
+          const updateData: any = {};
+          updateData[field.key] = valueToSave;
+          
+          await updateSettings(updateData, userId);
+          console.log(`[Enterprise Profile] 已保存 ${field.label}: ${valueToSave}`);
+          
+          // 计算下一步
+          const nextIndex = enterpriseProfileMode.currentFieldIndex + 1;
+          const totalFields = enterpriseProfileMode.missingFields.length;
+          const completedCount = nextIndex;
+          
+          setTimeout(async () => {
+            const actualProgress = await calculateEnterpriseProfileProgress();
+            
+            // 显示保存的值（福利字段特殊处理）
+            let displayValue = valueToSave;
+            if (field.key === 'benefits') {
+              try { displayValue = JSON.parse(valueToSave).join('、'); } catch { /* keep original */ }
+            }
+            
+            if (nextIndex >= totalFields) {
+              addAsstMsg(`✅ **${field.label}已保存！** → ${displayValue}\n\n---\n\n🎉 **恭喜！企业资料已全部完善！**\n\n✨ 完善度：**${actualProgress}%**\n\n您可以：\n• 前往 [基础信息设置](/settings?tab=General) 查看或修改\n• 前往 [企业主页](/employer/profile) 查看展示效果\n\n现在可以开始发布职位，招聘优质人才了！🚀`);
+              setEnterpriseProfileMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+            } else {
+              const nextField = enterpriseProfileMode.missingFields[nextIndex];
+              addAsstMsg(`✅ **${field.label}已保存！** → ${displayValue} (${completedCount}/${totalFields})\n\n📊 完善进度：${'█'.repeat(Math.floor(actualProgress / 10))}${'░'.repeat(10 - Math.floor(actualProgress / 10))} ${actualProgress}%\n\n---\n\n📝 **继续填写第 ${nextIndex + 1} 项：${nextField.label}**\n\n${getEnterpriseFieldPrompt(nextField)}\n\n💡 输入 "跳过" 可以跳过当前项，输入 "退出" 可以结束填写流程`);
+              setEnterpriseProfileMode(prev => ({ ...prev, currentFieldIndex: nextIndex }));
+            }
+            setIsTyping(false);
+          }, 600);
+          
+          return;
+        } catch (error) {
+          console.error('保存企业资料失败:', error);
+          setTimeout(() => {
+            addAsstMsg(`❌ 保存失败，请稍后重试。\n\n您输入的是：「${userMessage}」\n\n请重新输入${field.label}：`);
+            setIsTyping(false);
+          }, 500);
+          return;
+        }
+      }
+      
+      // 其他情况
+      setTimeout(() => {
+        const currentIndex = enterpriseProfileMode.currentFieldIndex;
+        const currentField = enterpriseProfileMode.missingFields[currentIndex >= 0 ? currentIndex : 0];
+        addAsstMsg(`我没有理解您的意思。\n\n现在正在填写「${currentField?.label || '企业资料'}」，请直接输入内容。\n\n💡 输入 "跳过" 可以跳过当前项，输入 "退出" 可以结束填写流程`);
         setIsTyping(false);
       }, 500);
       
@@ -10214,10 +12227,20 @@ const AIAssistantView = () => {
       const totalItems = enterpriseVerificationItems.length;
       const completedCount = enterpriseVerificationMode.completedItems.length;
       
+      // 检查 currentItem 是否有效
+      if (!currentItem) {
+        console.error('[handleSendMessage] Enterprise verification currentItem is undefined, currentIndex:', currentIndex);
+        setTimeout(() => {
+          addAssistantMsg(`⚠️ 当前认证项无效，请刷新页面后重试。`);
+          setIsTyping(false);
+        }, 500);
+        return;
+      }
+      
       // 用户选择跳过
       if (userMessage.includes('跳过')) {
         // 营业执照不能跳过
-        if (currentItem?.required) {
+        if (currentItem.required) {
           setTimeout(() => {
             addAssistantMsg(`⚠️ **${currentItem.label}是必填项**，不能跳过。\n\n营业执照是企业认证的基础，后续认证需要与营业执照信息进行核对。\n\n📷 请点击下方 **「上传证件」** 按钮上传营业执照照片。`);
             setIsTyping(false);
@@ -10254,9 +12277,17 @@ const AIAssistantView = () => {
       
       // 用户选择退出
       if (userMessage.includes('退出') || userMessage.includes('取消') || userMessage.includes('稍后')) {
-        if (currentItem?.required && completedCount === 0) {
+        // 检查是否所有必填项都已完成
+        const completedItems = enterpriseVerificationMode.completedItems;
+        const requiredItems = enterpriseVerificationItems.filter(item => item.required);
+        const allRequiredCompleted = requiredItems.every(item => completedItems.includes(item.key));
+        
+        if (!allRequiredCompleted) {
+          // 找出未完成的必填项
+          const incompleteRequired = requiredItems.filter(item => !completedItems.includes(item.key));
+          const incompleteList = incompleteRequired.map(item => `• ${item.label}`).join('\n');
           setTimeout(() => {
-            addAssistantMsg(`⚠️ **请先完成营业执照认证**\n\n营业执照是企业认证的基础，完成后才能退出或进行其他认证。\n\n📷 请点击下方 **「上传证件」** 按钮上传营业执照照片。`);
+            addAssistantMsg(`⚠️ **请先完成所有必填认证项**\n\n以下认证项为必填：\n${incompleteList}\n\n📷 请点击下方 **「上传证件」** 按钮上传证件照片。`);
             setIsTyping(false);
           }, 500);
           return;
@@ -10427,8 +12458,7 @@ const AIAssistantView = () => {
                 const taskTitle = selectedTask.title || selectedTask.task || '';
                 const taskType = selectedTask.todo_type || selectedTask.type || '';
                 const isProfileTask = taskType === 'profile_complete' || 
-                  taskTitle === '完善简历资料' ||
-                  (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+                  taskTitle === '完善简历资料';
                 
                 if (isProfileTask && selectedTask.status !== 'completed') {
                   const { updateTodo, createTodo, getTasks } = await import('./services/apiService');
@@ -10515,6 +12545,14 @@ const AIAssistantView = () => {
     const currentItem = isPersonalVerification ? verificationMode.items[currentIndex] : enterpriseVerificationItems[currentIndex];
     const totalItems = isPersonalVerification ? verificationMode.items.length : enterpriseVerificationItems.length;
     
+    // 检查 currentItem 是否有效
+    if (!currentItem) {
+      console.error('[handleCertImageUpload] currentItem is undefined, currentIndex:', currentIndex);
+      addCertImageMessage(`❌ 图片处理失败\n\n当前认证项无效，请刷新页面后重试。`);
+      if (certImageInputRef.current) certImageInputRef.current.value = '';
+      return;
+    }
+    
     // 检查文件类型
     const fileType = file.type;
     if (!['image/jpeg', 'image/png', 'image/jpg'].includes(fileType)) {
@@ -10559,7 +12597,7 @@ const AIAssistantView = () => {
       
       // 调用后端 OCR API 进行真正的图片内容识别
       const { certOCRReview } = await import('./services/apiService');
-      const ocrResult = await certOCRReview(imageBase64, currentItem.key as 'education' | 'skill_driver' | 'skill_cert' | 'work' | 'identity_front' | 'identity_back' | 'credit_fund' | 'credit_social', userId);
+      const ocrResult = await certOCRReview(imageBase64, currentItem.key as 'education' | 'skill_driver' | 'skill_cert' | 'work' | 'identity_front' | 'identity_back' | 'credit_fund' | 'credit_social' | 'business_license' | 'org_code' | 'tax_registration' | 'legal_person_id' | 'legal_person_id_front' | 'legal_person_id_back' | 'qualification' | 'enterprise_credit', userId);
       
       // 转换 OCR 结果格式
       const reviewResult = {
@@ -10571,6 +12609,251 @@ const AIAssistantView = () => {
       
       if (reviewResult.success) {
         // 审核通过（后端已验证姓名一致性）
+        
+        // ========== 企业认证处理分支 ==========
+        if (isEnterpriseVerification) {
+          const nextIndex = currentIndex + 1;
+          const newCompletedItems = [...enterpriseVerificationMode.completedItems, currentItem.key];
+          
+          try {
+            const { updateTodo, createEnterpriseCertification } = await import('./services/apiService');
+            
+            // 根据当前项构建认证数据
+            const certData: any = {
+              name: currentItem.label,
+              organization: '系统认证',
+              category: 'qualification',
+              cert_date: new Date().toISOString().split('T')[0],
+              color: 'blue',
+              icon: 'Building2'
+            };
+            
+            // 根据提取的信息填充数据
+            if (reviewResult.extractedInfo) {
+              if (currentItem.key === 'business_license') {
+                // 营业执照 - 保存详细信息
+                const companyName = reviewResult.extractedInfo['企业名称'] || reviewResult.extractedInfo['公司名称'] || '营业执照';
+                const legalRepresentative = reviewResult.extractedInfo['法定代表人'] || '';
+                certData.name = `营业执照 - ${companyName}`;
+                certData.organization = legalRepresentative || '系统认证';
+                
+                // 保存营业执照专用字段
+                certData.credit_code = reviewResult.extractedInfo['统一社会信用代码'] || '';
+                certData.valid_period = reviewResult.extractedInfo['有效期'] || reviewResult.extractedInfo['经营期限'] || '';
+                certData.business_address = reviewResult.extractedInfo['住所'] || reviewResult.extractedInfo['地址'] || '';
+                certData.registered_capital = reviewResult.extractedInfo['注册资本'] || '';
+                certData.business_scope = reviewResult.extractedInfo['经营范围'] || '';
+                
+                // 保存原始图片用于后台查看
+                certData.image_data = imageBase64;
+                
+                // 保存企业名称和法定代表人到状态（法定代表人用于后续校验身份证）
+                setEnterpriseVerificationMode(prev => ({
+                  ...prev,
+                  companyName: companyName,
+                  legalRepresentative: legalRepresentative
+                }));
+              } else if (currentItem.key === 'legal_person_id_front') {
+                // 法人身份证正面 - 校验姓名与营业执照法定代表人是否一致
+                const idName = reviewResult.extractedInfo['姓名'] || '';
+                const idNumber = reviewResult.extractedInfo['身份证号'] || '';
+                const legalRepresentative = enterpriseVerificationMode.legalRepresentative || '';
+                
+                // 校验姓名一致性
+                if (legalRepresentative && idName && legalRepresentative !== idName) {
+                  // 姓名不一致，拒绝审核
+                  addCertImageMessage(`❌ **法人身份证审核未通过！**\n\n**原因：身份证姓名与营业执照法定代表人不一致**\n\n• 营业执照法定代表人：**${legalRepresentative}**\n• 身份证姓名：**${idName}**\n\n请上传与营业执照法定代表人一致的身份证照片。\n\n📷 点击下方 **「上传证件」** 按钮重新上传。`);
+                  setIsTyping(false);
+                  setUploadingCertImage(false);
+                  if (certImageInputRef.current) certImageInputRef.current.value = '';
+                  return;
+                }
+                
+                // 将正面信息暂存到状态
+                setEnterpriseVerificationMode(prev => ({
+                  ...prev,
+                  legalPersonIdFront: {
+                    name: idName,
+                    idNumber: idNumber,
+                    imageData: imageBase64
+                  }
+                }));
+                
+                // 正面不创建数据库记录，标记为跳过保存
+                certData._skipSave = true;
+              } else if (currentItem.key === 'legal_person_id_back') {
+                // 法人身份证背面 - 合并正面信息创建完整记录
+                const frontInfo = enterpriseVerificationMode.legalPersonIdFront;
+                const authority = reviewResult.extractedInfo['签发机关'] || '公安机关';
+                const validPeriod = reviewResult.extractedInfo['有效期'] || reviewResult.extractedInfo['有效期限'] || '';
+                
+                certData.name = `法人身份证 - ${frontInfo?.name || '已认证'}`;
+                certData.organization = '身份证认证';
+                certData.id_card_name = frontInfo?.name || '';
+                certData.id_card_number = frontInfo?.idNumber || '';
+                certData.id_card_authority = authority;
+                certData.id_card_valid_period = validPeriod;
+                certData.image_data_front = frontInfo?.imageData || '';
+                certData.image_data_back = imageBase64;
+              } else {
+                // 其他证件
+                certData.name = currentItem.label;
+                Object.keys(reviewResult.extractedInfo).forEach(key => {
+                  if (key.includes('名称') || key.includes('公司')) {
+                    certData.name = `${currentItem.label} - ${reviewResult.extractedInfo[key]}`;
+                  }
+                });
+              }
+            }
+            
+            // 尝试保存到数据库（如果API存在的话，且不是跳过保存的情况）
+            if (!certData._skipSave) {
+              try {
+                await createEnterpriseCertification(certData, userId);
+                console.log('[Enterprise Cert] 已保存企业认证到数据库');
+              } catch (saveErr) {
+                console.warn('[Enterprise Cert] 保存认证失败（API可能未实现）:', saveErr);
+              }
+            } else {
+              console.log('[Enterprise Cert] 跳过保存（等待后续步骤合并）');
+            }
+            
+            // 构建成功消息
+            let successMessage = `✅ **${currentItem.label}审核通过！**\n\n`;
+            if (reviewResult.extractedInfo) {
+              successMessage += `📋 **识别到的信息：**\n`;
+              Object.entries(reviewResult.extractedInfo).forEach(([key, value]) => {
+                successMessage += `• ${key}：${value}\n`;
+              });
+              successMessage += `\n`;
+            }
+            
+            // 检查是否完成所有认证
+            if (nextIndex >= enterpriseVerificationItems.length) {
+              // 认证全部完成
+              successMessage += `---\n\n🎉 **恭喜！企业认证已全部完成！**\n\n`;
+              successMessage += `✅ 已完成：${newCompletedItems.length}/${enterpriseVerificationItems.length} 项\n\n`;
+              successMessage += `您的企业已通过认证，这将大幅提升招聘效果！\n\n`;
+              successMessage += `接下来，请完善企业资料以获得更好的招聘效果：\n\n`;
+              successMessage += `[[TASK:完善企业资料:enterprise_profile:📋]]`;
+              
+              addCertImageMessage(successMessage);
+              
+              setEnterpriseVerificationMode(prev => ({
+                ...prev,
+                currentIndex: nextIndex,
+                completedItems: newCompletedItems
+              }));
+              
+              // 更新任务为完成状态
+              if (selectedTask) {
+                await updateTodo(selectedTask.id, { 
+                  progress: 100, 
+                  status: 'completed' 
+                });
+                if (typeof refetchTasks === 'function') {
+                  refetchTasks();
+                }
+              }
+              
+              // 创建"完善企业资料"引导任务
+              try {
+                const { createTodo, updateSettings, getEnterpriseCertifications } = await import('./services/apiService');
+                
+                // 创建完善企业资料任务
+                const profileTaskData = {
+                  title: '完善企业资料',
+                  description: '完善企业基本信息、联系方式、企业介绍等，提升招聘效果',
+                  priority: 'MEDIUM',
+                  source: 'AGENT',
+                  todo_type: 'EMPLOYER',
+                  icon: 'FileText',
+                  user_id: userId,
+                  progress: 0,
+                  status: 'pending'
+                };
+                
+                await createTodo(profileTaskData);
+                console.log('[Enterprise] 已创建"完善企业资料"引导任务');
+                
+                // 获取企业认证信息，用于自动填充基础信息
+                const certifications = await getEnterpriseCertifications(userId);
+                const businessLicenseCert = certifications.find((c: any) => c.category === 'qualification' && c.name?.includes('营业执照'));
+                
+                if (businessLicenseCert) {
+                  // 将认证识别的信息自动填入基础信息设置
+                  const settingsToUpdate: any = {};
+                  
+                  // 企业名称（从营业执照名称中提取）
+                  const certName = businessLicenseCert.name || '';
+                  const companyNameMatch = certName.match(/营业执照\s*-\s*(.+)/);
+                  if (companyNameMatch && companyNameMatch[1]) {
+                    settingsToUpdate.display_name = companyNameMatch[1];
+                  }
+                  
+                  // 公司地址
+                  if (businessLicenseCert.business_address) {
+                    settingsToUpdate.detail_address = businessLicenseCert.business_address;
+                  }
+                  
+                  // 法定代表人姓名作为联系人
+                  if (businessLicenseCert.organization && businessLicenseCert.organization !== '系统认证') {
+                    settingsToUpdate.contact_name = businessLicenseCert.organization;
+                  }
+                  
+                  // 如果有需要更新的设置，调用API更新
+                  if (Object.keys(settingsToUpdate).length > 0) {
+                    await updateSettings(settingsToUpdate, userId);
+                    console.log('[Enterprise] 已将认证信息自动填入基础设置:', settingsToUpdate);
+                  }
+                }
+                
+                // 刷新任务列表
+                if (typeof refetchTasks === 'function') {
+                  refetchTasks();
+                }
+              } catch (taskError) {
+                console.error('[Enterprise] 创建完善企业资料任务失败:', taskError);
+              }
+            } else {
+              // 继续下一项
+              const nextItem = enterpriseVerificationItems[nextIndex];
+              successMessage += `---\n\n📋 **认证进度：** ${newCompletedItems.length}/${enterpriseVerificationItems.length} 项\n\n`;
+              successMessage += `${nextItem.icon} **第 ${nextIndex + 1} 项：${nextItem.label}**\n\n`;
+              successMessage += nextItem.description;
+              
+              addCertImageMessage(successMessage);
+              
+              setEnterpriseVerificationMode(prev => ({
+                ...prev,
+                currentIndex: nextIndex,
+                completedItems: newCompletedItems
+              }));
+              
+              // 更新任务进度
+              if (selectedTask) {
+                const progress = Math.round((newCompletedItems.length / enterpriseVerificationItems.length) * 100);
+                await updateTodo(selectedTask.id, { 
+                  progress, 
+                  status: 'in_progress' 
+                });
+                if (typeof refetchTasks === 'function') {
+                  refetchTasks();
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[Enterprise Cert] 处理失败:', error);
+            addCertImageMessage(`❌ 处理认证信息时出错，请重试。`);
+          }
+          
+          setIsTyping(false);
+          setUploadingCertImage(false);
+          if (certImageInputRef.current) certImageInputRef.current.value = '';
+          return;
+        }
+        
+        // ========== 个人认证处理分支 ==========
         const newCompletedItems = [...verificationMode.completedItems, currentItem.key];
         const nextIndex = currentIndex + 1;
         
@@ -11332,8 +13615,7 @@ const AIAssistantView = () => {
       const taskTitle = selectedTask.title || selectedTask.task || '';
       const taskType = selectedTask.todo_type || selectedTask.type || '';
       const isProfileTask = taskType === 'profile_complete' || 
-        taskTitle === '完善简历资料' ||
-        (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+        taskTitle === '完善简历资料';
       
       setTaskMessages(prev => ({
         ...prev,
@@ -11376,7 +13658,7 @@ const AIAssistantView = () => {
                     : 'bg-white text-slate-500 hover:bg-slate-100'
                 }`}
               >
-                进行中 ({tasks.filter((t: any) => t.status !== 'completed').length})
+                进行中 ({pendingTasksCount})
               </button>
               <button
                 onClick={() => setTaskFilter('completed')}
@@ -11386,7 +13668,7 @@ const AIAssistantView = () => {
                     : 'bg-white text-slate-500 hover:bg-slate-100'
                 }`}
               >
-                已完成 ({tasks.filter((t: any) => t.status === 'completed').length})
+                已完成 ({completedTasksCount})
               </button>
             </div>
           </div>
@@ -11779,19 +14061,26 @@ const AIAssistantView = () => {
                             } else if (part.type === 'task') {
                               // 渲染任务卡片
                               const handleTaskClick = async () => {
-                                // 找到对应任务并选中
-                                let targetTask = tasks.find((t: any) => 
-                                  t.title?.includes(part.title) || 
-                                  t.task?.includes(part.title) ||
-                                  t.todo_type === part.taskType ||
-                                  t.type === part.taskType
-                                );
-                                
-                                // 如果任务不存在，则创建任务
-                                if (!targetTask && part.taskType) {
-                                  try {
-                                    const { createTodo, getTasks } = await import('./services/apiService');
-                                    
+                                try {
+                                  const { createTodo, getTasks } = await import('./services/apiService');
+                                  
+                                  // 先获取最新的任务列表
+                                  const latestTasks = await getTasks(userId);
+                                  
+                                  // 找到对应任务
+                                  let targetTask = latestTasks.find((t: any) => 
+                                    t.title === part.title || 
+                                    t.title?.includes(part.title) || 
+                                    (part.taskType === 'enterprise_verification' && t.title === '完成企业认证') ||
+                                    (part.taskType === 'enterprise_profile' && t.title === '完善企业资料') ||
+                                    (part.taskType === 'profile_complete' && t.title === '完善简历资料') ||
+                                    (part.taskType === 'personal_verification' && t.title === '完善个人认证信息')
+                                  );
+                                  
+                                  console.log('[TaskCard] 查找任务:', part.title, part.taskType, '找到:', targetTask?.title);
+                                  
+                                  // 如果任务不存在，则创建任务
+                                  if (!targetTask && part.taskType) {
                                     // 根据任务类型创建相应的任务
                                     let taskData: any = null;
                                     
@@ -11825,9 +14114,20 @@ const AIAssistantView = () => {
                                         icon: 'Shield',
                                         user_id: userId,
                                       };
+                                    } else if (part.taskType === 'enterprise_profile') {
+                                      taskData = {
+                                        title: '完善企业资料',
+                                        description: '完善企业基本信息、联系方式、企业介绍等，提升招聘效果',
+                                        priority: 'MEDIUM',
+                                        source: 'AGENT',
+                                        todo_type: 'EMPLOYER',
+                                        icon: 'FileText',
+                                        user_id: userId,
+                                      };
                                     }
                                     
                                     if (taskData) {
+                                      console.log('[TaskCard] 创建任务:', taskData.title);
                                       const newTask = await createTodo(taskData, userId);
                                       console.log('[TaskCard] 创建任务成功:', newTask);
                                       
@@ -11839,17 +14139,17 @@ const AIAssistantView = () => {
                                       // 重新获取任务列表以找到新创建的任务
                                       const updatedTasks = await getTasks(userId);
                                       targetTask = updatedTasks.find((t: any) => 
-                                        t.title?.includes(part.title) || 
-                                        t.todo_type === part.taskType?.toUpperCase()
+                                        t.title === taskData.title
                                       );
                                     }
-                                  } catch (error) {
-                                    console.error('[TaskCard] 创建任务失败:', error);
                                   }
-                                }
-                                
-                                if (targetTask) {
-                                  setSelectedTask(targetTask);
+                                  
+                                  if (targetTask) {
+                                    console.log('[TaskCard] 选中任务:', targetTask.title);
+                                    setSelectedTask(targetTask);
+                                  }
+                                } catch (error) {
+                                  console.error('[TaskCard] 处理任务点击失败:', error);
                                 }
                               };
                               
@@ -11944,8 +14244,7 @@ const AIAssistantView = () => {
                 const taskTitle = selectedTask?.title || selectedTask?.task || '';
                 const taskType = selectedTask?.todo_type || selectedTask?.type || '';
                 const isProfileTask = taskType === 'profile_complete' || 
-                  taskTitle === '完善简历资料' ||
-                  (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')));
+                  taskTitle === '完善简历资料';
                 
                 if (isVerificationUpload || isEnterpriseVerificationUpload) {
                   // 认证任务：显示"上传证件"按钮
@@ -12140,6 +14439,60 @@ const AIAssistantView = () => {
                   return [];
                 }
                 
+                // 检查是否处于完善企业资料模式
+                if (enterpriseProfileMode.active) {
+                  const currentField = enterpriseProfileMode.missingFields[enterpriseProfileMode.currentFieldIndex];
+                  if (currentField) {
+                    const enterpriseFieldPrompts: Record<string, {label: string; prompt: string; autoSend?: boolean}[]> = {
+                      'display_name': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'short_name': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'industry': [
+                        { label: "互联网/IT", prompt: "1", autoSend: true },
+                        { label: "人工智能", prompt: "2", autoSend: true },
+                        { label: "金融/投资", prompt: "3", autoSend: true },
+                        { label: "⏭️ 跳过", prompt: "跳过", autoSend: true },
+                      ],
+                      'company_size': [
+                        { label: "0-20人", prompt: "1", autoSend: true },
+                        { label: "20-99人", prompt: "2", autoSend: true },
+                        { label: "100-499人", prompt: "3", autoSend: true },
+                        { label: "500+", prompt: "4", autoSend: true },
+                        { label: "⏭️ 跳过", prompt: "跳过", autoSend: true },
+                      ],
+                      'funding_stage': [
+                        { label: "未融资", prompt: "1", autoSend: true },
+                        { label: "A轮", prompt: "3", autoSend: true },
+                        { label: "已上市", prompt: "6", autoSend: true },
+                        { label: "不需要融资", prompt: "7", autoSend: true },
+                        { label: "⏭️ 跳过", prompt: "跳过", autoSend: true },
+                      ],
+                      'detail_address': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'contact_name': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'hr_phone': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'description': [
+                        { label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true },
+                      ],
+                      'benefits': [
+                        { label: "全选", prompt: "1,2,3,4,5,6,7,8", autoSend: true },
+                        { label: "基础福利", prompt: "1,3,8", autoSend: true },
+                        { label: "⏭️ 跳过", prompt: "跳过", autoSend: true },
+                      ],
+                    };
+                    return enterpriseFieldPrompts[currentField.key] || [{ label: "⏭️ 跳过此项", prompt: "跳过", autoSend: true }];
+                  }
+                  return [];
+                }
+                
                 // 非完善简历模式
                 if (!selectedTask) {
                   // 通用 AI 助手 - 显示找工作等快捷入口
@@ -12157,9 +14510,7 @@ const AIAssistantView = () => {
                 const taskType = selectedTask.todo_type || selectedTask.type || '';
                 
                 // 完善简历任务（但还没开始引导）
-                if (taskType === 'profile_complete' || 
-                    taskTitle === '完善简历资料' ||
-                    (taskTitle.includes('完善') && (taskTitle.includes('简历') || taskTitle.includes('资料')))) {
+                if (taskType === 'profile_complete' || taskTitle === '完善简历资料') {
                   return [
                     { label: "开始填写简历", prompt: "开始填写简历", autoSend: true },
                   ];
@@ -12280,19 +14631,379 @@ const ApplyDetailView = () => {
   );
 };
 
-// --- 招聘发布任务详情页 (EmployerPostView) - 重定向到 AI 助手 ---
-const EmployerPostView = () => {
+// --- 职位管理页 (JobManagementView) ---
+const JobManagementView = () => {
   const navigate = useNavigate();
-  
+  const { user } = useAuth();
+  const userId = user?.id || 0;
+
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'active' | 'closed' | 'draft'>('all');
+  const [searchText, setSearchText] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [editingJob, setEditingJob] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 2500);
+  };
+
+  // 加载岗位
+  const fetchJobs = async () => {
+    setLoading(true);
+    try {
+      const data = await getMyJobs(userId);
+      setJobs(data || []);
+    } catch (e) {
+      console.error('加载岗位失败:', e);
+      setJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // 重定向到 AI 助手页面并启动招聘发布任务
-    navigate('/ai-assistant?taskType=post', { replace: true });
-  }, [navigate]);
+    if (userId) fetchJobs();
+  }, [userId]);
+
+  // 过滤
+  const filteredJobs = jobs.filter(j => {
+    if (filter !== 'all' && j.status !== filter) return false;
+    if (searchText && !j.title?.toLowerCase().includes(searchText.toLowerCase()) && !j.company?.toLowerCase().includes(searchText.toLowerCase())) return false;
+    return true;
+  });
+
+  // 统计
+  const activeCount = jobs.filter(j => j.status === 'active').length;
+  const closedCount = jobs.filter(j => j.status === 'closed').length;
+  const totalViews = jobs.reduce((s, j) => s + (j.view_count || 0), 0);
+  const totalApplies = jobs.reduce((s, j) => s + (j.apply_count || 0), 0);
+
+  // 删除
+  const handleDelete = async (jobId: number) => {
+    try {
+      await deleteJob(jobId, userId);
+      setJobs(prev => prev.filter(j => j.id !== jobId));
+      setDeleteConfirm(null);
+      showToast('岗位已删除');
+    } catch (e) {
+      console.error('删除失败:', e);
+      showToast('删除失败，请重试');
+    }
+  };
+
+  // 切换状态
+  const handleToggleStatus = async (job: any) => {
+    const newStatus = job.status === 'active' ? 'closed' : 'active';
+    try {
+      await updateJob(job.id, { status: newStatus, user_id: userId } as any);
+      setJobs(prev => prev.map(j => j.id === job.id ? { ...j, status: newStatus } : j));
+      showToast(newStatus === 'active' ? '岗位已上线' : '岗位已关闭');
+    } catch (e) {
+      console.error('状态更新失败:', e);
+      showToast('操作失败，请重试');
+    }
+  };
+
+  // 编辑
+  const openEdit = (job: any) => {
+    setEditingJob(job);
+    setEditForm({
+      title: job.title || '',
+      company: job.company || '',
+      location: job.location || '',
+      description: job.description || '',
+      salary_min: job.salary_min || '',
+      salary_max: job.salary_max || '',
+      tags: (job.tags || []).join(', '),
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingJob) return;
+    setSaving(true);
+    try {
+      const tagsList = editForm.tags ? editForm.tags.split(/[,，]/).map((t: string) => t.trim()).filter(Boolean) : [];
+      await updateJob(editingJob.id, {
+        title: editForm.title,
+        company: editForm.company,
+        location: editForm.location,
+        description: editForm.description,
+        salary_min: editForm.salary_min ? Number(editForm.salary_min) : undefined,
+        salary_max: editForm.salary_max ? Number(editForm.salary_max) : undefined,
+        tags: tagsList,
+        user_id: userId,
+      } as any);
+      setJobs(prev => prev.map(j => j.id === editingJob.id ? {
+        ...j,
+        ...editForm,
+        salary_min: editForm.salary_min ? Number(editForm.salary_min) : j.salary_min,
+        salary_max: editForm.salary_max ? Number(editForm.salary_max) : j.salary_max,
+        tags: tagsList,
+      } : j));
+      setEditingJob(null);
+      showToast('岗位信息已更新');
+    } catch (e) {
+      console.error('保存失败:', e);
+      showToast('保存失败，请重试');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const formatSalary = (min?: number, max?: number) => {
+    if (!min && !max) return '面议';
+    if (min && max) return `${(min / 1000).toFixed(0)}k - ${(max / 1000).toFixed(0)}k`;
+    if (min) return `${(min / 1000).toFixed(0)}k 起`;
+    return `最高 ${((max || 0) / 1000).toFixed(0)}k`;
+  };
+
+  const statusLabel = (s: string) => {
+    if (s === 'active') return { text: '招聘中', color: 'bg-emerald-100 text-emerald-700' };
+    if (s === 'closed') return { text: '已关闭', color: 'bg-slate-100 text-slate-500' };
+    if (s === 'draft') return { text: '草稿', color: 'bg-amber-100 text-amber-700' };
+    return { text: s, color: 'bg-slate-100 text-slate-500' };
+  };
 
   return (
-    <div className="pt-40 text-center">
-      <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
-      <p className="text-slate-500">正在跳转到 AI 助手...</p>
+    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+      {/* 页面头部 */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
+        <div>
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-4 font-black transition-colors group text-sm">
+            <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回
+          </button>
+          <h1 className="text-4xl font-black text-slate-900 flex items-center gap-4">
+            <div className="p-3 bg-indigo-600 text-white rounded shadow-xl"><Briefcase size={32} /></div>
+            职位管理
+          </h1>
+          <p className="text-slate-500 font-medium mt-2">管理您发布的所有招聘岗位</p>
+        </div>
+        <button
+          onClick={() => navigate('/ai-assistant?taskType=post')}
+          className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-200 active:scale-95 transition-all"
+        >
+          <Plus size={20} /> 发布新岗位
+        </button>
+      </div>
+
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <Briefcase size={18} className="text-indigo-500" />
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">总岗位</span>
+          </div>
+          <div className="text-3xl font-black text-slate-900">{jobs.length}</div>
+        </div>
+        <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <Play size={18} className="text-emerald-500" />
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">招聘中</span>
+          </div>
+          <div className="text-3xl font-black text-emerald-600">{activeCount}</div>
+        </div>
+        <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <Eye size={18} className="text-indigo-500" />
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">总浏览</span>
+          </div>
+          <div className="text-3xl font-black text-slate-900">{totalViews}</div>
+        </div>
+        <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-3 mb-3">
+            <Users size={18} className="text-indigo-500" />
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider">总投递</span>
+          </div>
+          <div className="text-3xl font-black text-slate-900">{totalApplies}</div>
+        </div>
+      </div>
+
+      {/* 搜索和过滤栏 */}
+      <div className="bg-white rounded-lg border border-slate-100 p-4 mb-6 flex flex-col md:flex-row gap-3 items-center shadow-sm">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="搜索岗位名称或公司..."
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 placeholder:text-slate-400"
+          />
+        </div>
+        <div className="flex gap-2">
+          {[
+            { key: 'all' as const, label: '全部', count: jobs.length },
+            { key: 'active' as const, label: '招聘中', count: activeCount },
+            { key: 'closed' as const, label: '已关闭', count: closedCount },
+          ].map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-4 py-2 rounded text-xs font-black transition-all ${
+                filter === f.key
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                  : 'text-slate-500 hover:bg-slate-50 border border-slate-200'
+              }`}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 列表 */}
+      {loading ? (
+        <div className="text-center py-20">
+          <Loader2 className="mx-auto animate-spin text-indigo-600 mb-3" size={24} />
+          <p className="text-sm text-slate-400">加载中...</p>
+        </div>
+      ) : filteredJobs.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-lg border border-slate-100 shadow-sm">
+          <Briefcase className="mx-auto text-slate-300 mb-4" size={40} />
+          <p className="text-slate-900 font-black mb-1">
+            {jobs.length === 0 ? '还没有发布过岗位' : '没有符合条件的岗位'}
+          </p>
+          <p className="text-slate-500 text-sm mb-6 font-medium">
+            {jobs.length === 0 ? '通过 AI 助手，一句话即可发布招聘岗位' : '尝试调整筛选条件'}
+          </p>
+          {jobs.length === 0 && (
+            <button
+              onClick={() => navigate('/ai-assistant?taskType=post')}
+              className="bg-indigo-600 text-white px-6 py-3 rounded font-black text-sm inline-flex items-center gap-2 shadow-xl shadow-indigo-200 active:scale-95 transition-all"
+            >
+              <Sparkles size={16} /> 开始智能招聘
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredJobs.map((job) => {
+            const st = statusLabel(job.status);
+            return (
+              <div 
+                key={job.id} 
+                onClick={() => navigate(`/employer/post/${job.id}`)}
+                className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-5 w-full md:w-auto">
+                  <div className={`w-14 h-14 flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 transition-transform group-hover:scale-105 flex-shrink-0 ${
+                    job.status === 'active' ? 'bg-indigo-600 text-white ring-indigo-50' : 'bg-slate-400 text-white ring-slate-100'
+                  }`}>
+                    <Briefcase size={24} />
+                  </div>
+                  <div>
+                    <div className="text-base font-black text-slate-900 tracking-tight">{job.title}</div>
+                    <div className="text-xs font-bold text-slate-500 mt-0.5">{job.company} · {job.location}</div>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                        {formatSalary(job.salary_min, job.salary_max)}
+                      </span>
+                      <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${st.color}`}>{st.text}</span>
+                      {job.tags && job.tags.slice(0, 3).map((tag: string) => (
+                        <span key={tag} className="text-xs font-black uppercase text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">{tag}</span>
+                      ))}
+                      {job.tags && job.tags.length > 3 && <span className="text-xs text-slate-400 font-bold">+{job.tags.length - 3}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
+                  <div className="text-right">
+                    <div className="flex items-center gap-4 justify-end text-xs font-black text-slate-400 uppercase tracking-widest">
+                      <span className="flex items-center gap-1"><Eye size={12} /> {job.view_count || 0}</span>
+                      <span className="flex items-center gap-1"><Users size={12} /> {job.apply_count || 0}</span>
+                    </div>
+                    <div className="text-xs text-slate-400 font-bold mt-1">{job.created_at ? new Date(job.created_at).toLocaleDateString('zh-CN') : '-'}</div>
+                  </div>
+                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => openEdit(job)} className="p-2.5 bg-white text-slate-400 hover:text-indigo-600 rounded border border-slate-100 hover:border-indigo-200 transition-all" title="编辑"><Edit3 size={16} /></button>
+                    <button onClick={() => handleToggleStatus(job)} className={`p-2.5 bg-white rounded border border-slate-100 transition-all ${job.status === 'active' ? 'text-slate-400 hover:text-amber-600 hover:border-amber-200' : 'text-slate-400 hover:text-emerald-600 hover:border-emerald-200'}`} title={job.status === 'active' ? '关闭' : '上线'}>{job.status === 'active' ? <Square size={16} /> : <Play size={16} />}</button>
+                    <button onClick={() => setDeleteConfirm(job.id)} className="p-2.5 bg-white text-slate-400 hover:text-red-600 rounded border border-slate-100 hover:border-red-200 transition-all" title="删除"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deleteConfirm !== null && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-black text-slate-900 mb-2">确认删除</h3>
+            <p className="text-sm text-slate-500 mb-6">删除后岗位信息将无法恢复，确认要删除这个岗位吗？</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
+              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-2.5 rounded bg-red-600 text-white text-sm font-black hover:bg-red-700 transition-colors">确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑弹窗 */}
+      {editingJob && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditingJob(null)}>
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <Edit3 size={18} className="text-indigo-600" /> 编辑岗位
+              </h3>
+            </div>
+            <div className="px-6 py-5 overflow-y-auto max-h-[60vh] space-y-4">
+              <div>
+                <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">岗位名称</label>
+                <input value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">公司名称</label>
+                  <input value={editForm.company} onChange={e => setEditForm({ ...editForm, company: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">工作地点</label>
+                  <input value={editForm.location} onChange={e => setEditForm({ ...editForm, location: e.target.value })} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">最低薪资（元/月）</label>
+                  <input type="number" value={editForm.salary_min} onChange={e => setEditForm({ ...editForm, salary_min: e.target.value })} placeholder="8000" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">最高薪资（元/月）</label>
+                  <input type="number" value={editForm.salary_max} onChange={e => setEditForm({ ...editForm, salary_max: e.target.value })} placeholder="15000" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">标签（逗号分隔）</label>
+                <input value={editForm.tags} onChange={e => setEditForm({ ...editForm, tags: e.target.value })} placeholder="React, Python, 远程" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-black text-slate-400 mb-1.5 block uppercase tracking-wider">岗位描述</label>
+                <textarea value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} rows={5} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 resize-none" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+              <button onClick={() => setEditingJob(null)} className="flex-1 py-2.5 rounded border border-slate-200 text-sm font-black text-slate-600 hover:bg-slate-50 transition-colors">取消</button>
+              <button onClick={handleSaveEdit} disabled={saving} className="flex-1 py-2.5 rounded bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving ? '保存中...' : '保存修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className="fixed top-24 right-6 z-[9999] px-5 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 animate-in slide-in-from-right duration-300 bg-emerald-500 text-white">
+          <CheckCircle2 size={18} /> {toastMsg}
+        </div>
+      )}
     </div>
   );
 };
@@ -12874,8 +15585,10 @@ const TalentPoolView = () => {
 
 // 主应用内容组件
 const AppContent = () => {
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const { isLoggedIn, userRole } = useAuth();
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try { return localStorage.getItem('devnors_dark_mode') === 'true'; } catch { return false; }
+  });
+  const { isLoggedIn, userRole, user } = useAuth();
 
   useEffect(() => {
     if (isDarkMode) {
@@ -12883,10 +15596,18 @@ const AppContent = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    localStorage.setItem('devnors_dark_mode', String(isDarkMode));
   }, [isDarkMode]);
 
   const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
+    const newVal = !isDarkMode;
+    setIsDarkMode(newVal);
+    // 同步保存到后端
+    if (user?.id) {
+      import('./services/apiService').then(m => {
+        m.updateSettings({ dark_mode: newVal }, user.id).catch(() => {});
+      });
+    }
   };
 
   return (
@@ -12913,7 +15634,7 @@ const AppContent = () => {
           <Route path="/memory/input" element={<MemoryInputView />} />
           <Route path="/employer/home" element={<EnterpriseHomeView />} />
           <Route path="/employer/talent/:talentId" element={<TalentDetailView />} />
-          <Route path="/employer/post" element={<EmployerPostView />} />
+          <Route path="/employer/post" element={<JobManagementView />} />
           <Route path="/employer/post/:postId" element={<JobPostDetailView />} />
           <Route path="/invite" element={<InviteFriendView />} />
           <Route path="/candidate/delivery" element={<AIDeliveryView />} />
