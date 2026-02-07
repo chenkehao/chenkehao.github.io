@@ -989,6 +989,16 @@ export const getAccountTier = async (userId: number = 1): Promise<any> => {
   return request(`/settings/account-tier?user_id=${userId}`);
 };
 
+/**
+ * 升级/变更账户等级
+ */
+export const upgradeAccountTier = async (userId: number, tier: string, billingCycle: string = 'annual'): Promise<any> => {
+  return request(`/settings/account-tier/upgrade?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ tier, billing_cycle: billingCycle }),
+  });
+};
+
 export default {
   // Auth
   login,

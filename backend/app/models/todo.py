@@ -14,32 +14,33 @@ from app.database import Base
 
 class TodoStatus(str, enum.Enum):
     """任务状态"""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
 
 
 class TodoPriority(str, enum.Enum):
     """任务优先级"""
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
 
 
 class TodoSource(str, enum.Enum):
     """任务来源"""
-    USER = "user"       # 用户创建
-    AGENT = "agent"     # AI 智能体分发
-    SYSTEM = "system"   # 系统生成
+    USER = "USER"       # 用户创建
+    AGENT = "AGENT"     # AI 智能体分发
+    SYSTEM = "SYSTEM"   # 系统生成
 
 
 class TodoType(str, enum.Enum):
     """任务类型"""
-    CANDIDATE = "candidate"   # 候选人相关
-    EMPLOYER = "employer"     # 企业相关
-    SYSTEM = "system"         # 系统任务
+    CANDIDATE = "CANDIDATE"   # 候选人相关
+    EMPLOYER = "EMPLOYER"     # 企业相关
+    RECRUIT = "RECRUIT"       # 智能招聘任务（招聘方专属）
+    SYSTEM = "SYSTEM"         # 系统任务
 
 
 class Todo(Base):

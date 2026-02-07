@@ -903,12 +903,13 @@ async def get_todos(
         "title": t.title,
         "task": t.title,  # 兼容前端字段名
         "description": t.description or "",
-        "status": t.status.value if t.status else "pending",
-        "priority": t.priority.value.capitalize() if t.priority else "Medium",
+        "status": t.status.value.upper() if t.status else "PENDING",
+        "priority": t.priority.value.upper() if t.priority else "MEDIUM",
         "progress": t.progress or 0,
-        "source": t.source.value if t.source else "user",
+        "source": t.source.value.upper() if t.source else "USER",
         "icon": t.icon or "Calendar",
-        "type": t.todo_type.value if t.todo_type else "system",
+        "todo_type": t.todo_type.value.upper() if t.todo_type else "SYSTEM",
+        "type": t.todo_type.value.upper() if t.todo_type else "SYSTEM",
         "aiAdvice": t.ai_advice or "",
         "steps": json.loads(t.steps) if isinstance(t.steps, str) else (t.steps or []),
         "dueDate": t.due_date.strftime("%Y-%m-%d") if t.due_date else None,
@@ -925,19 +926,19 @@ async def create_todo(
     """创建待办任务"""
     # 解析优先级
     try:
-        priority = TodoPriority(todo.priority.lower())
+        priority = TodoPriority(todo.priority.upper())
     except ValueError:
         priority = TodoPriority.MEDIUM
     
     # 解析来源
     try:
-        source = TodoSource(todo.source.lower())
+        source = TodoSource(todo.source.upper())
     except ValueError:
         source = TodoSource.USER
     
     # 解析类型
     try:
-        todo_type = TodoType(todo.todo_type.lower())
+        todo_type = TodoType(todo.todo_type.upper())
     except ValueError:
         todo_type = TodoType.SYSTEM
     
@@ -991,8 +992,8 @@ async def update_todo(
     
     if status:
         try:
-            todo.status = TodoStatus(status.lower())
-            if status.lower() == "completed":
+            todo.status = TodoStatus(status.upper())
+            if status.upper() == "COMPLETED":
                 todo.completed_at = datetime.utcnow()
                 todo.progress = 100
         except ValueError:
@@ -1108,9 +1109,10 @@ async def get_tasks(
         "status": status_map.get(t.status, "pending"),
         "time": t.updated_at.strftime("%H:%M") if t.updated_at else "--:--",
         "icon": t.icon or "Calendar",
-        "priority": t.priority.value.capitalize() if t.priority else "Medium",
-        "source": t.source.value if t.source else "user",
-        "type": t.todo_type.value if t.todo_type else "system",
+        "priority": t.priority.value.upper() if t.priority else "MEDIUM",
+        "source": t.source.value.upper() if t.source else "USER",
+        "todo_type": t.todo_type.value.upper() if t.todo_type else "SYSTEM",
+        "type": t.todo_type.value.upper() if t.todo_type else "SYSTEM",
     } for t in todos]
 
 
