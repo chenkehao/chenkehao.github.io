@@ -73,6 +73,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       if (isAuthenticated()) {
         const userData = await getCurrentUser();
+        // 统一 account_tier 为大写
+        if (userData.account_tier) {
+          userData.account_tier = userData.account_tier.toUpperCase();
+        }
         setUser(userData);
         // 如果用户角色是 VIEWER，说明需要选择身份
         if (userData.role?.toLowerCase() === 'viewer') {
@@ -100,6 +104,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await apiLogin({ email, password });
       const userData = await getCurrentUser();
+      // 统一 account_tier 为大写
+      if (userData.account_tier) {
+        userData.account_tier = userData.account_tier.toUpperCase();
+      }
       setUser(userData);
       
       // 检查是否需要选择身份
@@ -145,6 +153,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (isAuthenticated()) {
       try {
         const userData = await getCurrentUser();
+        // 统一 account_tier 为大写
+        if (userData.account_tier) {
+          userData.account_tier = userData.account_tier.toUpperCase();
+        }
         setUser(userData);
       } catch (error) {
         console.error('刷新用户信息失败:', error);

@@ -43,7 +43,8 @@ import {
   getMyJobs,
   deleteJob,
   updateJob,
-  getJobDetail
+  getJobDetail,
+  upgradeAccountTier
 } from './services/apiService';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -710,8 +711,30 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
                   <div className="px-4 py-3 border-b border-slate-100">
-                    <div className="font-bold text-slate-900">{user?.name}</div>
-                    <div className="text-xs text-slate-500">UID: {user?.id}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-slate-900">{user?.name}</div>
+                      <span className="text-[10px] text-slate-400 font-mono">#{user?.id}</span>
+                    </div>
+                    <Link
+                      to="/pricing"
+                      onClick={() => setShowUserMenu(false)}
+                      className={`mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        user?.account_tier === 'ULTRA'
+                          ? 'bg-gradient-to-r from-rose-50 to-amber-50 text-rose-600 border border-rose-100'
+                          : user?.account_tier === 'PRO'
+                          ? 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-600 border border-indigo-100'
+                          : 'bg-slate-50 text-slate-600 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                      }`}
+                    >
+                      <Cpu size={12} />
+                      <span>
+                        {user?.account_tier === 'ULTRA' ? 'Devnors 1.0 Ultra' : user?.account_tier === 'PRO' ? 'Devnors 1.0 Pro' : 'Devnors 1.0'}
+                      </span>
+                      <span className="ml-auto text-[10px] opacity-60">
+                        {user?.account_tier === 'ULTRA' ? '旗舰版' : user?.account_tier === 'PRO' ? '专业版' : '基础版'}
+                      </span>
+                      {user?.account_tier !== 'ULTRA' && <Zap size={10} className="text-amber-500 ml-0.5" />}
+                    </Link>
                   </div>
                   <Link 
                     to="/settings" 
@@ -3551,7 +3574,7 @@ const TokenManagementView = () => {
 // --- 工作台页面 ---
 const WorkbenchView = () => {
   const navigate = useNavigate();
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, userRole } = useAuth();
   
   // 使用当前登录用户的 ID 获取数据（纯动态数据）
   const userId = user?.id || 0;
@@ -3590,7 +3613,26 @@ const WorkbenchView = () => {
     }
   };
   
-  const todosWithIcons = todosData.map((todo: any) => {
+  // 根据用户角色过滤任务
+  const roleFilteredTodos = useMemo(() => {
+    if (!todosData || todosData.length === 0) return [];
+    const recruitKeywords = ['智能招聘', '企业认证', '企业资料', '筛选候选人', '安排面试', '人才分析'];
+    const candidateKeywords = ['个人认证', '简历', '求职', '职位推荐'];
+    return todosData.filter((todo: any) => {
+      const todoType = (todo.todo_type || todo.type || '').toUpperCase();
+      const title = todo.title || todo.task || '';
+      if (userRole === 'candidate') {
+        if (todoType === 'RECRUIT' || todoType === 'EMPLOYER') return false;
+        if (recruitKeywords.some(kw => title.includes(kw))) return false;
+      } else if (userRole === 'employer' || userRole === 'recruiter') {
+        if (todoType === 'CANDIDATE') return false;
+        if (candidateKeywords.some(kw => title.includes(kw))) return false;
+      }
+      return true;
+    });
+  }, [todosData, userRole]);
+  
+  const todosWithIcons = roleFilteredTodos.map((todo: any) => {
     const priorityLower = (todo.priority || '').toLowerCase();
     return {
       ...todo,
@@ -3815,12 +3857,30 @@ const TodoListView = () => {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<'all' | 'user' | 'agent'>('all');
   
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, userRole } = useAuth();
   const userId = user?.id || 0;
   
   // 使用 API 获取待办事项数据（纯动态数据）
   const { data: todosData, loading: todosLoading } = useTodos(userId);
-  const allTodos = todosData;
+  
+  // 根据用户角色过滤任务
+  const allTodos = useMemo(() => {
+    if (!todosData || todosData.length === 0) return [];
+    const recruitKeywords = ['智能招聘', '企业认证', '企业资料', '筛选候选人', '安排面试', '人才分析'];
+    const candidateKeywords = ['个人认证', '简历', '求职', '职位推荐'];
+    return todosData.filter((todo: any) => {
+      const todoType = (todo.todo_type || todo.type || '').toUpperCase();
+      const title = todo.title || todo.task || '';
+      if (userRole === 'candidate') {
+        if (todoType === 'RECRUIT' || todoType === 'EMPLOYER') return false;
+        if (recruitKeywords.some(kw => title.includes(kw))) return false;
+      } else if (userRole === 'employer' || userRole === 'recruiter') {
+        if (todoType === 'CANDIDATE') return false;
+        if (candidateKeywords.some(kw => title.includes(kw))) return false;
+      }
+      return true;
+    });
+  }, [todosData, userRole]);
   
   const filteredTodos = useMemo(() => {
     if (filter === 'all') return allTodos;
@@ -5034,7 +5094,9 @@ const ModelsPage = () => {
 // --- 定价方案页面 ---
 const PricingView = () => {
   const navigate = useNavigate();
-  const { isLoggedIn, userRole } = useAuth();
+  const { user, isLoggedIn, userRole, refreshUser } = useAuth();
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null);
 
   // 处理需要登录的操作
   const handleAuthAction = (plan: string) => {
@@ -5046,11 +5108,41 @@ const PricingView = () => {
       navigate('/login', { state: { from: '/tokens', plan } });
     }
   };
+  
+  // 处理升级操作
+  const handleUpgrade = async (tierName: string) => {
+    if (!isLoggedIn || !user?.id) {
+      navigate('/login', { state: { from: '/pricing', plan: tierName } });
+      return;
+    }
+    const tierMap: Record<string, string> = {
+      'Devnors 1.0': 'FREE',
+      'Devnors 1.0 Pro': 'PRO',
+      'Devnors 1.0 Ultra': 'ULTRA',
+    };
+    const tier = tierMap[tierName] || 'FREE';
+    setUpgrading(true);
+    try {
+      await upgradeAccountTier(user.id, tier, billingCycle);
+      await refreshUser();
+      setUpgradeSuccess(tierName);
+      setTimeout(() => setUpgradeSuccess(null), 4000);
+    } catch (e) {
+      console.error('升级失败', e);
+    } finally {
+      setUpgrading(false);
+    }
+  };
+  
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('annual');
 
+  const currentTier = user?.account_tier || 'FREE';
+  const tierOrder: Record<string, number> = { FREE: 0, PRO: 1, ULTRA: 2 };
+  
   const plans = [
     {
       name: 'Devnors 1.0',
+      tier: 'FREE',
       price: billingCycle === 'annual' ? '¥0' : '¥0',
       period: '/月',
       description: '基础版 · 入门体验',
@@ -5065,12 +5157,12 @@ const PricingView = () => {
         { name: '高阶对接算法', value: '-', included: false },
       ],
       cta: '免费使用',
-      current: true,
       color: 'border-slate-200',
       btnColor: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
     },
     {
       name: 'Devnors 1.0 Pro',
+      tier: 'PRO',
       price: billingCycle === 'annual' ? '¥350' : '¥450',
       period: billingCycle === 'annual' ? '/月' : '/月',
       description: '专业版 · 性能平衡',
@@ -5086,12 +5178,12 @@ const PricingView = () => {
         { name: '高阶对接算法', value: '-', included: false },
       ],
       cta: '立即升级',
-      current: false,
       color: 'border-indigo-200 shadow-xl',
       btnColor: 'bg-indigo-600 text-white hover:bg-indigo-700',
     },
     {
       name: 'Devnors 1.0 Ultra',
+      tier: 'ULTRA',
       price: billingCycle === 'annual' ? '¥2,000' : '¥2,500',
       period: billingCycle === 'annual' ? '/月' : '/月',
       description: '旗舰版 · 无限可能',
@@ -5107,14 +5199,60 @@ const PricingView = () => {
         { name: '定制化微调', value: '✓', included: true },
       ],
       cta: '立即升级',
-      current: false,
       color: 'border-rose-200 shadow-xl',
       btnColor: 'bg-rose-600 text-white hover:bg-rose-700',
     },
   ];
 
+  const getButtonLabel = (plan: typeof plans[0]) => {
+    if (!isLoggedIn) return plan.cta;
+    if (plan.tier === currentTier) return '当前方案';
+    if (tierOrder[plan.tier] > tierOrder[currentTier]) return '立即升级';
+    return '切换方案';
+  };
+
+  const isCurrentPlan = (plan: typeof plans[0]) => isLoggedIn && plan.tier === currentTier;
+
   return (
     <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      {/* 升级成功提示 */}
+      {upgradeSuccess && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle2 size={18} />
+          <span className="font-bold">已成功升级到 {upgradeSuccess}！</span>
+        </div>
+      )}
+      
+      {/* 当前方案 banner */}
+      {isLoggedIn && (
+        <div className={`mb-8 p-4 rounded-xl border flex items-center justify-between ${
+          currentTier === 'ULTRA'
+            ? 'bg-gradient-to-r from-rose-50 to-amber-50 border-rose-100'
+            : currentTier === 'PRO'
+            ? 'bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-100'
+            : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <Cpu size={18} className={
+              currentTier === 'ULTRA' ? 'text-rose-600' : currentTier === 'PRO' ? 'text-indigo-600' : 'text-slate-500'
+            } />
+            <div>
+              <span className="font-bold text-slate-900">当前方案：</span>
+              <span className={`font-black ${
+                currentTier === 'ULTRA' ? 'text-rose-600' : currentTier === 'PRO' ? 'text-indigo-600' : 'text-slate-600'
+              }`}>
+                {currentTier === 'ULTRA' ? 'Devnors 1.0 Ultra · 旗舰版' : currentTier === 'PRO' ? 'Devnors 1.0 Pro · 专业版' : 'Devnors 1.0 · 基础版'}
+              </span>
+            </div>
+          </div>
+          {currentTier !== 'ULTRA' && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 font-bold">
+              <Zap size={12} /> 升级解锁更多能力
+            </div>
+          )}
+        </div>
+      )}
+      
       <div className="text-center mb-12">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-indigo-100">
           <Sparkle size={16} /> 模型定价
@@ -5154,11 +5292,16 @@ const PricingView = () => {
         {plans.map((plan, idx) => (
           <div 
             key={idx}
-            className={`relative bg-white rounded-2xl p-8 border-2 ${plan.color} flex flex-col`}
+            className={`relative bg-white rounded-2xl p-8 border-2 ${isCurrentPlan(plan) ? 'ring-2 ring-indigo-400 ' : ''}${plan.color} flex flex-col`}
           >
             {plan.popular && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
                 最具性价比
+              </div>
+            )}
+            {isCurrentPlan(plan) && (
+              <div className="absolute -top-4 right-4 bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold">
+                当前方案
               </div>
             )}
             
@@ -5196,10 +5339,19 @@ const PricingView = () => {
             </div>
 
             <button
-              onClick={() => handleAuthAction(plan.name)}
-              className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${plan.btnColor}`}
+              onClick={() => isCurrentPlan(plan) ? undefined : handleUpgrade(plan.name)}
+              disabled={isCurrentPlan(plan) || upgrading}
+              className={`w-full py-4 rounded-xl font-bold text-sm transition-all ${
+                isCurrentPlan(plan) 
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                  : upgrading 
+                  ? 'bg-slate-200 text-slate-400 cursor-wait' 
+                  : plan.btnColor
+              }`}
             >
-              {isLoggedIn ? (plan.current ? '当前方案' : '立即升级') : plan.cta}
+              {upgrading ? (
+                <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> 处理中...</span>
+              ) : getButtonLabel(plan)}
             </button>
           </div>
         ))}
@@ -9337,16 +9489,21 @@ const AIAssistantView = () => {
   // 按角色过滤的任务列表（用于统计）
   const roleFilteredTasks = useMemo(() => {
     if (!tasks || tasks.length === 0) return [];
+    const recruitKeywords = ['智能招聘', '企业认证', '企业资料', '筛选候选人', '安排面试', '人才分析'];
+    const candidateKeywords = ['个人认证', '简历', '求职', '职位推荐'];
     return tasks.filter((task: any) => {
       const taskType = (task.todo_type || task.type || '').toUpperCase();
+      const title = task.title || task.task || '';
       
       // 按用户角色过滤任务类型
       if (userRole === 'employer' || userRole === 'recruiter') {
-        // 企业/招聘者只看EMPLOYER类型和SYSTEM类型任务
+        // 企业/招聘者不看CANDIDATE类型任务
         if (taskType === 'CANDIDATE') return false;
+        if (candidateKeywords.some(kw => title.includes(kw))) return false;
       } else if (userRole === 'candidate') {
-        // 求职者只看CANDIDATE类型和SYSTEM类型任务
-        if (taskType === 'EMPLOYER') return false;
+        // 求职者不看RECRUIT和EMPLOYER类型任务
+        if (taskType === 'RECRUIT' || taskType === 'EMPLOYER') return false;
+        if (recruitKeywords.some(kw => title.includes(kw))) return false;
       }
       return true;
     });
@@ -9370,7 +9527,13 @@ const AIAssistantView = () => {
     }
   }, [roleFilteredTasks, taskFilter]);
   
-  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
+  const allModelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
+  const isModelAvailable = (model: string) => {
+    const tier = user?.account_tier || 'FREE';
+    if (tier === 'ULTRA') return true;
+    if (tier === 'PRO') return model !== 'Devnors 1.0 Ultra';
+    return model === 'Devnors 1.0';
+  };
   
   // 处理 URL 参数中的任务 ID
   useEffect(() => {
@@ -14617,13 +14780,22 @@ ${JSON.stringify(currentJobs, null, 2)}
             <div className="flex items-center gap-3">
               <select 
                 value={selectedModel} 
-                onChange={(e) => setSelectedModel(e.target.value)}
+                onChange={(e) => {
+                  if (isModelAvailable(e.target.value)) setSelectedModel(e.target.value);
+                }}
                 className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
               >
-                {modelOptions.map(model => (
-                  <option key={model} value={model}>{model}</option>
+                {allModelOptions.map(model => (
+                  <option key={model} value={model} disabled={!isModelAvailable(model)}>
+                    {model}{!isModelAvailable(model) ? ' (需升级)' : ''}
+                  </option>
                 ))}
               </select>
+              {user?.account_tier !== 'ULTRA' && (
+                <Link to="/pricing" className="text-amber-500 hover:text-amber-600 transition-colors" title="升级方案">
+                  <Zap size={14} />
+                </Link>
+              )}
               <button 
                 onClick={handleResetChat} 
                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all" 
@@ -15856,6 +16028,7 @@ const InviteFriendView = () => {
 // --- AI投递任务详情页 (AIDeliveryView) ---
 const AIDeliveryView = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [selectedJob, setSelectedJob] = useState(RECOMMENDED_JOBS[0]);
   const [isDelivering, setIsDelivering] = useState(false);
   const [deliveryStatus, setDeliveryStatus] = useState<'idle' | 'preparing' | 'delivering' | 'completed'>('idle');
@@ -15866,7 +16039,13 @@ const AIDeliveryView = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
   
-  const modelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
+  const allModelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
+  const isModelAvailable = (model: string) => {
+    const tier = user?.account_tier || 'FREE';
+    if (tier === 'ULTRA') return true;
+    if (tier === 'PRO') return model !== 'Devnors 1.0 Ultra';
+    return model === 'Devnors 1.0';
+  };
 
   const handleDelivery = async () => {
     setIsDelivering(true);
@@ -16032,13 +16211,22 @@ const AIDeliveryView = () => {
               <div className="flex items-center gap-2">
                 <select 
                   value={selectedModel} 
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  onChange={(e) => {
+                    if (isModelAvailable(e.target.value)) setSelectedModel(e.target.value);
+                  }}
                   className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer"
                 >
-                  {modelOptions.map(model => (
-                    <option key={model} value={model}>{model}</option>
+                  {allModelOptions.map(model => (
+                    <option key={model} value={model} disabled={!isModelAvailable(model)}>
+                      {model}{!isModelAvailable(model) ? ' (需升级)' : ''}
+                    </option>
                   ))}
                 </select>
+                {user?.account_tier !== 'ULTRA' && (
+                  <Link to="/pricing" className="text-amber-500 hover:text-amber-600 transition-colors" title="升级方案">
+                    <Zap size={14} />
+                  </Link>
+                )}
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-slate-50">

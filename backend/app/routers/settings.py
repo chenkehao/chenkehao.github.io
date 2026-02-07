@@ -1311,6 +1311,72 @@ async def get_account_tier(
     }
 
 
+class UpgradeTierRequest(BaseModel):
+    tier: str
+    billing_cycle: str = "annual"
+
+
+@router.post("/account-tier/upgrade")
+async def upgrade_account_tier(
+    req: UpgradeTierRequest,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """升级/变更账户等级"""
+    from app.models.user import User, AccountTier
+    
+    result = await db.execute(
+        select(User).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    old_tier = user.account_tier.value if user.account_tier else "free"
+    
+    # 解析新等级
+    tier_map = {
+        "free": AccountTier.FREE,
+        "pro": AccountTier.PRO,
+        "ultra": AccountTier.ULTRA,
+    }
+    
+    new_tier_key = req.tier.lower()
+    new_tier = tier_map.get(new_tier_key)
+    if not new_tier:
+        raise HTTPException(status_code=400, detail=f"无效的账户等级: {req.tier}")
+    
+    # 更新账户等级
+    user.account_tier = new_tier
+    await db.commit()
+    
+    # 价格映射
+    price_map = {
+        "free": {"monthly": 0, "annual": 0},
+        "pro": {"monthly": 199, "annual": 1990},
+        "ultra": {"monthly": 599, "annual": 5990},
+    }
+    
+    price = price_map.get(new_tier_key, {}).get(req.billing_cycle, 0)
+    
+    tier_names = {
+        "free": "基础版",
+        "pro": "专业版",
+        "ultra": "旗舰版",
+    }
+    
+    return {
+        "success": True,
+        "old_tier": old_tier,
+        "new_tier": new_tier_key,
+        "tier_name": tier_names.get(new_tier_key, "基础版"),
+        "price": price,
+        "billing_cycle": req.billing_cycle,
+        "message": f"已从 {tier_names.get(old_tier, '基础版')} 切换至 {tier_names.get(new_tier_key, '基础版')}"
+    }
+
+
 # === 证件 OCR 审核 API ===
 
 class CertOCRRequest(BaseModel):
