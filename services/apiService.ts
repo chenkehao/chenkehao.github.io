@@ -722,6 +722,18 @@ export const chatWithAI = async (data: {
   });
 };
 
+/**
+ * 获取个性化招聘建议（基于企业资料由大模型生成）
+ */
+export const getRecruitmentSuggestions = async (userId: number = 1): Promise<{
+  company_name: string;
+  company_summary: string;
+  suggestions: string[];
+  enterprise_context: string;
+}> => {
+  return request(`/public/recruitment-suggestions?user_id=${userId}`);
+};
+
 // ==================== 设置相关 API ====================
 
 /**
@@ -788,23 +800,27 @@ export const createPersonalCertification = async (data: {
   level?: string;
   color?: string;
   icon?: string;
+  image_data?: string;
 }, userId: number = 1): Promise<any> => {
-  const params = new URLSearchParams();
-  params.append('name', data.name);
-  params.append('organization', data.organization);
-  params.append('cert_date', data.cert_date);
-  params.append('category', data.category);
-  if (data.degree) params.append('degree', data.degree);
-  if (data.major) params.append('major', data.major);
-  if (data.cert_number) params.append('cert_number', data.cert_number);
-  if (data.score !== undefined) params.append('score', data.score.toString());
-  if (data.level) params.append('level', data.level);
-  if (data.color) params.append('color', data.color);
-  if (data.icon) params.append('icon', data.icon);
-  params.append('user_id', userId.toString());
-  
-  return request(`/settings/personal-certifications?${params.toString()}`, {
+  return request(`/settings/personal-certifications?user_id=${userId}`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: data.name,
+      organization: data.organization,
+      cert_date: data.cert_date || '',
+      category: data.category,
+      degree: data.degree || null,
+      major: data.major || null,
+      cert_number: data.cert_number || null,
+      score: data.score !== undefined ? data.score : null,
+      level: data.level || null,
+      color: data.color || null,
+      icon: data.icon || null,
+      image_data: data.image_data || null,
+    }),
   });
 };
 

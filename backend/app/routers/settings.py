@@ -547,38 +547,75 @@ async def get_personal_certifications(
     return masked_certs
 
 
+class PersonalCertificationRequest(BaseModel):
+    """个人认证创建请求（JSON Body）"""
+    name: str
+    organization: str
+    cert_date: str = ""
+    category: str = "education"
+    degree: Optional[str] = None
+    major: Optional[str] = None
+    cert_number: Optional[str] = None
+    score: Optional[int] = None
+    level: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    image_data: Optional[str] = None  # 审核通过的证件图片 Base64
+
+
 @router.post("/personal-certifications")
 async def create_personal_certification(
-    name: str,
-    organization: str,
-    cert_date: str,
-    category: str = "education",
-    degree: str = None,
-    major: str = None,
-    cert_number: str = None,
-    score: int = None,
-    level: str = None,
-    color: str = None,
-    icon: str = None,
+    request: Optional[PersonalCertificationRequest] = None,
+    name: str = Query(None),
+    organization: str = Query(None),
+    cert_date: str = Query(""),
+    category: str = Query("education"),
+    degree: str = Query(None),
+    major: str = Query(None),
+    cert_number: str = Query(None),
+    score: int = Query(None),
+    level: str = Query(None),
+    color: str = Query(None),
+    icon: str = Query(None),
     user_id: int = Query(1, description="用户ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """创建个人认证"""
-    cert = PersonalCertification(
-        user_id=user_id,
-        name=name,
-        organization=organization,
-        cert_date=cert_date,
-        category=category,
-        degree=degree,
-        major=major,
-        cert_number=cert_number,
-        score=score,
-        level=level,
-        color=color,
-        icon=icon,
-        status=CertificationStatus.VALID
-    )
+    """创建个人认证 - 支持 JSON Body 和 Query Params 两种方式"""
+    # 优先使用 JSON Body
+    if request:
+        cert = PersonalCertification(
+            user_id=user_id,
+            name=request.name,
+            organization=request.organization,
+            cert_date=request.cert_date,
+            category=request.category,
+            degree=request.degree,
+            major=request.major,
+            cert_number=request.cert_number,
+            score=request.score,
+            level=request.level,
+            color=request.color,
+            icon=request.icon,
+            image_data=request.image_data,
+            status=CertificationStatus.VALID
+        )
+    else:
+        # 兼容旧的 Query Params 方式
+        cert = PersonalCertification(
+            user_id=user_id,
+            name=name,
+            organization=organization,
+            cert_date=cert_date,
+            category=category,
+            degree=degree,
+            major=major,
+            cert_number=cert_number,
+            score=score,
+            level=level,
+            color=color,
+            icon=icon,
+            status=CertificationStatus.VALID
+        )
     db.add(cert)
     await db.commit()
     
@@ -1430,10 +1467,26 @@ async def cert_ocr_review(request: CertOCRRequest):
         if result:
             return result
     
-    # 阿里云不可用时的提示
+    # 阿里云不可用时，使用 MiniMax 视觉模型作为 fallback
+    minimax_api_key = settings.minimax_api_key
+    if minimax_api_key:
+        print("[OCR Review] Aliyun OCR not available, falling back to MiniMax Vision...")
+        result = await _call_minimax_vision_ocr(minimax_api_key, image_base64, cert_type, prompt)
+        if result:
+            return result
+    
+    # Gemini 视觉 fallback
+    gemini_api_key = settings.gemini_api_key
+    if gemini_api_key:
+        print("[OCR Review] Trying Gemini Vision fallback...")
+        result = await _call_gemini_vision_ocr(gemini_api_key, image_base64, cert_type, prompt)
+        if result:
+            return result
+    
+    # 所有 OCR 服务都不可用
     return CertOCRResponse(
         success=False,
-        reason='**OCR 服务未配置或调用失败**\n\n请联系管理员检查阿里云 OCR 配置。\n\n您可以输入 "跳过" 跳过当前认证项。'
+        reason='**OCR 服务未配置或调用失败**\n\n请联系管理员检查 AI 服务配置。\n\n您可以输入 "跳过" 跳过当前认证项。'
     )
 
 
@@ -1489,6 +1542,151 @@ async def _get_verified_identity_name(user_id: int) -> Optional[str]:
         return None
 
 
+async def _call_minimax_vision_ocr(api_key: str, image_base64: str, cert_type: str, prompt: str) -> Optional[CertOCRResponse]:
+    """使用 MiniMax 视觉模型进行证件识别"""
+    import httpx
+    import json
+    
+    try:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "abab6.5s-chat",
+                    "messages": messages,
+                    "max_tokens": 2048,
+                    "temperature": 0.1,
+                }
+            )
+            
+            result = response.json()
+            
+            if result.get("choices"):
+                reply = result["choices"][0].get("message", {}).get("content", "")
+                print(f"[MiniMax Vision] Raw response: {reply[:200]}")
+                
+                return _parse_vision_ocr_response(reply, cert_type)
+            else:
+                error_msg = result.get("base_resp", {}).get("status_msg", "Unknown error")
+                print(f"[MiniMax Vision] API error: {error_msg}")
+                return None
+                
+    except Exception as e:
+        print(f"[MiniMax Vision] Error: {e}")
+        return None
+
+
+async def _call_gemini_vision_ocr(api_key: str, image_base64: str, cert_type: str, prompt: str) -> Optional[CertOCRResponse]:
+    """使用 Gemini 视觉模型进行证件识别"""
+    import httpx
+    import json
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
+                json={
+                    "contents": [{
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": image_base64
+                                }
+                            },
+                            {"text": prompt}
+                        ]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "maxOutputTokens": 2048,
+                    }
+                }
+            )
+            
+            result = response.json()
+            
+            if "candidates" in result:
+                reply = result["candidates"][0]["content"]["parts"][0].get("text", "")
+                print(f"[Gemini Vision] Raw response: {reply[:200]}")
+                
+                return _parse_vision_ocr_response(reply, cert_type)
+            else:
+                print(f"[Gemini Vision] API error: {result}")
+                return None
+                
+    except Exception as e:
+        print(f"[Gemini Vision] Error: {e}")
+        return None
+
+
+def _parse_vision_ocr_response(reply: str, cert_type: str) -> Optional[CertOCRResponse]:
+    """解析视觉模型的 OCR 响应"""
+    import json
+    import re
+    
+    try:
+        # 提取 JSON（可能被 markdown 代码块包裹）
+        json_match = re.search(r'\{[\s\S]*\}', reply)
+        if not json_match:
+            print(f"[Vision OCR] No JSON found in response")
+            return CertOCRResponse(
+                success=False,
+                reason='AI 模型未能正确识别证件内容，请上传更清晰的图片。'
+            )
+        
+        data = json.loads(json_match.group())
+        
+        is_valid = data.get("is_valid_certificate", False)
+        confidence = data.get("confidence", 0)
+        reason = data.get("reason", "")
+        extracted_info = data.get("extracted_info", {})
+        detected_side = data.get("detected_side")
+        
+        if is_valid and confidence >= 0.5:
+            return CertOCRResponse(
+                success=True,
+                reason=reason,
+                extracted_info=extracted_info,
+                detected_side=detected_side
+            )
+        else:
+            return CertOCRResponse(
+                success=False,
+                reason=f'**审核未通过**\n\n{reason}\n\n请上传清晰的证件照片。您也可以输入 "跳过" 跳过当前认证项。',
+                extracted_info=extracted_info,
+                detected_side=detected_side
+            )
+    except json.JSONDecodeError as e:
+        print(f"[Vision OCR] JSON parse error: {e}, reply: {reply[:200]}")
+        return CertOCRResponse(
+            success=False,
+            reason='AI 模型返回格式异常，请重试或上传更清晰的图片。'
+        )
+
+
 def _build_cert_ocr_prompt(cert_type: str) -> str:
     """根据证件类型构建 prompt"""
     if cert_type == 'education':
@@ -1542,6 +1740,37 @@ def _build_cert_ocr_prompt(cert_type: str) -> str:
 判断标准：
 1. 图片中必须能看到职业资格证书的典型特征
 2. 以下情况应判定为无效：普通照片、学历证书、身份证、营业执照等
+
+请只返回JSON，不要包含其他文字。'''
+
+    elif cert_type == 'skill_driver':
+        return '''请仔细分析这张图片，判断它是否是一份有效的中国机动车驾驶证。
+
+请按以下 JSON 格式严格返回结果：
+{
+  "is_valid_certificate": true或false,
+  "confidence": 0.0到1.0之间的数字,
+  "reason": "判断原因说明",
+  "certificate_type": "驾驶证/非驾驶证",
+  "extracted_info": {
+    "姓名": "驾驶人姓名",
+    "准驾车型": "准驾车型（如C1、C2、A1、B2等）",
+    "证号": "驾驶证号码",
+    "有效期至": "有效期限",
+    "初次领证": "初次领证日期"
+  }
+}
+
+判断标准：
+1. 图片必须是中国机动车驾驶证（驾照），包含"中华人民共和国机动车驾驶证"字样
+2. 必须能看到驾驶证的典型特征：准驾车型、驾驶人信息、有效期等
+3. 以下情况应判定为无效（is_valid_certificate=false）：
+   - 身份证（正面或反面）—— 这不是驾驶证！
+   - 护照、港澳通行证等其他身份证件
+   - 营业执照、学历证书等其他类型证件
+   - 行驶证（注意区分：行驶证是车辆证件，驾驶证是驾驶人证件）
+   - 普通照片（风景、人物、物品等）
+   - 图片模糊无法辨认
 
 请只返回JSON，不要包含其他文字。'''
 
@@ -2005,8 +2234,67 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                 )
         
         elif cert_type == 'skill_driver':
-            # 驾驶证识别 - 使用阿里云驾驶证识别 API
+            # 驾驶证识别 - 先用通用OCR验证证件类型，再用专用API提取信息
+            import json
+            import re
+            
+            # ======= 第一步：用通用OCR验证图片是否真的是驾驶证 =======
             try:
+                print("[Aliyun OCR] Step 1: Verifying document type with general OCR...")
+                verify_stream = io.BytesIO(image_bytes)
+                verify_request = ocr_models.RecognizeGeneralRequest(body=verify_stream)
+                verify_response = client.recognize_general_with_options(verify_request, runtime)
+                
+                general_content = ''
+                if verify_response.body and verify_response.body.data:
+                    verify_data = json.loads(verify_response.body.data) if isinstance(verify_response.body.data, str) else verify_response.body.data
+                    general_content = verify_data.get('content', '') if isinstance(verify_data, dict) else str(verify_data)
+                    print(f"[Aliyun OCR] General OCR content: {general_content[:500]}")
+                
+                # 检查是否是身份证（必须先排除）
+                id_card_keywords = ['居民身份证', '公民身份号码', '签发机关', '中华人民共和国居民身份证']
+                is_id_card = any(kw in general_content for kw in id_card_keywords)
+                
+                if is_id_card:
+                    print(f"[Aliyun OCR] REJECTED: Document is an ID card, not a driver's license!")
+                    return CertOCRResponse(
+                        success=False,
+                        reason='**这不是驾驶证！**\n\n检测到您上传的是**居民身份证**，请上传**机动车驾驶证**照片。\n\n驾驶证上应包含"中华人民共和国机动车驾驶证"字样、准驾车型等信息。'
+                    )
+                
+                # 检查是否包含驾驶证关键词
+                driver_must_keywords = ['驾驶证', '机动车驾驶', '准驾车型', '驾驶人']
+                driver_support_keywords = ['C1', 'C2', 'A1', 'A2', 'B1', 'B2', '初次领证', '有效期']
+                
+                has_must_keyword = any(kw in general_content for kw in driver_must_keywords)
+                has_support_keyword = any(kw in general_content for kw in driver_support_keywords)
+                
+                if not has_must_keyword and not has_support_keyword:
+                    # 检查是否是其他类型证件
+                    other_cert_keywords = ['营业执照', '毕业证', '学位证', '护照', '通行证', '行驶证', '资格证']
+                    detected_other = [kw for kw in other_cert_keywords if kw in general_content]
+                    if detected_other:
+                        print(f"[Aliyun OCR] REJECTED: Detected other document type: {detected_other}")
+                        return CertOCRResponse(
+                            success=False,
+                            reason=f'**这不是驾驶证！**\n\n检测到您上传的可能是**{detected_other[0]}**，请上传**机动车驾驶证**照片。'
+                        )
+                    else:
+                        print(f"[Aliyun OCR] REJECTED: No driver's license keywords found")
+                        return CertOCRResponse(
+                            success=False,
+                            reason='**未能识别为驾驶证**\n\n图片中未检测到驾驶证相关内容。\n\n请上传清晰的**机动车驾驶证**照片，确保"准驾车型"等关键信息清晰可见。'
+                        )
+                
+                print(f"[Aliyun OCR] Document verified as driver's license (must_keyword={has_must_keyword}, support_keyword={has_support_keyword})")
+                
+            except Exception as verify_err:
+                print(f"[Aliyun OCR] General OCR verification warning: {verify_err}, proceeding with driver license API...")
+            
+            # ======= 第二步：用专用驾驶证API提取详细信息 =======
+            try:
+                print("[Aliyun OCR] Step 2: Extracting details with driver license API...")
+                image_stream.seek(0)
                 request = ocr_models.RecognizeDriverLicenseRequest(
                     body=image_stream
                 )
@@ -2016,7 +2304,6 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                 print(f"[Aliyun OCR] Driver License Response: {result}")
                 
                 if result and result.data:
-                    import json
                     data = json.loads(result.data) if isinstance(result.data, str) else result.data
                     print(f"[Aliyun OCR] Driver License Raw Data: {json.dumps(data, ensure_ascii=False)}")
                     
@@ -2065,17 +2352,25 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                     
                     print(f"[Aliyun OCR] Final Extracted - name: {name}, vehicle_class: {vehicle_class}, valid_period: {valid_period}, license_no: {license_no}")
                     
-                    if name or vehicle_class:
+                    # 严格验证：驾驶证必须有准驾车型（这是驾驶证独有的字段）
+                    if vehicle_class and name:
                         extracted_info = {
                             '姓名': name,
                             '准驾车型': vehicle_class,
                             '有效期至': valid_period,
                             '初次领证': issue_date,
-                            '证号': license_no  # 不在 OCR 时打码，由后端 API 返回时统一打码
+                            '证号': license_no
                         }
                         return CertOCRResponse(
                             success=True,
                             extracted_info=extracted_info
+                        )
+                    elif name and not vehicle_class:
+                        # 有姓名但没有准驾车型，可能不是驾驶证
+                        print(f"[Aliyun OCR] WARNING: Has name but no vehicle_class - likely not a driver's license")
+                        return CertOCRResponse(
+                            success=False,
+                            reason='**驾驶证识别失败**\n\n未能识别到"准驾车型"等驾驶证关键信息。\n\n请确保上传的是**机动车驾驶证正本**照片，而非身份证或其他证件。'
                         )
                     else:
                         return CertOCRResponse(
@@ -2088,103 +2383,103 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                         reason='**驾驶证识别失败**\n\n无法识别图片内容。'
                     )
             except Exception as driver_error:
-                # 如果驾驶证专用 API 失败，使用通用识别
-                print(f"[Aliyun OCR] Driver license API failed, falling back to general: {driver_error}")
-                image_stream.seek(0)
-                request = ocr_models.RecognizeGeneralRequest(body=image_stream)
-                response = client.recognize_general_with_options(request, runtime)
+                # 如果驾驶证专用 API 失败，使用通用识别结果中的信息
+                print(f"[Aliyun OCR] Driver license API failed, using general OCR result: {driver_error}")
                 
-                if response.body and response.body.data:
-                    import json
-                    data = json.loads(response.body.data) if isinstance(response.body.data, str) else response.body.data
-                    content = data.get('content', '') if isinstance(data, dict) else str(data)
+                if general_content:
+                    # 已经通过第一步验证是驾驶证，从通用OCR结果中提取信息
+                    # 提取姓名
+                    name_match = re.search(r'姓名[：:\s]*([^\s性国民住地址出生日期,，。\n]{2,4})', general_content)
+                    if not name_match:
+                        name_match = re.search(r'姓名[：:\s]*([\u4e00-\u9fa5]{2,4})(?:性别|国籍|住址|出生|$|\s)', general_content)
+                    if not name_match:
+                        name_match = re.search(r'驾驶人[：:\s]*([\u4e00-\u9fa5]{2,4})', general_content)
                     
-                    print(f"[Aliyun OCR] General OCR content for driver license: {content[:500]}")
+                    # 提取准驾车型
+                    class_match = re.search(r'准驾车型[：:\s]*([A-Z0-9]+)', general_content)
+                    if not class_match:
+                        class_match = re.search(r'([ABCDEF][123]?[ABCDEF]?|D|E|F|M|N|P)', general_content)
                     
-                    # 检查驾驶证关键词
-                    driver_keywords = ['驾驶证', '准驾车型', 'C1', 'C2', 'A1', 'A2', 'B1', 'B2', '机动车', '驾驶人', '有效期']
-                    if any(kw in content for kw in driver_keywords):
-                        # 尝试从内容中提取信息
-                        import re
-                        
-                        # 提取姓名 - 多种格式
-                        # 排除常见标签词（性别、国籍等），只匹配中文姓名（2-4个汉字）
-                        name_match = re.search(r'姓名[：:\s]*([^\s性国民住地址出生日期,，。\n]{2,4})', content)
-                        if not name_match:
-                            # 尝试匹配 "姓名" 后紧跟的中文名字（2-4个汉字）
-                            name_match = re.search(r'姓名[：:\s]*([\u4e00-\u9fa5]{2,4})(?:性别|国籍|住址|出生|$|\s)', content)
-                        if not name_match:
-                            name_match = re.search(r'驾驶人[：:\s]*([\u4e00-\u9fa5]{2,4})', content)
-                        
-                        # 提取准驾车型
-                        class_match = re.search(r'准驾车型[：:\s]*([A-Z0-9]+)', content)
-                        if not class_match:
-                            class_match = re.search(r'([ABCDEF][123]?[ABCDEF]?|D|E|F|M|N|P)', content)
-                        
-                        # 提取证号
-                        license_match = re.search(r'证号[：:\s]*(\d{12,18})', content)
-                        if not license_match:
-                            # 尝试匹配身份证号格式的证号
-                            license_match = re.search(r'(\d{15}|\d{17}[\dXx])', content)
-                        
-                        # 提取有效期 - 支持多种格式
-                        valid_period = ''
-                        
-                        # 格式1: "有效期限 2019.06.26-2025.06.26" 或 "有效期 2019年6月26日至2025年6月26日"
-                        valid_match = re.search(r'有效期限?[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)\s*[-至到–—]\s*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?|长期)', content)
+                    # 提取证号
+                    license_match = re.search(r'证号[：:\s]*(\d{12,18})', general_content)
+                    if not license_match:
+                        license_match = re.search(r'(\d{15}|\d{17}[\dXx])', general_content)
+                    
+                    # 提取有效期 - 支持多种格式
+                    valid_period = ''
+                    
+                    # 格式1: "有效期限 2019.06.26-2025.06.26" 日期范围
+                    valid_match = re.search(r'有效期限?[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)\s*[-至到–—]\s*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?|长期)', general_content)
+                    if valid_match:
+                        valid_period = f"{valid_match.group(1)} 至 {valid_match.group(2)}"
+                        print(f"[Aliyun OCR] Valid period format 1: {valid_period}")
+                    
+                    # 格式2: "2019.06.26-2025.06.26" 无前缀日期范围
+                    if not valid_period:
+                        valid_match = re.search(r'(\d{4}\.\d{2}\.\d{2})\s*[-至到–—]\s*(\d{4}\.\d{2}\.\d{2}|长期)', general_content)
                         if valid_match:
                             valid_period = f"{valid_match.group(1)} 至 {valid_match.group(2)}"
-                            print(f"[Aliyun OCR] Valid period matched format 1: {valid_period}")
-                        
-                        # 格式2: "2019.06.26-2025.06.26" 或 "2019.06.26至2025.06.26" (无"有效期"前缀)
-                        if not valid_period:
-                            valid_match = re.search(r'(\d{4}\.\d{2}\.\d{2})\s*[-至到–—]\s*(\d{4}\.\d{2}\.\d{2}|长期)', content)
-                            if valid_match:
-                                valid_period = f"{valid_match.group(1)} 至 {valid_match.group(2)}"
-                                print(f"[Aliyun OCR] Valid period matched format 2: {valid_period}")
-                        
-                        # 格式3: "至 2025.06.26" 或 "至 2025年6月26日"
-                        if not valid_period:
-                            valid_match = re.search(r'至[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', content)
-                            if valid_match:
-                                valid_period = f"至 {valid_match.group(1)}"
-                                print(f"[Aliyun OCR] Valid period matched format 3: {valid_period}")
-                        
-                        # 格式4: 查找任意日期范围格式 "YYYY.MM.DD-YYYY.MM.DD"
-                        if not valid_period:
-                            valid_match = re.search(r'(\d{4}[-./]\d{2}[-./]\d{2})\s*[-至到–—]\s*(\d{4}[-./]\d{2}[-./]\d{2})', content)
-                            if valid_match:
-                                valid_period = f"{valid_match.group(1)} 至 {valid_match.group(2)}"
-                                print(f"[Aliyun OCR] Valid period matched format 4: {valid_period}")
-                        
-                        # 格式5: "6年" 有效期年限
-                        if not valid_period:
-                            valid_match = re.search(r'有效期限?\s*[：:\s]*(\d+)\s*年', content)
-                            if valid_match:
-                                valid_period = f"{valid_match.group(1)}年"
-                                print(f"[Aliyun OCR] Valid period matched format 5: {valid_period}")
-                        
-                        if not valid_period:
-                            print(f"[Aliyun OCR] No valid period found in content")
-                        
-                        # 提取初次领证日期
-                        issue_date = ''
-                        issue_match = re.search(r'初次领证日期[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', content)
-                        if not issue_match:
-                            issue_match = re.search(r'初次领证[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', content)
-                        if not issue_match:
-                            # 尝试匹配格式如 "2019-06-26" 在"初次领证"附近
-                            issue_match = re.search(r'领证日期[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', content)
-                        if issue_match:
-                            issue_date = issue_match.group(1)
-                            print(f"[Aliyun OCR] Issue date extracted: {issue_date}")
-                        
-                        name = name_match.group(1) if name_match else ''
-                        vehicle_class = class_match.group(1) if class_match else ''
-                        license_no = license_match.group(1) if license_match else ''
-                        
-                        print(f"[Aliyun OCR] General fallback extracted - name: {name}, class: {vehicle_class}, license: {license_no}, valid: {valid_period}, issue: {issue_date}")
-                        
+                            print(f"[Aliyun OCR] Valid period format 2: {valid_period}")
+                    
+                    # 格式3: "至 2025.06.26"
+                    if not valid_period:
+                        valid_match = re.search(r'至[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', general_content)
+                        if valid_match:
+                            valid_period = f"至 {valid_match.group(1)}"
+                            print(f"[Aliyun OCR] Valid period format 3: {valid_period}")
+                    
+                    # 格式4: 任意日期范围 "YYYY-MM-DD 至 YYYY-MM-DD"
+                    if not valid_period:
+                        valid_match = re.search(r'(\d{4}[-./]\d{2}[-./]\d{2})\s*[-至到–—]\s*(\d{4}[-./]\d{2}[-./]\d{2})', general_content)
+                        if valid_match:
+                            valid_period = f"{valid_match.group(1)} 至 {valid_match.group(2)}"
+                            print(f"[Aliyun OCR] Valid period format 4: {valid_period}")
+                    
+                    # 格式5: "有效起始日期 2012-04-18" + "有效期限 6年" → 计算结束日期
+                    if not valid_period:
+                        start_match = re.search(r'有效起始日期[：:\s]*(\d{4}[-./]\d{1,2}[-./]\d{1,2})', general_content)
+                        years_match = re.search(r'有效期限[：:\s]*(\d+)\s*年', general_content)
+                        if start_match and years_match:
+                            from datetime import datetime, timedelta
+                            try:
+                                start_str = start_match.group(1).replace('/', '-').replace('.', '-')
+                                start_date = datetime.strptime(start_str, '%Y-%m-%d')
+                                years = int(years_match.group(1))
+                                end_date = start_date.replace(year=start_date.year + years)
+                                valid_period = f"{start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}"
+                                print(f"[Aliyun OCR] Valid period format 5 (calculated): {valid_period}")
+                            except Exception as e:
+                                valid_period = f"{start_match.group(1)} 起 {years_match.group(1)}年"
+                                print(f"[Aliyun OCR] Valid period format 5 (raw): {valid_period}, error: {e}")
+                        elif years_match:
+                            valid_period = f"{years_match.group(1)}年"
+                            print(f"[Aliyun OCR] Valid period format 5 (years only): {valid_period}")
+                        elif start_match:
+                            # 只有起始日期，尝试查找 "长期" 关键词
+                            if '长期' in general_content:
+                                valid_period = f"{start_match.group(1)} 起 长期有效"
+                            else:
+                                valid_period = f"{start_match.group(1)} 起"
+                            print(f"[Aliyun OCR] Valid period format 5 (start only): {valid_period}")
+                    
+                    if not valid_period:
+                        print(f"[Aliyun OCR] No valid period found in content")
+                    
+                    # 提取初次领证日期
+                    issue_date = ''
+                    issue_match = re.search(r'初次领证日期?[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', general_content)
+                    if not issue_match:
+                        issue_match = re.search(r'领证日期[：:\s]*(\d{4}[-./年]\d{1,2}[-./月]?\d{0,2}日?)', general_content)
+                    if issue_match:
+                        issue_date = issue_match.group(1)
+                    
+                    name = name_match.group(1) if name_match else ''
+                    vehicle_class = class_match.group(1) if class_match else ''
+                    license_no = license_match.group(1) if license_match else ''
+                    
+                    print(f"[Aliyun OCR] General fallback extracted - name: {name}, class: {vehicle_class}, license: {license_no}, valid: {valid_period}, issue: {issue_date}")
+                    
+                    if vehicle_class:
                         extracted_info = {
                             '姓名': name,
                             '准驾车型': vehicle_class,
@@ -2193,10 +2488,10 @@ async def _call_aliyun_ocr(access_key_id: str, access_key_secret: str, image_bas
                             '初次领证': issue_date
                         }
                         return CertOCRResponse(success=True, extracted_info=extracted_info)
-                    
+                
                 return CertOCRResponse(
                     success=False,
-                    reason='**未能识别驾驶证**\n\n图片中未检测到驾驶证相关内容。\n\n请上传清晰的驾驶证照片。'
+                    reason='**驾驶证识别失败**\n\n驾驶证专用识别和通用识别均未能成功。\n\n请上传更清晰的驾驶证照片。'
                 )
         
         elif cert_type == 'skill_cert':

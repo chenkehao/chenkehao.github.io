@@ -134,6 +134,9 @@ class PersonalCertification(Base):
     color = Column(String(100))  # 显示颜色
     icon = Column(String(50))  # 图标名称
     
+    # 证件图片
+    image_data = Column(Text)  # 审核通过的证件图片 Base64
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

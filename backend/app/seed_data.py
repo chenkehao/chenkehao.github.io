@@ -37,9 +37,10 @@ async def seed_database():
         
         print("Seeding database...")
         
-        # 1. 创建用户
+        # 1. 创建用户（UID 从 1000000 开始）
         users = [
             User(
+                id=1000000,
                 email="admin@devnors.com",
                 hashed_password=get_password_hash("admin123"),
                 name="系统管理员",
@@ -48,6 +49,7 @@ async def seed_database():
                 is_verified=True,
             ),
             User(
+                id=1000001,
                 email="hr@devnors.com",
                 hashed_password=get_password_hash("hr123456"),
                 name="李招聘",
@@ -57,6 +59,7 @@ async def seed_database():
                 is_verified=True,
             ),
             User(
+                id=1000002,
                 email="candidate@example.com",
                 hashed_password=get_password_hash("candidate123"),
                 name="张三",
@@ -66,6 +69,7 @@ async def seed_database():
             ),
             # 测试账号 - 求职者
             User(
+                id=1000003,
                 email="test@example.com",
                 hashed_password=get_password_hash("test123456"),
                 name="测试用户",
@@ -75,6 +79,7 @@ async def seed_database():
             ),
             # 测试账号 - 新用户（需要选择身份）
             User(
+                id=1000004,
                 email="new@example.com",
                 hashed_password=get_password_hash("new123456"),
                 name="新用户",
@@ -332,15 +337,15 @@ async def seed_database():
                 "due_date": datetime.utcnow() + timedelta(days=5),
             },
             {
-                "title": "完善企业品牌画像",
-                "description": "定义公司的技术栈偏好与团队文化。详尽的企业画像能显著降低 45% 的初期沟通成本，让 AI 猎头更精准地锁定目标。",
+                "title": "优化求职意向设置",
+                "description": "完善您的求职意向，包括期望城市、薪资范围和行业偏好。精准的求职意向能帮助 AI 猎头更高效地为您匹配目标岗位。",
                 "status": TodoStatus.IN_PROGRESS,
                 "priority": TodoPriority.MEDIUM,
                 "source": TodoSource.USER,
-                "todo_type": TodoType.EMPLOYER,
+                "todo_type": TodoType.CANDIDATE,
                 "progress": 20,
                 "icon": "Building2",
-                "ai_advice": "增加关于弹性办公和智能协同的内容能有效吸引 A+ 级别的远程开发者。",
+                "ai_advice": "建议补充期望的技术方向和团队规模偏好，可提升职位匹配精准度 30%。",
                 "steps": [
                     {"name": "任务启动与初始化", "done": True},
                     {"name": "核心信息收集", "done": True},
@@ -639,91 +644,7 @@ async def seed_database():
         )
         db.add(settings_data)
         
-        # 13. 创建企业认证信息
-        enterprise_certs = [
-            {
-                "name": "国家高新技术企业认证",
-                "organization": "科技部火炬中心",
-                "cert_date": "2024-01-15",
-                "category": "qualification",
-                "color": "bg-amber-50 border-amber-200",
-                "icon": "Medal"
-            },
-            {
-                "name": "ISO 27001 信息安全管理体系",
-                "organization": "SGS 通标标准",
-                "cert_date": "2023-08-20",
-                "category": "qualification",
-                "color": "bg-blue-50 border-blue-200",
-                "icon": "Medal"
-            },
-            {
-                "name": "可信云服务认证",
-                "organization": "云计算开源产业联盟",
-                "cert_date": "2023-06-10",
-                "category": "qualification",
-                "color": "bg-emerald-50 border-emerald-200",
-                "icon": "Medal"
-            },
-            {
-                "name": "人力资源服务许可证",
-                "organization": "北京市人社局",
-                "cert_date": "2022-12-01",
-                "category": "qualification",
-                "color": "bg-rose-50 border-rose-200",
-                "icon": "Medal"
-            },
-            {
-                "name": "企业工商营业执照",
-                "organization": "北京市市场监督管理局",
-                "cert_date": "2021-05-10",
-                "category": "credit",
-                "score": 98,
-                "color": "bg-indigo-50 border-indigo-200",
-                "icon": "Building2"
-            },
-            {
-                "name": "税务登记证",
-                "organization": "北京市税务局",
-                "cert_date": "2021-05-15",
-                "category": "credit",
-                "score": 100,
-                "color": "bg-emerald-50 border-emerald-200",
-                "icon": "FileText"
-            },
-            {
-                "name": "组织机构代码证",
-                "organization": "国家质量监督检验检疫总局",
-                "cert_date": "2021-05-10",
-                "category": "credit",
-                "score": 100,
-                "color": "bg-amber-50 border-amber-200",
-                "icon": "Database"
-            },
-            {
-                "name": "银行对公账户",
-                "organization": "中国工商银行",
-                "cert_date": "2021-06-01",
-                "category": "credit",
-                "score": 95,
-                "color": "bg-blue-50 border-blue-200",
-                "icon": "Wallet"
-            },
-        ]
-        
-        for cert_data in enterprise_certs:
-            cert = EnterpriseCertification(
-                user_id=hr_user_obj.id,
-                name=cert_data["name"],
-                organization=cert_data["organization"],
-                cert_date=cert_data["cert_date"],
-                category=cert_data["category"],
-                color=cert_data.get("color"),
-                icon=cert_data.get("icon"),
-                score=cert_data.get("score"),
-                status=CertificationStatus.VALID
-            )
-            db.add(cert)
+        # 13. 企业认证信息（不再预置虚假数据，由用户通过认证流程真实上传）
         
         # 14. 创建个人认证信息（为候选人用户）
         personal_certs = [

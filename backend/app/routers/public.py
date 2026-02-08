@@ -1450,6 +1450,247 @@ async def chat_with_assistant(
     return generate_smart_response(request.message, request.context, request.model)
 
 
+@router.get("/recruitment-suggestions")
+async def get_recruitment_suggestions(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """根据企业资料调用大模型生成个性化的招聘岗位建议"""
+    import httpx
+    import json
+    from app.config import settings
+    from app.models.settings import UserSettings, EnterpriseCertification
+    
+    try:
+        # 1. 获取企业设置信息
+        stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+        result = await db.execute(stmt)
+        user_settings = result.scalar_one_or_none()
+        
+        company_name = ''
+        industry = ''
+        company_size = ''
+        location = ''
+        benefits = ''
+        description = ''
+        
+        if user_settings:
+            company_name = user_settings.display_name or user_settings.short_name or ''
+            industry = user_settings.industry or ''
+            company_size = user_settings.company_size or ''
+            location = f"{user_settings.city or ''}{user_settings.district or ''}"
+            benefits = user_settings.benefits or ''
+            description = user_settings.description or ''
+        
+        # 2. 获取企业认证数据（营业执照中的经营范围等）
+        stmt = select(EnterpriseCertification).where(
+            EnterpriseCertification.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        enterprise_certs = result.scalars().all()
+        
+        business_scope = ''
+        registered_capital = ''
+        cert_names = []
+        
+        for cert in enterprise_certs:
+            if cert.business_scope:
+                business_scope = cert.business_scope
+            if cert.registered_capital:
+                registered_capital = cert.registered_capital
+            if cert.name:
+                cert_names.append(cert.name)
+        
+        # 3. 获取用户基本信息
+        from app.models.user import User
+        stmt = select(User).where(User.id == user_id)
+        result = await db.execute(stmt)
+        user_obj = result.scalar_one_or_none()
+        
+        if not company_name and user_obj:
+            company_name = user_obj.company_name or '贵公司'
+        
+        # 4. 构建企业画像上下文
+        enterprise_context = f"""企业名称：{company_name}
+所属行业：{industry or '未知'}
+企业规模：{company_size or '未知'}
+所在地区：{location or '未知'}
+企业福利：{benefits or '未知'}
+企业简介：{description or '未知'}
+经营范围：{business_scope or '未知'}
+注册资本：{registered_capital or '未知'}
+已有认证：{', '.join(cert_names) if cert_names else '无'}"""
+        
+        # 5. 调用大模型生成个性化招聘建议
+        ai_prompt = f"""你是一个资深的 HR 招聘顾问。请根据以下企业信息，分析该企业最可能需要招聘的岗位类型，给出 3-5 个精准的招聘建议提示语。
+
+{enterprise_context}
+
+要求：
+1. 根据企业的行业、经营范围、规模来推断最适合的岗位
+2. 每条建议要简短有力，像用户自然说出来的话，不超过20个字
+3. 要体现行业特色，不要太通用
+4. 如果是科技/互联网公司，建议开发、产品、运营相关岗位
+5. 如果是传统行业，建议销售、市场、管理相关岗位
+6. 如果企业信息不足，给出通用但有价值的建议
+
+请严格按以下 JSON 格式返回（直接返回JSON，不要markdown标记）：
+{{
+  "company_summary": "一句话描述企业特征（不超过30字）",
+  "suggestions": [
+    "建议提示语1",
+    "建议提示语2", 
+    "建议提示语3"
+  ]
+}}"""
+
+        # 尝试 MiniMax
+        minimax_api_key = settings.minimax_api_key or ""
+        if minimax_api_key:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                        headers={
+                            "Authorization": f"Bearer {minimax_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "abab6.5s-chat",
+                            "messages": [
+                                {"role": "system", "content": "你是一个资深 HR 招聘顾问，擅长分析企业需求并提供精准的招聘建议。请只返回JSON格式结果。"},
+                                {"role": "user", "content": ai_prompt}
+                            ],
+                            "max_tokens": 1024,
+                            "temperature": 0.7,
+                        }
+                    )
+                    result = response.json()
+                    if result.get("choices"):
+                        reply = result["choices"][0].get("message", {}).get("content", "")
+                        # 解析 JSON
+                        import re
+                        json_match = re.search(r'\{[\s\S]*\}', reply)
+                        if json_match:
+                            data = json.loads(json_match.group())
+                            return {
+                                "company_name": company_name,
+                                "company_summary": data.get("company_summary", ""),
+                                "suggestions": data.get("suggestions", []),
+                                "enterprise_context": enterprise_context
+                            }
+            except Exception as e:
+                print(f"[Recruitment Suggestions] MiniMax error: {e}")
+        
+        # Gemini fallback
+        gemini_api_key = settings.gemini_api_key or ""
+        if gemini_api_key:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}",
+                        json={
+                            "contents": [{"parts": [{"text": ai_prompt}]}],
+                            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+                        }
+                    )
+                    result = response.json()
+                    if "candidates" in result:
+                        reply = result["candidates"][0]["content"]["parts"][0].get("text", "")
+                        import re
+                        json_match = re.search(r'\{[\s\S]*\}', reply)
+                        if json_match:
+                            data = json.loads(json_match.group())
+                            return {
+                                "company_name": company_name,
+                                "company_summary": data.get("company_summary", ""),
+                                "suggestions": data.get("suggestions", []),
+                                "enterprise_context": enterprise_context
+                            }
+            except Exception as e:
+                print(f"[Recruitment Suggestions] Gemini error: {e}")
+        
+        # AI 不可用时返回基于行业的默认建议
+        default_suggestions = _get_default_suggestions(industry, business_scope)
+        return {
+            "company_name": company_name,
+            "company_summary": f"{industry or '企业'}招聘",
+            "suggestions": default_suggestions,
+            "enterprise_context": enterprise_context
+        }
+        
+    except Exception as e:
+        print(f"[Recruitment Suggestions] Error: {e}")
+        return {
+            "company_name": "贵公司",
+            "company_summary": "",
+            "suggestions": [
+                "招一个高级前端工程师",
+                "需要产品经理，3年经验",
+                "技术团队扩招5个人"
+            ],
+            "enterprise_context": ""
+        }
+
+
+def _get_default_suggestions(industry: str, business_scope: str) -> list:
+    """根据行业返回默认招聘建议"""
+    industry_lower = (industry or '').lower()
+    scope_lower = (business_scope or '').lower()
+    
+    combined = industry_lower + scope_lower
+    
+    if any(kw in combined for kw in ['互联网', '科技', '软件', '信息技术', 'it', '人工智能', 'ai', '数据']):
+        return [
+            "招高级前端工程师，熟悉React",
+            "需要Java后端，3年以上经验",
+            "招产品经理，负责核心产品线",
+            "数据分析师，熟悉Python",
+        ]
+    elif any(kw in combined for kw in ['电商', '零售', '贸易', '商务']):
+        return [
+            "招运营经理，有电商平台经验",
+            "需要供应链专员，熟悉物流",
+            "招美工设计，会视频剪辑优先",
+            "客服主管，管理10人团队",
+        ]
+    elif any(kw in combined for kw in ['金融', '投资', '银行', '保险', '证券']):
+        return [
+            "招风控经理，5年以上经验",
+            "需要投资分析师，CFA优先",
+            "招合规专员，熟悉金融法规",
+            "客户经理，有高净值客户资源",
+        ]
+    elif any(kw in combined for kw in ['教育', '培训', '学校']):
+        return [
+            "招课程研发专家，K12方向",
+            "需要英语老师，有教师资格证",
+            "招市场推广经理，懂教育行业",
+            "教务管理，有3年以上经验",
+        ]
+    elif any(kw in combined for kw in ['医疗', '健康', '医药', '生物']):
+        return [
+            "招临床研究员，医学背景",
+            "需要医药代表，覆盖华东区域",
+            "招注册专员，熟悉NMPA流程",
+            "质量管理工程师，GMP经验",
+        ]
+    elif any(kw in combined for kw in ['制造', '生产', '工厂', '工程']):
+        return [
+            "招生产经理，精益管理经验",
+            "需要品质工程师，熟悉ISO",
+            "招机械设计师，SolidWorks",
+            "仓储物流主管，管理经验优先",
+        ]
+    else:
+        return [
+            "招一个高级工程师",
+            "需要销售经理，行业经验丰富",
+            "招行政人事，综合管理能力强",
+            "市场专员，有策划执行经验",
+        ]
+
+
 # ============ 用户资料接口 ============
 
 from app.models.profile import UserProfile, ProfileType

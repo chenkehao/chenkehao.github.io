@@ -630,7 +630,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
 
   return (
     <nav className="fixed top-0 w-full z-50 bg-white border-b border-slate-200 px-6 py-4">
-      <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <div className="max-w-7xl mx-auto flex justify-between items-center relative">
         <Link to="/" className="flex items-center space-x-2">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 transition-transform active:scale-95">
             <Zap className="text-white w-6 h-6" />
@@ -638,7 +638,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
           <span className="text-2xl font-bold tracking-tight text-slate-900">Devnors <span className="text-indigo-600 text-sm font-normal">得若</span></span>
         </Link>
         
-        <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-500">
+        <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-500 absolute left-1/2 -translate-x-1/2">
           {isLoggedIn && (
             <>
               <Link to="/ai-assistant" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><Bot size={16}/> AI助手</Link>
@@ -709,7 +709,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
               </button>
               
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
+                <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
                   <div className="px-4 py-3 border-b border-slate-100">
                     <div className="flex items-center justify-between">
                       <div className="font-bold text-slate-900">{user?.name}</div>
@@ -718,7 +718,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                     <Link
                       to="/pricing"
                       onClick={() => setShowUserMenu(false)}
-                      className={`mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      className={`mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                         user?.account_tier === 'ULTRA'
                           ? 'bg-gradient-to-r from-rose-50 to-amber-50 text-rose-600 border border-rose-100'
                           : user?.account_tier === 'PRO'
@@ -726,14 +726,11 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                           : 'bg-slate-50 text-slate-600 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
                       }`}
                     >
-                      <Cpu size={12} />
+                      <Cpu size={12} className="flex-shrink-0" />
                       <span>
-                        {user?.account_tier === 'ULTRA' ? 'Devnors 1.0 Ultra' : user?.account_tier === 'PRO' ? 'Devnors 1.0 Pro' : 'Devnors 1.0'}
+                        {user?.account_tier === 'ULTRA' ? 'Devnors 1.0 Ultra · 旗舰版' : user?.account_tier === 'PRO' ? 'Devnors 1.0 Pro · 专业版' : 'Devnors 1.0 · 基础版'}
                       </span>
-                      <span className="ml-auto text-[10px] opacity-60">
-                        {user?.account_tier === 'ULTRA' ? '旗舰版' : user?.account_tier === 'PRO' ? '专业版' : '基础版'}
-                      </span>
-                      {user?.account_tier !== 'ULTRA' && <Zap size={10} className="text-amber-500 ml-0.5" />}
+                      {user?.account_tier !== 'ULTRA' && <Zap size={10} className="text-amber-500 flex-shrink-0" />}
                     </Link>
                   </div>
                   <Link 
@@ -2227,7 +2224,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                       })()}
                     </span>
                     <span className="text-slate-300">·</span>
-                    <span>{user?.account_tier === 'ULTRA' ? 'Ultra 旗舰版' : user?.account_tier === 'PRO' ? 'Pro 专业版' : '免费版'}</span>
+                    <span>{user?.account_tier === 'ULTRA' ? 'Devnors 1.0 Ultra · 旗舰版' : user?.account_tier === 'PRO' ? 'Devnors 1.0 Pro · 专业版' : 'Devnors 1.0 · 基础版'}</span>
                     <span className="text-slate-300">·</span>
                     <span>注册于 {user?.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '未知'}</span>
                   </div>
@@ -9274,7 +9271,9 @@ const AIAssistantView = () => {
     backUploaded: boolean;
     frontInfo: Record<string, string> | null;
     backInfo: Record<string, string> | null;
-  }>({ frontUploaded: false, backUploaded: false, frontInfo: null, backInfo: null });
+    frontImage: string | null;
+    backImage: string | null;
+  }>({ frontUploaded: false, backUploaded: false, frontInfo: null, backInfo: null, frontImage: null, backImage: null });
   
   // 获取用户画像 memories 来判断完善程度
   const memoryScope = userRole === 'employer' ? 'employer' : 'candidate';
@@ -9461,7 +9460,19 @@ const AIAssistantView = () => {
   
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  // 根据用户当前方案等级初始化模型选择
+  const tierToModel = (tier?: string) => {
+    const t = tier?.toUpperCase();
+    if (t === 'ULTRA') return 'Devnors 1.0 Ultra';
+    if (t === 'PRO') return 'Devnors 1.0 Pro';
+    return 'Devnors 1.0';
+  };
+  const [selectedModel, setSelectedModel] = useState(() => tierToModel(user?.account_tier));
+  
+  // 用户方案等级变化时同步更新模型选择
+  useEffect(() => {
+    setSelectedModel(tierToModel(user?.account_tier));
+  }, [user?.account_tier]);
   
   // 使用当前登录用户的 ID 获取任务数据
   const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useTasks(userId || 0);
@@ -10068,10 +10079,13 @@ const AIAssistantView = () => {
         
         // 生成岗位摘要给用户确认
         const jobsSummary = jobs.map((job: any, i: number) => {
-          return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${job.salary_min || '面议'}K-${job.salary_max || '面议'}K/月\n\n${job.description}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
+          const desc = typeof job.description === 'string' ? job.description : (job.description ? JSON.stringify(job.description) : '暂无描述');
+          const salaryMin = typeof job.salary_min === 'number' ? job.salary_min : '面议';
+          const salaryMax = typeof job.salary_max === 'number' ? job.salary_max : '面议';
+          return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${salaryMin}K-${salaryMax}K/月\n\n${desc}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
         }).join('\n\n---\n\n');
         
-        const generatedResult = `📋 **根据您的需求，我为您拟定了以下 ${jobs.length} 个岗位招聘计划：**\n\n${jobsSummary}\n\n---\n\n⬆️ 以上是我根据您的需求和企业信息生成的岗位描述，请您确认：\n\n✅ **没问题，直接发布** — 输入"发布"或"确认"\n✏️ **需要修改** — 直接告诉我要改什么，例如"薪资改高一点"、"加上远程办公"、"删掉第二个岗位"\n➕ **还要加岗位** — 继续描述新的招聘需求`;
+        const generatedResult = `📋 **根据您的需求，我为您拟定了以下 ${jobs.length} 个岗位招聘计划：**\n\n${jobsSummary}\n\n---\n\n⬆️ 以上是我根据您的需求和企业信息生成的岗位描述，请您确认：\n\n[[ACTION:✅ 确认发布:确认发布:success]]`;
         
         // 移除之前的"正在分析"消息，替换为结果
         if (selectedTask) {
@@ -10218,10 +10232,13 @@ ${JSON.stringify(currentJobs, null, 2)}
               }
               
               const jobsSummary = updatedJobs.map((job: any, i: number) => {
-                return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${job.salary_min || '面议'}K-${job.salary_max || '面议'}K/月\n\n${job.description}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
+                const desc = typeof job.description === 'string' ? job.description : (job.description ? JSON.stringify(job.description) : '暂无描述');
+                const salaryMin = typeof job.salary_min === 'number' ? job.salary_min : '面议';
+                const salaryMax = typeof job.salary_max === 'number' ? job.salary_max : '面议';
+                return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${salaryMin}K-${salaryMax}K/月\n\n${desc}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
               }).join('\n\n---\n\n');
               
-              const updatedResult = `✏️ **已根据您的要求修改，请再次确认：**\n\n${jobsSummary}\n\n---\n\n✅ **没问题，直接发布** — 输入"发布"或"确认"\n✏️ **还需修改** — 继续告诉我要改什么`;
+              const updatedResult = `✏️ **已根据您的要求修改，请再次确认：**\n\n${jobsSummary}\n\n---\n\n[[ACTION:✅ 确认发布:确认发布:success]]`;
               
               // 移除"正在修改"消息
               if (selectedTask) {
@@ -11536,29 +11553,54 @@ ${JSON.stringify(currentJobs, null, 2)}
         });
         
         const initRecruitTask = async () => {
+          const taskId = selectedTask.id;
           try {
-            const { getSettings } = await import('./services/apiService');
-            const settingsData = await getSettings(userId).catch(() => ({}));
-            const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
+            // 先显示加载中的提示
+            const { getRecruitmentSuggestions } = await import('./services/apiService');
+            const companyName = user?.company_name || '贵公司';
             
-            const welcomeMsg = `🏢 **${companyName} · 智能招聘助手**\n\n我将帮您完成整个招聘流程：\n\n` +
+            setTaskMessages(prev => ({
+              ...prev,
+              [taskId]: [{ role: 'assistant', content: `🏢 **${companyName} · 智能招聘助手**\n\n⏳ 正在根据企业资料分析适合您的招聘方向...` }]
+            }));
+            
+            // 调用后端 API，根据企业资料由大模型生成个性化建议
+            const suggestionsData = await getRecruitmentSuggestions(userId);
+            const finalCompanyName = suggestionsData.company_name || companyName;
+            const suggestions = suggestionsData.suggestions || [];
+            const companySummary = suggestionsData.company_summary || '';
+            
+            // 构建个性化的欢迎消息
+            let suggestionsText = '';
+            if (suggestions.length > 0) {
+              suggestionsText = suggestions.map(s => `💡 "${s}"`).join('\n');
+            } else {
+              suggestionsText = `💡 "需要一个前端和一个后端"\n💡 "招产品经理，3年经验以上"\n💡 "技术团队扩招5个人"`;
+            }
+            
+            let welcomeMsg = `🏢 **${finalCompanyName} · 智能招聘助手**\n\n`;
+            
+            if (companySummary) {
+              welcomeMsg += `📊 **企业画像分析**：${companySummary}\n\n`;
+            }
+            
+            welcomeMsg += `我将帮您完成整个招聘流程：\n\n` +
               `**① 描述需求** → 告诉我您想招什么人\n` +
               `**② AI 生成岗位** → 我会根据您的企业信息自动生成完整的岗位描述\n` +
               `**③ 确认发布** → 您确认后一键上线\n\n---\n\n` +
-              `现在请告诉我您的招聘需求，可以简单描述，我来帮您完善。例如：\n\n` +
-              `💡 "需要一个前端和一个后端"\n` +
-              `💡 "招产品经理，3年经验以上"\n` +
-              `💡 "技术团队扩招5个人"\n\n` +
-              `您想招什么人？`;
+              `根据您的企业资料，为您智能推荐以下招聘方向：\n\n` +
+              `${suggestionsText}\n\n` +
+              `您可以直接输入以上建议，也可以自由描述您的招聘需求。`;
             
             setTaskMessages(prev => ({
               ...prev,
-              [selectedTask.id]: [{ role: 'assistant', content: welcomeMsg }]
+              [taskId]: [{ role: 'assistant', content: welcomeMsg }]
             }));
           } catch (e) {
+            console.error('[Recruitment Init] Error:', e);
             setTaskMessages(prev => ({
               ...prev,
-              [selectedTask.id]: [{ role: 'assistant', content: '🏢 **智能招聘助手**\n\n请告诉我您的招聘需求，我来帮您自动生成岗位并发布。' }]
+              [taskId]: [{ role: 'assistant', content: `🏢 **智能招聘助手**\n\n我将帮您完成整个招聘流程：\n\n**① 描述需求** → 告诉我您想招什么人\n**② AI 生成岗位** → 根据企业信息自动生成\n**③ 确认发布** → 确认后一键上线\n\n请告诉我您的招聘需求，例如：\n\n💡 "需要一个前端和一个后端"\n💡 "招产品经理，3年经验以上"\n💡 "技术团队扩招5个人"\n\n您想招什么人？` }]
             }));
           }
         };
@@ -11603,10 +11645,13 @@ ${JSON.stringify(currentJobs, null, 2)}
     }
   };
 
-  const handleSend = async () => {
-    if (!inputMessage.trim() || isTyping) return;
+  const handleSend = async (directMessageOrEvent?: string | React.MouseEvent) => {
+    // 区分直接传入的消息字符串和 onClick 传入的 MouseEvent
+    const directMessage = typeof directMessageOrEvent === 'string' ? directMessageOrEvent : undefined;
+    const messageToSend = directMessage || inputMessage;
+    if (!messageToSend.trim() || isTyping) return;
     
-    const userMessage = inputMessage;
+    const userMessage = messageToSend;
     
     // 编辑模式处理
     if (editMode.active && editMode.awaitingInput) {
@@ -13858,7 +13903,8 @@ ${JSON.stringify(currentJobs, null, 2)}
               setIdCardInfo(prev => ({
                 ...prev,
                 frontUploaded: true,
-                frontInfo: reviewResult.extractedInfo || null
+                frontInfo: reviewResult.extractedInfo || null,
+                frontImage: imageBase64
               }));
               
               // 保存正面信息到用户资料
@@ -13881,7 +13927,8 @@ ${JSON.stringify(currentJobs, null, 2)}
               setIdCardInfo(prev => ({
                 ...prev,
                 backUploaded: true,
-                backInfo: reviewResult.extractedInfo || null
+                backInfo: reviewResult.extractedInfo || null,
+                backImage: imageBase64
               }));
               
               // 保存反面信息到用户资料
@@ -13900,8 +13947,8 @@ ${JSON.stringify(currentJobs, null, 2)}
             
             // 当身份证两面都上传完成后，创建认证记录
             const updatedIdCardInfo = isIdFront 
-              ? { ...idCardInfo, frontUploaded: true, frontInfo: reviewResult.extractedInfo || null }
-              : { ...idCardInfo, backUploaded: true, backInfo: reviewResult.extractedInfo || null };
+              ? { ...idCardInfo, frontUploaded: true, frontInfo: reviewResult.extractedInfo || null, frontImage: imageBase64 }
+              : { ...idCardInfo, backUploaded: true, backInfo: reviewResult.extractedInfo || null, backImage: imageBase64 };
             
             if (updatedIdCardInfo.frontUploaded && updatedIdCardInfo.backUploaded) {
               // 两面都已上传，创建完整的身份认证记录
@@ -13910,6 +13957,12 @@ ${JSON.stringify(currentJobs, null, 2)}
               const ethnicity = updatedIdCardInfo.frontInfo?.['民族'] || '';
               const genderEthnicity = [gender, ethnicity ? `${ethnicity}族` : ''].filter(Boolean).join(' · ');
               const finalIdentityName = updatedIdCardInfo.frontInfo?.['姓名'] || '';
+              
+              // 合并正反面图片数据（用分隔符连接）
+              const combinedImageData = [
+                updatedIdCardInfo.frontImage || '',
+                updatedIdCardInfo.backImage || ''
+              ].filter(Boolean).join('|||');
               
               const certData = {
                 name: `实名认证 - ${finalIdentityName || '已认证'}`,
@@ -13920,7 +13973,8 @@ ${JSON.stringify(currentJobs, null, 2)}
                 major: genderEthnicity, // 存储性别和民族
                 category: 'identity',
                 color: 'blue',
-                icon: 'IdCard'
+                icon: 'IdCard',
+                image_data: combinedImageData  // 保存审核通过的正反面图片
               };
               await createPersonalCertification(certData, userId);
               console.log('[Certification] 已保存完整身份认证到数据库');
@@ -14099,9 +14153,10 @@ ${JSON.stringify(currentJobs, null, 2)}
             };
             certData.color = certStyles[currentItem.key]?.color || 'gray';
             certData.icon = certStyles[currentItem.key]?.icon || 'Award';
+            certData.image_data = imageBase64;  // 保存审核通过的证件原始图片
             
             await createPersonalCertification(certData, userId);
-            console.log(`[Certification] 已保存${currentItem.label}到数据库`);
+            console.log(`[Certification] 已保存${currentItem.label}到数据库（含原始图片）`);
           }
           
           // 更新任务进度
@@ -14922,9 +14977,9 @@ ${JSON.stringify(currentJobs, null, 2)}
                       <div className="markdown-content">
                         {/* 渲染消息内容，支持任务卡片和链接卡片 */}
                         {(() => {
-                          // 解析任务卡片语法: [[TASK:任务标题:任务类型:图标]] 和 链接卡片语法: [[LINK:标题:路径:图标]]
-                          const cardRegex = /\[\[(TASK|LINK):([^:]+):([^:]+):([^\]]+)\]\]/g;
-                          const parts: (string | { type: 'task'; title: string; taskType: string; icon: string } | { type: 'link'; title: string; path: string; icon: string })[] = [];
+                          // 解析卡片语法: [[TASK:...]], [[LINK:...]], [[ACTION:按钮文字:发送内容:样式]]
+                          const cardRegex = /\[\[(TASK|LINK|ACTION):([^:]+):([^:]+):([^\]]+)\]\]/g;
+                          const parts: (string | { type: 'task'; title: string; taskType: string; icon: string } | { type: 'link'; title: string; path: string; icon: string } | { type: 'action'; label: string; message: string; style: string })[] = [];
                           let lastIndex = 0;
                           let match;
                           const content = msg.content;
@@ -14948,6 +15003,13 @@ ${JSON.stringify(currentJobs, null, 2)}
                                 title: match[2],
                                 path: match[3],
                                 icon: match[4]
+                              });
+                            } else if (match[1] === 'ACTION') {
+                              parts.push({
+                                type: 'action',
+                                label: match[2],
+                                message: match[3],
+                                style: match[4]
                               });
                             }
                             lastIndex = match.index + match[0].length;
@@ -15185,6 +15247,46 @@ ${JSON.stringify(currentJobs, null, 2)}
                                     <ExternalLink size={16} className="text-emerald-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
                                   </div>
                                 </Link>
+                              );
+                            } else if (part.type === 'action') {
+                              // 渲染快捷操作按钮（一组ACTION连续渲染为按钮组）
+                              const isFirstInGroup = partIdx === 0 || typeof parts[partIdx - 1] !== 'object' || (parts[partIdx - 1] as any).type !== 'action';
+                              
+                              if (!isFirstInGroup) return null; // 非首个按钮，已在首个中渲染
+                              
+                              // 收集连续的 ACTION
+                              const actionGroup: { label: string; message: string; style: string }[] = [];
+                              for (let k = partIdx; k < parts.length; k++) {
+                                const p = parts[k];
+                                if (typeof p === 'object' && p.type === 'action') {
+                                  actionGroup.push(p);
+                                } else {
+                                  break;
+                                }
+                              }
+                              
+                              const styleMap: Record<string, string> = {
+                                'primary': 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600',
+                                'success': 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-600',
+                                'warning': 'bg-amber-500 text-white hover:bg-amber-600 border-amber-500',
+                                'secondary': 'bg-white text-slate-700 hover:bg-slate-50 border-slate-200',
+                                'outline': 'bg-white text-indigo-600 hover:bg-indigo-50 border-indigo-200',
+                              };
+                              
+                              return (
+                                <div key={partIdx} className="flex flex-wrap gap-2 my-3">
+                                  {actionGroup.map((action, actionIdx) => (
+                                    <button
+                                      key={actionIdx}
+                                      onClick={() => {
+                                        handleSend(action.message);
+                                      }}
+                                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95 ${styleMap[action.style] || styleMap['secondary']}`}
+                                    >
+                                      {action.label}
+                                    </button>
+                                  ))}
+                                </div>
                               );
                             } else {
                               return null;
@@ -15488,6 +15590,25 @@ ${JSON.stringify(currentJobs, null, 2)}
                   return [];
                 }
                 
+                // 招聘发布模式 - optimize步骤显示建议按钮
+                if (postMode.active && postMode.step === 'optimize') {
+                  return [
+                    { label: "✏️ 薪资调整", prompt: "薪资改高一点", autoSend: true },
+                    { label: "🏠 加上远程办公", prompt: "加上远程办公", autoSend: true },
+                    { label: "➕ 继续加岗位", prompt: "继续加岗位", autoSend: true },
+                    { label: "🗑️ 删掉最后一个", prompt: "删掉最后一个岗位", autoSend: true },
+                  ];
+                }
+                
+                // 招聘发布模式 - requirement步骤显示快捷需求
+                if (postMode.active && postMode.step === 'requirement') {
+                  return [
+                    { label: "💡 招前端", prompt: "招一个前端工程师", autoSend: true },
+                    { label: "💡 招后端", prompt: "招一个后端工程师", autoSend: true },
+                    { label: "💡 招产品经理", prompt: "招一个产品经理", autoSend: true },
+                  ];
+                }
+                
                 // 非完善简历模式
                 if (!selectedTask) {
                   // 通用 AI 助手 - 显示找工作等快捷入口
@@ -15583,13 +15704,8 @@ ${JSON.stringify(currentJobs, null, 2)}
                       key={sIdx}
                       onClick={() => {
                         if (item.autoSend) {
-                          // 自动发送：直接设置消息并触发发送
-                          setInputMessage(item.prompt);
-                          // 使用 setTimeout 确保状态更新后再调用 handleSend
-                          setTimeout(() => {
-                            const sendBtn = document.querySelector('[data-send-btn]') as HTMLButtonElement;
-                            if (sendBtn) sendBtn.click();
-                          }, 50);
+                          // 自动发送：直接调用 handleSend
+                          handleSend(item.prompt);
                         } else {
                           setInputMessage(item.prompt);
                         }
@@ -16037,7 +16153,13 @@ const AIDeliveryView = () => {
     {role: 'assistant', content: '您好！我是 AI 投递助手。我将帮助您完成简历投递全流程，包括简历优化、求职信生成、投递策略规划等。'}
   ]);
   const [inputMessage, setInputMessage] = useState('');
-  const [selectedModel, setSelectedModel] = useState('Devnors 1.0');
+  // 根据用户当前方案等级初始化模型选择
+  const [selectedModel, setSelectedModel] = useState(() => {
+    const t = user?.account_tier?.toUpperCase();
+    if (t === 'ULTRA') return 'Devnors 1.0 Ultra';
+    if (t === 'PRO') return 'Devnors 1.0 Pro';
+    return 'Devnors 1.0';
+  });
   
   const allModelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
   const isModelAvailable = (model: string) => {
