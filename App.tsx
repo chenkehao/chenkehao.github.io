@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,7 +12,8 @@ import {
   Smartphone, ShieldEllipsis, MessageSquare, ExternalLink, Phone, MapPin, Share2, Loader2, Rocket, Terminal, Play, Square, Activity,
   Cpu, Coins, Fingerprint, Building2, Building, Layers, Eye, Compass, Info, Heart, LayoutDashboard, Settings, PieChart, CheckSquare, ListTodo, PenTool,
   History, Timer, ClipboardCheck, Filter, ChevronRight, ChevronDown, UserCircle2, Database, AlertCircle, Sparkle, Eraser, Milestone, Brain, Pin, Trash2, Edit3, Save, CreditCard, ArrowUpRight, TrendingDown, Wallet, Key, UserPlus, ShieldAlert, Laptop, Bell, Verified, Medal, Trophy, Landmark, CircleDollarSign, Gem, CreditCard as CreditCardIcon, Github as GithubIcon, MessageCircle, Tag, Instagram, Twitter, RotateCcw, GitBranch, ArrowRightCircle, Upload, Code, PlusCircle, Wand2, Link2, Linkedin, Gift, FileCheck, Moon, Sun, Inbox, AlertTriangle, Paperclip, Scan, IdCard, Camera, ImageIcon, CheckCircle, XCircle, Car, BadgeCheck,
-  Settings2, Check, Shield
+  Settings2, Check, Shield, Star, Wrench,
+  ScrollText, RefreshCw, Pencil, ArrowLeftRight, Pause
 } from 'lucide-react';
 import { analyzeResume, chatWithInterviewer } from './services/geminiService';
 import { CandidateProfile, Job, SkillGap, AgentFeedback, AccountTier, TeamMember, CustomLLMConfig } from './types';
@@ -524,6 +525,115 @@ const MOCK_TALENTS: TalentInfo[] = [
 ];
 
 // --- 业务组件 ---
+
+/**
+ * StreamingMessage — 实时打字机效果组件
+ * 模拟 AI 逐字输出的体验，当 targetText 变化时只打出新增部分
+ */
+const StreamingMessage = ({ targetText, speed = 18, onTyping }: { targetText: string; speed?: number; onTyping?: () => void }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const prevTargetRef = useRef('');
+  const rafRef = useRef<number>(0);
+  const charIdxRef = useRef(0);
+  const baseTextRef = useRef('');
+  const scrollTickRef = useRef(0);
+  const onTypingRef = useRef(onTyping);
+  onTypingRef.current = onTyping;
+  
+  useEffect(() => {
+    // 当 targetText 变化时计算新增部分
+    const prevTarget = prevTargetRef.current;
+    prevTargetRef.current = targetText;
+    
+    // 找公共前缀长度（保留已打出的部分）
+    let commonLen = 0;
+    const minLen = Math.min(prevTarget.length, targetText.length);
+    for (let i = 0; i < minLen; i++) {
+      if (prevTarget[i] === targetText[i]) commonLen = i + 1;
+      else break;
+    }
+    
+    // 如果新文本完全不同或是全新的，从公共部分开始打
+    baseTextRef.current = targetText.slice(0, commonLen);
+    charIdxRef.current = commonLen;
+    setDisplayedText(baseTextRef.current);
+    
+    // 取消之前的动画
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    
+    let lastTime = 0;
+    scrollTickRef.current = 0;
+    const animate = (time: number) => {
+      if (!lastTime) lastTime = time;
+      const elapsed = time - lastTime;
+      
+      if (elapsed >= speed) {
+        lastTime = time;
+        // 动态调整每帧字符数：文本量大时打得更快
+        const remaining = targetText.length - charIdxRef.current;
+        const charsPerTick = remaining > 200 ? 6 : remaining > 80 ? 4 : remaining > 20 ? 3 : 1;
+        charIdxRef.current = Math.min(charIdxRef.current + charsPerTick, targetText.length);
+        setDisplayedText(targetText.slice(0, charIdxRef.current));
+        
+        // 每打几次触发一次滚动（避免过于频繁）
+        scrollTickRef.current++;
+        if (scrollTickRef.current % 5 === 0) {
+          onTypingRef.current?.();
+        }
+      }
+      
+      if (charIdxRef.current < targetText.length) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        // 打完了，最后滚一次
+        onTypingRef.current?.();
+      }
+    };
+    
+    if (charIdxRef.current < targetText.length) {
+      rafRef.current = requestAnimationFrame(animate);
+    }
+    
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [targetText, speed]);
+  
+  const isTyping = displayedText.length < targetText.length;
+  
+  return (
+    <div>
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({node, ...props}) => <h3 className="text-base font-bold text-slate-900 mt-3 mb-2" {...props} />,
+          h2: ({node, ...props}) => <h4 className="text-sm font-bold text-slate-900 mt-3 mb-1.5" {...props} />,
+          h3: ({node, ...props}) => <h5 className="text-sm font-bold text-slate-800 mt-2 mb-1" {...props} />,
+          p: ({node, ...props}) => <p className="my-1.5 leading-relaxed" {...props} />,
+          ul: ({node, ...props}) => <ul className="my-2 ml-4 list-disc space-y-1" {...props} />,
+          ol: ({node, ...props}) => <ol className="my-2 ml-4 list-decimal space-y-1" {...props} />,
+          li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+          strong: ({node, ...props}) => <strong className="font-bold text-slate-900" {...props} />,
+          em: ({node, ...props}) => <em className="italic text-slate-500" {...props} />,
+          code: ({node, inline, className, ...props}: any) => {
+            const isInline = inline || !className;
+            return isInline ? (
+              <code className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+            ) : (
+              <code className="block bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto font-mono my-2" {...props} />
+            );
+          },
+          hr: ({node, ...props}) => <hr className="my-3 border-slate-200" {...props} />,
+        }}
+      >
+        {displayedText}
+      </ReactMarkdown>
+      {isTyping && (
+        <span className="inline-block w-1.5 h-4 bg-indigo-500 rounded-sm animate-pulse ml-0.5 align-text-bottom" />
+      )}
+    </div>
+  );
+};
 
 const MockInterviewConsole = ({ questions, profile }: { questions: string[], profile: CandidateProfile }) => {
   const [messages, setMessages] = useState<{ role: 'ai' | 'user', text: string }[]>([
@@ -3575,21 +3685,29 @@ const WorkbenchView = () => {
   
   // 使用当前登录用户的 ID 获取数据（纯动态数据）
   const userId = user?.id || 0;
-  const { data: flowsData, loading: flowsLoading } = useFlows(10);
+  const { data: flowsData, loading: flowsLoading } = useFlows(20, userId || undefined);
   const { data: todosData, loading: todosLoading } = useTodos(userId);
 
-  // 转换 flows 数据为前端需要的格式
-  const matchingData = flowsData.map((flow: any) => ({
+  const isEmployer = userRole === 'employer' || userRole === 'recruiter';
+  const isCandidate = userRole === 'candidate';
+
+  // 转换 flows 数据为前端需要的格式 — 后端已按角色返回对应视角
+  const matchingData = (flowsData || []).map((flow: any) => ({
     id: flow.id,
     candidate: flow.candidateName || '未知候选人',
+    candidateId: flow.candidateId,
     job: flow.role || '未知职位',
+    jobId: flow.jobId,
     company: flow.company || '未知公司',
-    salary: '面议',
+    salary: flow.salary || '面议',
     matchScore: flow.matchScore || 0,
     currentStep: flow.currentStep || 1,
-    nodes: ['解析', '对标', '初试', '复试', '终审'],
-    lastAction: flow.timeline?.[0]?.action || '流程进行中',
-    status: flow.status === 'active' ? '面试中' : flow.status === 'completed' ? 'Offer' : '进行中',
+    totalSteps: flow.totalSteps || 4,
+    nodes: flow.nodes || (isCandidate ? ['投递', '匹配', '筛选', '结果'] : ['邀请', '匹配', '筛选', '结果']),
+    lastAction: flow.lastAction || flow.timeline?.[0]?.action || '流程进行中',
+    queueType: flow.queueType || (isCandidate ? 'delivery' : 'recruit'),
+    status: flow.status === 'completed' ? '已通过' : flow.status === 'rejected' ? '未通过' : flow.status === 'screening' ? '筛选中' : '进行中',
+    statusColor: flow.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : flow.status === 'rejected' ? 'bg-red-50 text-red-500' : flow.status === 'screening' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600',
   }));
 
   const tokenStats = [
@@ -3728,97 +3846,126 @@ const WorkbenchView = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-12 space-y-8">
-          <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow overflow-hidden  ">
+          <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow overflow-hidden">
             <div className="flex justify-between items-center mb-8">
-              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3 ">
-                <Activity className="text-indigo-600" size={24} /> AI对接队列
+              <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+                <Activity className="text-indigo-600" size={24} /> {isCandidate ? '智能投递队列' : '智能招聘队列'}
               </h2>
-              <div className="flex gap-2">
-                 <span className="flex items-center gap-1 text-xs font-black text-slate-400 uppercase"><div className="w-2 h-2 rounded-full bg-indigo-600"></div> 已完成</span>
-                 <span className="flex items-center gap-1 text-xs font-black text-slate-400 uppercase"><div className="w-2 h-2 rounded-full bg-slate-200"></div> 待执行</span>
+              <div className="flex gap-3">
+                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> 已通过</span>
+                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> 进行中</span>
+                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-red-400"></div> 未通过</span>
               </div>
             </div>
+
+            {flowsLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
+            ) : !isLoggedIn ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Activity size={48} className="text-slate-200 mb-4" />
+                <p className="text-slate-400 text-sm font-medium mb-2">请先登录查看数据</p>
+                <button onClick={() => navigate('/login')} className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-500 transition-colors">立即登录</button>
+              </div>
+            ) : matchingData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Activity size={48} className="text-slate-200 mb-4" />
+                <p className="text-slate-400 text-sm font-medium mb-2">{isCandidate ? '暂无投递记录' : '暂无招聘流程'}</p>
+                <p className="text-slate-300 text-xs">{isCandidate ? '前往 AI 助手开始智能求职投递' : '前往 AI 助手开始智能招聘'}</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[1000px]">
+              <table className="w-full text-left min-w-[900px]">
                 <thead>
-                  <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400 ">
-                    <th className="pb-4 pl-2">候选人与目标岗位</th>
-                    <th className="pb-4 text-center">匹配分</th>
+                  <tr className="border-b border-slate-50 text-xs uppercase font-black tracking-widest text-slate-400">
+                    <th className="pb-4 pl-2">{isCandidate ? '目标企业与岗位' : '候选人与目标岗位'}</th>
+                    <th className="pb-4 text-center">匹配度</th>
                     <th className="pb-4">薪资范围</th>
-                    <th className="pb-4">核心节点进度</th>
-                    <th className="pb-4">最新 AI 动作</th>
+                    <th className="pb-4">流程进度</th>
+                    <th className="pb-4">最新动态</th>
                     <th className="pb-4 text-right pr-2">状态</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50 ">
-                  {matchingData.map(item => (
+                <tbody className="divide-y divide-slate-50">
+                  {matchingData.map((item: any) => (
                     <tr 
                       key={item.id} 
                       onClick={() => navigate(`/workbench/flow/${item.id}`)}
-                      className="group hover:bg-slate-50/50 transition-colors cursor-pointer /50"
+                      className="group hover:bg-slate-50/50 transition-colors cursor-pointer"
                     >
                       <td className="py-5 pl-2">
                         <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg ring-4 ring-indigo-50 ">
-                             {item.candidate.charAt(0)}
-                           </div>
-                           <div>
-                             <div className="font-black text-slate-900 text-sm ">{item.candidate}</div>
-                             <div className="text-xs font-bold text-indigo-600 mt-0.5">{item.company}</div>
-                             <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1 ">
-                               <Briefcase size={10} /> {item.job}
+                           {isCandidate ? (
+                             <div className="w-10 h-10 rounded bg-slate-100 text-slate-600 flex items-center justify-center font-bold shadow-sm border border-slate-200">
+                               {(item.company || '?').charAt(0)}
                              </div>
+                           ) : (
+                             <div className="w-10 h-10 rounded bg-indigo-600 text-white flex items-center justify-center font-bold shadow-lg ring-4 ring-indigo-50">
+                               {(item.candidate || '?').charAt(0)}
+                             </div>
+                           )}
+                           <div>
+                             {isCandidate ? (
+                               <>
+                                 <div className="font-black text-slate-900 text-sm">{item.company}</div>
+                                 <div className="text-xs font-bold text-indigo-600 mt-0.5 flex items-center gap-1">
+                                   <Briefcase size={10} /> {item.job}
+                                 </div>
+                               </>
+                             ) : (
+                               <>
+                                 <div className="font-black text-slate-900 text-sm">{item.candidate}</div>
+                                 <div className="text-xs font-bold text-indigo-600 mt-0.5">{item.company}</div>
+                                 <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                                   <Briefcase size={10} /> {item.job}
+                                 </div>
+                               </>
+                             )}
                            </div>
                         </div>
                       </td>
                       <td className="py-5">
                          <div className="flex flex-col items-center gap-1">
-                           <div className={`px-3 py-1 rounded-full text-[11px] font-black shadow-sm ${item.matchScore >= 90 ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600  '}`}>
+                           <div className={`px-3 py-1 rounded-full text-[11px] font-black shadow-sm ${item.matchScore >= 90 ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
                              {item.matchScore}%
                            </div>
-                           <div className="text-[8px] font-bold text-slate-400 uppercase">Confidence</div>
                          </div>
                       </td>
                       <td className="py-5">
-                        <div className="text-sm font-bold text-slate-700 ">{item.salary}</div>
+                        <div className="text-sm font-bold text-slate-700">{item.salary}</div>
                       </td>
                       <td className="py-5">
-                         <div className="flex items-center gap-2">
-                            {['解析', '对标', '初试', '复试'].map((node, nIdx) => (
+                         <div className="flex items-center gap-1.5">
+                            {(item.nodes || []).map((node: string, nIdx: number) => (
                               <div key={nIdx} className="flex items-center">
                                 <div 
                                   className={`w-2 h-2 rounded-full transition-all duration-500 ${nIdx < item.currentStep ? 'bg-indigo-600' : 'bg-slate-200'}`}
                                   title={node}
                                 ></div>
-                                {nIdx < 3 && <div className={`w-4 h-0.5 ${nIdx < item.currentStep - 1 ? 'bg-indigo-600' : 'bg-slate-100 '}`}></div>}
+                                {nIdx < (item.nodes || []).length - 1 && (
+                                  <div className={`w-3 h-0.5 ${nIdx < item.currentStep - 1 ? 'bg-indigo-600' : 'bg-slate-100'}`} />
+                                )}
                               </div>
                             ))}
-                            <span className="ml-2 text-xs font-bold text-slate-500 ">{item.nodes[item.currentStep - 1]}</span>
+                            <span className="ml-2 text-xs font-bold text-slate-500">{(item.nodes || [])[Math.min(item.currentStep - 1, (item.nodes || []).length - 1)] || ''}</span>
                          </div>
                       </td>
                       <td className="py-5">
-                         <div className="flex items-center gap-2">
-                            <Bot size={12} className="text-indigo-400" />
-                            <span className="text-xs text-slate-600 font-medium italic">“{item.lastAction}”</span>
+                         <div className="flex items-center gap-2 max-w-[220px]">
+                            <Bot size={12} className="text-indigo-400 flex-shrink-0" />
+                            <span className="text-xs text-slate-600 font-medium truncate" title={item.lastAction}>{item.lastAction}</span>
                          </div>
                       </td>
                       <td className="py-5 text-right pr-2">
-                         <div className="flex flex-col items-end gap-1">
-                            <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest ${
-                              item.status === '面试中' ? 'bg-blue-50 text-blue-600' : 
-                              item.status === 'Offer' ? 'bg-emerald-50 text-emerald-600' : 
-                              'bg-slate-100 text-slate-500'
-                            }`}>
-                              {item.status}
-                            </span>
-                            <span className="text-[9px] font-bold text-slate-400">实时更新中</span>
-                         </div>
+                         <span className={`inline-block px-3 py-1 rounded-lg text-xs font-black ${item.statusColor}`}>
+                           {item.status}
+                         </span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -5152,6 +5299,7 @@ const PricingView = () => {
         { name: '高级推理能力', value: '-', included: false },
         { name: '专属技术支持', value: '-', included: false },
         { name: '高阶对接算法', value: '-', included: false },
+        { name: '求职云端轮巡周期', value: '1 天', included: true },
       ],
       cta: '免费使用',
       color: 'border-slate-200',
@@ -5173,6 +5321,7 @@ const PricingView = () => {
         { name: '高级推理能力', value: '✓', included: true },
         { name: '专属技术支持', value: '工单', included: true },
         { name: '高阶对接算法', value: '-', included: false },
+        { name: '求职云端轮巡周期', value: '7 天', included: true },
       ],
       cta: '立即升级',
       color: 'border-indigo-200 shadow-xl',
@@ -5194,6 +5343,7 @@ const PricingView = () => {
         { name: '专属技术支持', value: '工单', included: true },
         { name: '高阶对接算法', value: '✓', included: true },
         { name: '定制化微调', value: '✓', included: true },
+        { name: '求职云端轮巡周期', value: '30 天', included: true },
       ],
       cta: '立即升级',
       color: 'border-rose-200 shadow-xl',
@@ -5412,7 +5562,7 @@ const CandidateView = () => {
         <div className="absolute top-0 right-0 p-8 opacity-5"><Brain size={120} /></div>
         <div className="flex justify-between items-center mb-6 relative z-10">
             <h3 className="text-xl font-black flex items-center gap-3 text-slate-900">
-              <Database size={20} className="text-emerald-500" /> 人才画像 Memory
+              <Database size={20} className="text-emerald-500" /> 个人记忆 Memory
             </h3>
             <button 
               onClick={() => navigate('/candidate/memory')}
@@ -5427,7 +5577,7 @@ const CandidateView = () => {
           ) : memories.length === 0 ? (
             <div className="col-span-4 text-center py-8 text-slate-400">
               <Database size={32} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm font-medium">暂无人才画像记忆</p>
+              <p className="text-sm font-medium">暂无个人记忆</p>
               <button 
                 onClick={() => navigate('/candidate/memory')}
                 className="mt-2 text-emerald-600 text-xs font-bold hover:underline"
@@ -5441,7 +5591,7 @@ const CandidateView = () => {
                 <span className="text-sm font-black uppercase tracking-wider">{memory.type}</span>
                 <span className="text-xs text-slate-400 font-mono">{memory.date}</span>
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed">"{memory.content}"</p>
+              <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>"{memory.content}"</p>
             </div>
           ))}
         </div>
@@ -5492,8 +5642,11 @@ const CandidateView = () => {
                 ))}
               </div>
               
-              <button className="w-full mt-6 bg-slate-50 hover:bg-slate-100 text-slate-600 py-4 rounded font-black text-sm flex items-center justify-center gap-2 transition-all border border-slate-200 border-dashed">
-                <ChevronDown size={18} /> 查看更多
+              <button 
+                onClick={() => navigate('/candidate/jobs')}
+                className="w-full mt-6 bg-slate-50 hover:bg-slate-100 text-slate-600 py-4 rounded font-black text-sm flex items-center justify-center gap-2 transition-all border border-slate-200 border-dashed"
+              >
+                <ArrowRight size={18} /> 查看全部推荐岗位
               </button>
             </div>
 
@@ -5556,7 +5709,7 @@ const CandidateHomeView = () => {
 
       <div className="mb-8">
         <button onClick={() => navigate('/candidate/memory')} className="group w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white px-8 py-6 rounded-lg font-black text-xl flex items-center justify-center gap-3 shadow-2xl shadow-indigo-200 active:scale-98 transition-all">
-          <Brain size={28} /> 人才画像 Memory
+          <Brain size={28} /> 个人记忆 Memory
           <ChevronRight size={24} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
@@ -5634,13 +5787,35 @@ const CandidateHomeView = () => {
   );
 };
 
-// --- 企业画像 Memory 详情页 ---
+// --- 企业记忆 Memory 详情页 ---
 const EnterpriseMemoryView = () => {
   const navigate = useNavigate();
   const { user, isLoggedIn, userRole } = useAuth();
   const [activeCategory, setActiveCategory] = useState('全部');
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean; memoryId: number | null; content: string}>({show: false, memoryId: null, content: ''});
   const [deleting, setDeleting] = useState(false);
+  
+  // 添加/编辑弹窗
+  const [memoryModal, setMemoryModal] = useState<{show: boolean; mode: 'add' | 'edit'; id?: number; type: string; content: string; importance: string}>({
+    show: false, mode: 'add', type: 'requirement', content: '', importance: 'Medium'
+  });
+  const [saving, setSaving] = useState(false);
+  
+  // 记忆类型选项（企业画像）
+  const memoryTypeOptions: { id: string; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'culture', label: '文化', icon: <Building2 size={18} />, color: 'text-rose-500' },
+    { id: 'tech', label: '技术', icon: <Code size={18} />, color: 'text-indigo-500' },
+    { id: 'requirement', label: '要求', icon: <ClipboardCheck size={18} />, color: 'text-orange-500' },
+    { id: 'strategy', label: '策略', icon: <Target size={18} />, color: 'text-fuchsia-500' },
+    { id: 'benefit', label: '福利', icon: <Gift size={18} />, color: 'text-cyan-500' },
+    { id: 'action', label: '动作', icon: <Zap size={18} />, color: 'text-violet-500' },
+    { id: 'preference', label: '偏好', icon: <Star size={18} />, color: 'text-purple-500' },
+    { id: 'experience', label: '经验', icon: <Briefcase size={18} />, color: 'text-amber-500' },
+  ];
+  
+  // 中文类型名 → 英文 type 的反向映射
+  const typeNameToId: Record<string, string> = {};
+  memoryTypeOptions.forEach(t => { typeNameToId[t.label] = t.id; });
   
   // 使用 API 获取企业画像记忆数据 (scope = 'employer')
   const userId = user?.id || 1;
@@ -5657,6 +5832,37 @@ const EnterpriseMemoryView = () => {
     if (activeCategory === '全部') return memoriesData;
     return memoriesData.filter((m: any) => m.type === activeCategory || m.type?.toUpperCase() === activeCategory.toUpperCase());
   }, [activeCategory, memoriesData]);
+  
+  // 保存记忆（添加/编辑）
+  const handleSaveMemory = async () => {
+    if (!memoryModal.content.trim()) return;
+    setSaving(true);
+    try {
+      if (memoryModal.mode === 'edit' && memoryModal.id) {
+        const { updateMemory } = await import('./services/apiService');
+        await updateMemory(memoryModal.id, {
+          type: memoryModal.type,
+          content: memoryModal.content.trim(),
+          importance: memoryModal.importance,
+          scope: 'employer',
+        });
+      } else {
+        const { createMemory } = await import('./services/apiService');
+        await createMemory({
+          type: memoryModal.type,
+          content: memoryModal.content.trim(),
+          importance: memoryModal.importance,
+          scope: 'employer',
+        }, userId);
+      }
+      refetchMemories();
+      setMemoryModal({ show: false, mode: 'add', type: 'requirement', content: '', importance: 'Medium' });
+    } catch (e) {
+      console.error('保存记忆失败:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
   
   // 删除记忆
   const handleDeleteMemory = async () => {
@@ -5711,9 +5917,9 @@ const EnterpriseMemoryView = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
-           <h1 className="text-4xl font-black text-slate-900 flex items-center gap-4">
-             <div className="p-3 bg-indigo-600 text-white rounded shadow-xl shadow-indigo-100"><Brain size={32} /></div>
-             企业画像 Memory 记忆中心
+           <h1 className="text-3xl font-black text-slate-900 flex items-center gap-4">
+             <div className="p-3 bg-indigo-600 text-white rounded shadow-xl shadow-indigo-100"><Brain size={28} /></div>
+             企业记忆 Memory
            </h1>
            <p className="text-slate-500 font-medium mt-2">Devnors Agent 持续学习并固化的企业招聘偏好与文化基因</p>
         </div>
@@ -5721,13 +5927,16 @@ const EnterpriseMemoryView = () => {
           <button 
             onClick={handleOptimizeMemories}
             disabled={optimizing || memoriesLoading}
-            className="bg-amber-500 text-white px-6 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50"
+            className="bg-amber-500 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50"
           >
-            {optimizing ? <Loader2 className="animate-spin" size={20} /> : <Wand2 size={20} />}
+            {optimizing ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
             {optimizing ? 'AI 优化中...' : '记忆优化'}
           </button>
-          <button onClick={() => navigate('/ai-assistant?editType=employer&editField=company')} className="bg-indigo-600 text-white px-6 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
-             <Plus size={20} /> 添加新记忆
+          <button 
+            onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'requirement', content: '', importance: 'Medium' })}
+            className="bg-indigo-600 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
+          >
+             <Plus size={18} /> 添加新记忆
           </button>
         </div>
       </div>
@@ -5745,7 +5954,7 @@ const EnterpriseMemoryView = () => {
            <div className="bg-white p-6 rounded border border-slate-100 card-shadow">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 px-2">记忆分类库</h3>
               <div className="space-y-1">
-                 {['全部', '文化', '技术', '要求', '策略'].map((cat) => (
+                 {['全部', '文化', '技术', '要求', '策略', '动作', '福利', '偏好'].map((cat) => (
                    <button 
                      key={cat}
                      onClick={() => setActiveCategory(cat)}
@@ -5758,24 +5967,41 @@ const EnterpriseMemoryView = () => {
               </div>
            </div>
            
-           <div className="bg-indigo-900 p-8 rounded text-white shadow-xl relative overflow-hidden">
-              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-600/5" />
-              <h4 className="text-xs font-black uppercase text-indigo-400 mb-2">AI 记忆同步状态</h4>
+           <div className="bg-indigo-50 p-5 rounded border border-indigo-200 shadow-sm relative overflow-hidden">
+              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-200/30" />
+              <h4 className="text-xs font-black uppercase text-indigo-600 mb-2">AI 记忆同步状态</h4>
               <div className="flex items-center gap-2 mb-4">
                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-sm font-black">Agent 同步中 (100%)</span>
+                 <span className="text-sm font-black text-slate-800">Agent 同步中 (100%)</span>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed italic">“系统正在实时分析您与人才沟通的细节，并自动提炼新的招聘偏好记忆。”</p>
+              <p className="text-xs text-slate-500 leading-relaxed italic">“系统正在实时分析您与人才沟通的细节，并自动提炼新的招聘偏好记忆。”</p>
            </div>
         </div>
 
         <div className="lg:col-span-9">
+           {!memoriesLoading && filteredMemories.length === 0 ? (
+              <div className="bg-white rounded-lg border border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-5">
+                  <Brain size={32} className="text-indigo-400" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-700 mb-2">暂无企业记忆</h3>
+                <p className="text-sm text-slate-400 mb-6 max-w-sm leading-relaxed">AI Agent 会在招聘对话中自动提炼记忆，您也可以手动添加招聘偏好、企业文化等信息，让 Agent 更懂您的需求</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'requirement', content: '', importance: 'Medium' })}
+                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-95"
+                  >
+                    <Plus size={16} /> 手动添加记忆
+                  </button>
+                </div>
+              </div>
+           ) : (
            <div className="grid grid-cols-1 gap-6">
               {filteredMemories.map((memory) => (
-                <div key={memory.id} className="bg-white p-8 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all flex flex-col md:flex-row gap-8">
+                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all flex flex-col md:flex-row gap-6">
                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                         <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
+                      <div className="flex items-center gap-2.5 mb-3">
+                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
                            {memory.type}
                          </span>
                          <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
@@ -5783,14 +6009,24 @@ const EnterpriseMemoryView = () => {
                          <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
                            <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
                          </span>
-                         <div className={`ml-auto w-2 h-2 rounded-full ${memory.importance === 'High' ? 'bg-rose-500' : 'bg-amber-500'}`} title={`重要性: ${memory.importance}`}></div>
+                         
                       </div>
-                      <p className="text-lg text-slate-800 font-bold leading-relaxed mb-6 group-hover:text-indigo-600 transition-colors">
+                      <p className="text-base text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
                         “{memory.content}”
                       </p>
-                      <div className="flex items-center gap-4 text-xs font-black text-slate-400 uppercase tracking-widest">
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
                          <button 
-                           onClick={() => navigate(`/ai-assistant?editType=employer&editField=${memory.type?.toLowerCase() || 'company'}&editId=${memory.id}`)}
+                           onClick={() => {
+                             const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
+                             setMemoryModal({
+                               show: true,
+                               mode: 'edit',
+                               id: memory.id,
+                               type: typeId,
+                               content: memory.content,
+                               importance: memory.importance || 'Medium',
+                             });
+                           }}
                            className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors"
                          >
                            <Edit3 size={12} /> 编辑
@@ -5803,17 +6039,111 @@ const EnterpriseMemoryView = () => {
                          </button>
                       </div>
                    </div>
-                   <div className="md:w-64 bg-slate-50 rounded-lg p-6 border border-slate-100 flex flex-col justify-center">
-                      <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-2">Agent 推理逻辑</h5>
-                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
-                        {memory.ai_reasoning || "基于您过去的招聘偏好和候选人筛选历史自动提取，用于优化后续人才匹配。点击「记忆优化」生成详细推理。"}
-                      </p>
+                   <div className="md:w-56 bg-slate-50 rounded-lg p-5 border border-slate-100 flex flex-col justify-between">
+                      <div>
+                        <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Agent 推理逻辑</h5>
+                        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                          {memory.ai_reasoning || ({
+                            requirement: '基于用户在对话中明确提出的招聘要求固化，后续生成岗位、筛选候选人时将自动遵循此规则。',
+                            culture: '从用户描述中提取的企业文化与工作方式偏好，将影响岗位描述中的团队氛围和工作环境部分。',
+                            tech: '用户指定的技术栈偏好或技术要求，后续岗位生成和候选人匹配时将优先匹配此技术方向。',
+                            strategy: '从用户操作中提炼的招聘策略与面试方法论，将指导 Agent 后续的招聘流程和候选人评估。',
+                            benefit: '用户设定的福利待遇标准，生成岗位时将自动附带此福利信息，提升岗位吸引力。',
+                            action: '基于用户操作行为和指令记录的动作偏好，Agent 后续执行相似任务时将参考此模式。',
+                            preference: '用户的通用招聘偏好，贯穿所有岗位生成和候选人筛选环节。',
+                            experience: '用户对候选人经验的要求标准，匹配候选人时将以此作为核心筛选维度。',
+                          } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
+                        </p>
+                      </div>
+                      {memory.version_history && memory.version_history.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-200">
+                          <h6 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <History size={10} /> 版本记录 ({memory.version_history.length})
+                          </h6>
+                          <div className="space-y-1 max-h-20 overflow-y-auto">
+                            {memory.version_history.slice(-3).map((v: any, vi: number) => (
+                              <div key={vi} className="text-xs text-slate-400 leading-tight">
+                                <span className="font-bold text-slate-500">v{v.version}</span>
+                                <span className="mx-1">·</span>
+                                <span>{v.date}</span>
+                                <span className="mx-1">·</span>
+                                <span className="text-slate-500">{v.source?.substring(0, 20)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                    </div>
                 </div>
               ))}
            </div>
+           )}
         </div>
       </div>
+      
+      {/* 添加/编辑记忆弹窗 */}
+      {memoryModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                {memoryModal.mode === 'add' ? <Plus className="text-indigo-600" size={20} /> : <Edit3 className="text-indigo-600" size={20} />}
+              </div>
+              <h3 className="text-lg font-black text-slate-900">{memoryModal.mode === 'add' ? '添加新记忆' : '编辑记忆'}</h3>
+            </div>
+            
+            {/* 类型选择 */}
+            <div className="mb-4">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">记忆类型</label>
+              <div className="grid grid-cols-4 gap-2">
+                {memoryTypeOptions.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setMemoryModal(prev => ({ ...prev, type: opt.id }))}
+                    className={`p-2.5 rounded-lg border-2 transition-all text-center flex flex-col items-center gap-1 ${
+                      memoryModal.type === opt.id 
+                        ? 'border-indigo-600 bg-indigo-50' 
+                        : 'border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className={memoryModal.type === opt.id ? 'text-indigo-600' : opt.color}>{opt.icon}</div>
+                    <div className="text-xs font-bold text-slate-700">{opt.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* 内容 */}
+            <div className="mb-4">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">记忆内容</label>
+              <textarea
+                value={memoryModal.content}
+                onChange={(e) => setMemoryModal(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="请输入记忆内容，例如：招聘薪资范围统一为15-30K..."
+                className="w-full h-28 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-300 transition-all resize-none"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setMemoryModal({ show: false, mode: 'add', type: 'requirement', content: '', importance: 'Medium' })}
+                className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                disabled={saving}
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSaveMemory}
+                disabled={saving || !memoryModal.content.trim()}
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                {saving ? '保存中...' : memoryModal.mode === 'add' ? '添加记忆' : '保存修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* 删除确认弹窗 */}
       {deleteConfirm.show && (
@@ -5863,26 +6193,18 @@ const EnterpriseMemoryView = () => {
             <p className="text-slate-600 mb-4">{optimizeResult.message}</p>
             
             {optimizeResult.summary && (
-              <div className="grid grid-cols-5 gap-2 mb-4">
+              <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-indigo-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-indigo-600">{optimizeResult.summary.merged || 0}</div>
                   <div className="text-[10px] text-indigo-500 font-medium">合并</div>
-                </div>
-                <div className="bg-rose-50 rounded-lg p-2 text-center">
-                  <div className="text-lg font-black text-rose-600">{optimizeResult.summary.deleted || 0}</div>
-                  <div className="text-[10px] text-rose-500 font-medium">删除</div>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-emerald-600">{optimizeResult.summary.reclassified || 0}</div>
                   <div className="text-[10px] text-emerald-500 font-medium">重分类</div>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-2 text-center">
-                  <div className="text-lg font-black text-amber-600">{optimizeResult.summary.created || 0}</div>
-                  <div className="text-[10px] text-amber-500 font-medium">新增</div>
-                </div>
                 <div className="bg-purple-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-purple-600">{optimizeResult.summary.reasoning_updated || 0}</div>
-                  <div className="text-[10px] text-purple-500 font-medium">推理</div>
+                  <div className="text-[10px] text-purple-500 font-medium">推理更新</div>
                 </div>
               </div>
             )}
@@ -5895,17 +6217,21 @@ const EnterpriseMemoryView = () => {
                     <div key={idx} className="text-xs text-slate-600 flex items-start gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-white font-bold ${
                         action.action === 'merge' ? 'bg-indigo-500' :
-                        action.action === 'delete' ? 'bg-rose-500' :
-                        action.action === 'reclassify' ? 'bg-emerald-500' : 'bg-amber-500'
+                        action.action === 'reclassify' ? 'bg-emerald-500' : 'bg-purple-500'
                       }`}>
                         {action.action === 'merge' ? '合并' :
-                         action.action === 'delete' ? '删除' :
-                         action.action === 'reclassify' ? '重分类' : '新增'}
+                         action.action === 'reclassify' ? '重分类' : '推理'}
                       </span>
                       <span className="flex-1">{action.reason}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(!optimizeResult.actions || optimizeResult.actions.length === 0) && (
+              <div className="bg-slate-50 rounded-lg p-4 mb-4 text-center">
+                <p className="text-sm text-slate-500">所有记忆已是最优状态，无需调整。</p>
               </div>
             )}
             
@@ -5922,17 +6248,69 @@ const EnterpriseMemoryView = () => {
   );
 };
 
-// --- 人才画像 Memory 详情页 ---
+// --- 个人记忆 Memory 详情页 ---
 const CandidateMemoryView = () => {
   const navigate = useNavigate();
   const { user, isLoggedIn, userRole } = useAuth();
   const [activeCategory, setActiveCategory] = useState('全部');
   const [deleteConfirm, setDeleteConfirm] = useState<{show: boolean; memoryId: number | null; content: string}>({show: false, memoryId: null, content: ''});
   const [deleting, setDeleting] = useState(false);
+  
+  // 添加/编辑弹窗
+  const [memoryModal, setMemoryModal] = useState<{show: boolean; mode: 'add' | 'edit'; id?: number; type: string; content: string; importance: string}>({
+    show: false, mode: 'add', type: 'skill', content: '', importance: 'Medium'
+  });
+  const [saving, setSaving] = useState(false);
+  
+  // 记忆类型选项（人才画像）
+  const memoryTypeOptions: { id: string; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'skill', label: '技能', icon: <Wrench size={18} />, color: 'text-emerald-500' },
+    { id: 'experience', label: '经验', icon: <Briefcase size={18} />, color: 'text-amber-500' },
+    { id: 'preference', label: '偏好', icon: <Star size={18} />, color: 'text-purple-500' },
+    { id: 'goal', label: '目标', icon: <Target size={18} />, color: 'text-rose-500' },
+    { id: 'salary', label: '薪酬', icon: <Coins size={18} />, color: 'text-green-500' },
+    { id: 'location', label: '地点', icon: <MapPin size={18} />, color: 'text-sky-500' },
+    { id: 'tech', label: '技术', icon: <Code size={18} />, color: 'text-indigo-500' },
+    { id: 'culture', label: '文化', icon: <Building2 size={18} />, color: 'text-rose-500' },
+  ];
+  
+  const typeNameToId: Record<string, string> = {};
+  memoryTypeOptions.forEach(t => { typeNameToId[t.label] = t.id; });
 
   // 使用 API 获取人才画像记忆数据 (scope = 'candidate')
   const userId = user?.id || 1;
   const { data: memoriesData, loading: memoriesLoading, refetch: refetchMemories } = useMemories(userId, 'candidate');
+  
+  // 保存记忆（添加/编辑）
+  const handleSaveMemory = async () => {
+    if (!memoryModal.content.trim()) return;
+    setSaving(true);
+    try {
+      if (memoryModal.mode === 'edit' && memoryModal.id) {
+        const { updateMemory } = await import('./services/apiService');
+        await updateMemory(memoryModal.id, {
+          type: memoryModal.type,
+          content: memoryModal.content.trim(),
+          importance: memoryModal.importance,
+          scope: 'candidate',
+        });
+      } else {
+        const { createMemory } = await import('./services/apiService');
+        await createMemory({
+          type: memoryModal.type,
+          content: memoryModal.content.trim(),
+          importance: memoryModal.importance,
+          scope: 'candidate',
+        }, userId);
+      }
+      refetchMemories();
+      setMemoryModal({ show: false, mode: 'add', type: 'skill', content: '', importance: 'Medium' });
+    } catch (e) {
+      console.error('保存记忆失败:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
   
   // 删除记忆
   const handleDeleteMemory = async () => {
@@ -5992,9 +6370,9 @@ const CandidateMemoryView = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
-           <h1 className="text-4xl font-black text-slate-900 flex items-center gap-4">
-             <div className="p-3 bg-emerald-600 text-white rounded shadow-xl shadow-emerald-100"><Brain size={32} /></div>
-             人才画像 Memory 记忆中心
+           <h1 className="text-3xl font-black text-slate-900 flex items-center gap-4">
+             <div className="p-3 bg-emerald-600 text-white rounded shadow-xl shadow-emerald-100"><Brain size={28} /></div>
+             个人记忆 Memory
            </h1>
            <p className="text-slate-500 font-medium mt-2">Devnors Agent 持续学习并固化的人才能力、技能偏好与职业发展轨迹</p>
         </div>
@@ -6002,13 +6380,16 @@ const CandidateMemoryView = () => {
           <button 
             onClick={handleOptimizeMemories}
             disabled={optimizing || memoriesLoading}
-            className="bg-amber-500 text-white px-6 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50"
+            className="bg-amber-500 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-amber-600 transition-all active:scale-95 disabled:opacity-50"
           >
-            {optimizing ? <Loader2 className="animate-spin" size={20} /> : <Wand2 size={20} />}
+            {optimizing ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
             {optimizing ? 'AI 优化中...' : '记忆优化'}
           </button>
-          <button onClick={() => navigate('/ai-assistant?editType=candidate&editField=skill')} className="bg-emerald-600 text-white px-6 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:bg-emerald-700 transition-all active:scale-95">
-             <Plus size={20} /> 添加新记忆
+          <button 
+            onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'skill', content: '', importance: 'Medium' })}
+            className="bg-emerald-600 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
+          >
+             <Plus size={18} /> 添加新记忆
           </button>
         </div>
       </div>
@@ -6021,12 +6402,12 @@ const CandidateMemoryView = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-3 space-y-4">
            <div className="bg-white p-6 rounded border border-slate-100 card-shadow">
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 px-2">记忆分类库</h3>
               <div className="space-y-1">
-                 {['全部', '技能', '经验', '偏好', '目标'].map((cat) => (
+                 {['全部', '技能', '经验', '偏好', '目标', '薪酬', '地点', '技术'].map((cat) => (
                    <button 
                      key={cat}
                      onClick={() => setActiveCategory(cat)}
@@ -6039,24 +6420,41 @@ const CandidateMemoryView = () => {
               </div>
            </div>
            
-           <div className="bg-emerald-50 p-8 rounded border border-emerald-200 shadow-sm relative overflow-hidden">
-              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-600/5" />
+           <div className="bg-emerald-50 p-5 rounded border border-emerald-200 shadow-sm relative overflow-hidden">
+              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-emerald-200/30" />
               <h4 className="text-xs font-black uppercase text-emerald-600 mb-2">AI 记忆同步状态</h4>
               <div className="flex items-center gap-2 mb-4">
                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-sm font-black text-slate-700">Agent 同步中 (100%)</span>
+                 <span className="text-sm font-black text-slate-800">Agent 同步中 (100%)</span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed italic">"系统正在实时分析您的职业履历，并自动提炼能力画像与职业偏好记忆。"</p>
            </div>
         </div>
 
         <div className="lg:col-span-9">
+           {!memoriesLoading && filteredMemories.length === 0 ? (
+              <div className="bg-white rounded-lg border border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-5">
+                  <Brain size={32} className="text-emerald-400" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-700 mb-2">暂无个人记忆</h3>
+                <p className="text-sm text-slate-400 mb-6 max-w-sm leading-relaxed">AI Agent 会在与您对话的过程中自动提炼记忆，您也可以手动添加技能、偏好等信息，帮助 Agent 更精准地理解您</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'skill', content: '', importance: 'Medium' })}
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all active:scale-95"
+                  >
+                    <Plus size={16} /> 手动添加记忆
+                  </button>
+                </div>
+              </div>
+           ) : (
            <div className="grid grid-cols-1 gap-6">
               {filteredMemories.map((memory) => (
-                <div key={memory.id} className="bg-white p-8 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all flex flex-col md:flex-row gap-8">
+                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all flex flex-col md:flex-row gap-6">
                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                         <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
+                      <div className="flex items-center gap-2.5 mb-3">
+                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
                            {memory.type}
                          </span>
                          <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
@@ -6064,14 +6462,24 @@ const CandidateMemoryView = () => {
                          <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
                            <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
                          </span>
-                         <div className={`ml-auto w-2 h-2 rounded-full ${memory.importance === 'High' ? 'bg-rose-500' : 'bg-emerald-500'}`} title={`重要性: ${memory.importance}`}></div>
+                         
                       </div>
-                      <p className="text-lg text-slate-800 font-bold leading-relaxed mb-6 group-hover:text-emerald-600 transition-colors">
+                      <p className="text-base text-slate-800 font-semibold leading-relaxed mb-4 group-hover:text-emerald-600 transition-colors">
                         "{memory.content}"
                       </p>
-                      <div className="flex items-center gap-4 text-xs font-black text-slate-400 uppercase tracking-widest">
+                      <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
                          <button 
-                           onClick={() => navigate(`/ai-assistant?editType=candidate&editField=${memory.type?.toLowerCase() || 'skill'}&editId=${memory.id}`)}
+                           onClick={() => {
+                             const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
+                             setMemoryModal({
+                               show: true,
+                               mode: 'edit',
+                               id: memory.id,
+                               type: typeId,
+                               content: memory.content,
+                               importance: memory.importance || 'Medium',
+                             });
+                           }}
                            className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
                          >
                            <Edit3 size={12} /> 编辑
@@ -6084,17 +6492,109 @@ const CandidateMemoryView = () => {
                          </button>
                       </div>
                    </div>
-                   <div className="md:w-64 bg-emerald-50 rounded-lg p-6 border border-emerald-100 flex flex-col justify-center">
-                      <h5 className="text-[9px] font-black text-emerald-600 uppercase tracking-tighter mb-2">Agent 推理逻辑</h5>
-                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
-                        {memory.ai_reasoning || "基于您的职业履历和求职偏好自动提取，用于优化后续职位匹配。点击「记忆优化」生成详细推理。"}
-                      </p>
+                   <div className="md:w-56 bg-emerald-50 rounded-lg p-5 border border-emerald-100 flex flex-col justify-between">
+                      <div>
+                        <h5 className="text-xs font-black text-emerald-600 uppercase tracking-wider mb-2">Agent 推理逻辑</h5>
+                        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                          {memory.ai_reasoning || ({
+                            skill: '从用户简历或对话中识别的核心技能，将用于岗位匹配时的能力评估和推荐排序。',
+                            experience: '用户的工作经历记录，匹配岗位时将对照经验年限和行业背景进行精准推荐。',
+                            preference: '用户表达的求职偏好，过滤推荐岗位时优先满足这些条件。',
+                            goal: '用户的职业发展目标，推荐岗位时将考虑岗位的成长空间是否匹配用户长期规划。',
+                            salary: '用户的薪酬期望区间，推荐岗位时自动过滤薪资不匹配的机会。',
+                            location: '用户的工作地点偏好，推荐岗位时优先推荐符合地点要求的机会。',
+                            tech: '用户掌握的技术栈，匹配岗位时将以技术契合度作为核心推荐依据。',
+                            culture: '用户偏好的工作文化与团队氛围，推荐时倾向匹配文化契合的企业。',
+                          } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
+                        </p>
+                      </div>
+                      {memory.version_history && memory.version_history.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-emerald-200">
+                          <h6 className="text-xs font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <History size={10} /> 版本记录 ({memory.version_history.length})
+                          </h6>
+                          <div className="space-y-1 max-h-20 overflow-y-auto">
+                            {memory.version_history.slice(-3).map((v: any, vi: number) => (
+                              <div key={vi} className="text-xs text-slate-400 leading-tight">
+                                <span className="font-bold text-slate-500">v{v.version}</span>
+                                <span className="mx-1">·</span>
+                                <span>{v.date}</span>
+                                <span className="mx-1">·</span>
+                                <span className="text-slate-500">{v.source?.substring(0, 20)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                    </div>
                 </div>
               ))}
            </div>
+           )}
         </div>
       </div>
+      
+      {/* 添加/编辑记忆弹窗 */}
+      {memoryModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                {memoryModal.mode === 'add' ? <Plus className="text-emerald-600" size={20} /> : <Edit3 className="text-emerald-600" size={20} />}
+              </div>
+              <h3 className="text-lg font-black text-slate-900">{memoryModal.mode === 'add' ? '添加新记忆' : '编辑记忆'}</h3>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">记忆类型</label>
+              <div className="grid grid-cols-4 gap-2">
+                {memoryTypeOptions.map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => setMemoryModal(prev => ({ ...prev, type: opt.id }))}
+                    className={`p-2.5 rounded-lg border-2 transition-all text-center flex flex-col items-center gap-1 ${
+                      memoryModal.type === opt.id 
+                        ? 'border-emerald-600 bg-emerald-50' 
+                        : 'border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div className={memoryModal.type === opt.id ? 'text-emerald-600' : opt.color}>{opt.icon}</div>
+                    <div className="text-xs font-bold text-slate-700">{opt.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">记忆内容</label>
+              <textarea
+                value={memoryModal.content}
+                onChange={(e) => setMemoryModal(prev => ({ ...prev, content: e.target.value }))}
+                placeholder="请输入记忆内容，例如：熟练掌握React和TypeScript..."
+                className="w-full h-28 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all resize-none"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setMemoryModal({ show: false, mode: 'add', type: 'skill', content: '', importance: 'Medium' })}
+                className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                disabled={saving}
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSaveMemory}
+                disabled={saving || !memoryModal.content.trim()}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                {saving ? '保存中...' : memoryModal.mode === 'add' ? '添加记忆' : '保存修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* 删除确认弹窗 */}
       {deleteConfirm.show && (
@@ -6144,26 +6644,18 @@ const CandidateMemoryView = () => {
             <p className="text-slate-600 mb-4">{optimizeResult.message}</p>
             
             {optimizeResult.summary && (
-              <div className="grid grid-cols-5 gap-2 mb-4">
+              <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-indigo-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-indigo-600">{optimizeResult.summary.merged || 0}</div>
                   <div className="text-[10px] text-indigo-500 font-medium">合并</div>
-                </div>
-                <div className="bg-rose-50 rounded-lg p-2 text-center">
-                  <div className="text-lg font-black text-rose-600">{optimizeResult.summary.deleted || 0}</div>
-                  <div className="text-[10px] text-rose-500 font-medium">删除</div>
                 </div>
                 <div className="bg-emerald-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-emerald-600">{optimizeResult.summary.reclassified || 0}</div>
                   <div className="text-[10px] text-emerald-500 font-medium">重分类</div>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-2 text-center">
-                  <div className="text-lg font-black text-amber-600">{optimizeResult.summary.created || 0}</div>
-                  <div className="text-[10px] text-amber-500 font-medium">新增</div>
-                </div>
                 <div className="bg-purple-50 rounded-lg p-2 text-center">
                   <div className="text-lg font-black text-purple-600">{optimizeResult.summary.reasoning_updated || 0}</div>
-                  <div className="text-[10px] text-purple-500 font-medium">推理</div>
+                  <div className="text-[10px] text-purple-500 font-medium">推理更新</div>
                 </div>
               </div>
             )}
@@ -6176,17 +6668,21 @@ const CandidateMemoryView = () => {
                     <div key={idx} className="text-xs text-slate-600 flex items-start gap-2">
                       <span className={`px-1.5 py-0.5 rounded text-white font-bold ${
                         action.action === 'merge' ? 'bg-indigo-500' :
-                        action.action === 'delete' ? 'bg-rose-500' :
-                        action.action === 'reclassify' ? 'bg-emerald-500' : 'bg-amber-500'
+                        action.action === 'reclassify' ? 'bg-emerald-500' : 'bg-purple-500'
                       }`}>
                         {action.action === 'merge' ? '合并' :
-                         action.action === 'delete' ? '删除' :
-                         action.action === 'reclassify' ? '重分类' : '新增'}
+                         action.action === 'reclassify' ? '重分类' : '推理'}
                       </span>
                       <span className="flex-1">{action.reason}</span>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {(!optimizeResult.actions || optimizeResult.actions.length === 0) && (
+              <div className="bg-slate-50 rounded-lg p-4 mb-4 text-center">
+                <p className="text-sm text-slate-500">所有记忆已是最优状态，无需调整。</p>
               </div>
             )}
             
@@ -6695,6 +7191,336 @@ const CandidateProfileView = () => {
   );
 };
 
+// --- 公开候选人个人主页（企业方查看） ---
+const PublicCandidateProfileView = () => {
+  const { candidateId } = useParams();
+  const navigate = useNavigate();
+  const [profileData, setProfileData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!candidateId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/public/talents/${candidateId}`);
+        if (res.ok) setProfileData(await res.json());
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
+  }, [candidateId]);
+
+  if (loading) return (
+    <div className="pt-40 text-center">
+      <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
+      <p className="text-slate-500">加载个人主页...</p>
+    </div>
+  );
+
+  if (!profileData) return (
+    <div className="pt-40 text-center">
+      <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
+      <p className="text-slate-500 font-bold">候选人资料未找到</p>
+      <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold">返回</button>
+    </div>
+  );
+
+  const dp = {
+    name: profileData.name || '未知',
+    role: profileData.role || '未设置职位',
+    experienceYears: profileData.experienceYears || 0,
+    skills: profileData.skills || [],
+    summary: profileData.summary || '',
+    idealJobPersona: profileData.idealJobPersona || '',
+    radarData: profileData.radarData || [],
+    education: profileData.education || [],
+    experience: profileData.experience || [],
+    projects: profileData.projects || [],
+    certifications: profileData.certifications || [],
+    awards: profileData.awards || [],
+    interviewQuestions: profileData.interviewQuestions || [],
+    optimizationSuggestions: profileData.optimizationSuggestions || [],
+    email: profileData.email,
+    phone: profileData.phone,
+    wechat: profileData.wechat,
+    salaryRange: profileData.salaryRange || '',
+    matchScore: profileData.matchScore || 0,
+  };
+
+  return (
+    <div className="pt-28 pb-16 px-6 max-w-6xl mx-auto animate-in fade-in duration-500">
+      {/* 顶部导航 */}
+      <div className="flex items-center justify-between mb-8">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 font-medium text-sm transition-colors">
+          <ChevronLeft size={18} /> 返回
+        </button>
+        {dp.matchScore > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-full text-sm font-black border border-indigo-100">
+            <Zap size={14} /> 匹配分 {dp.matchScore}%
+          </span>
+        )}
+      </div>
+
+      {/* 个人信息头部 */}
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-2xl p-8 mb-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
+        <div className="flex items-center gap-6 relative z-10">
+          <div className="w-24 h-24 bg-white/20 backdrop-blur text-white flex items-center justify-center text-4xl font-black rounded-xl">
+            {dp.name.charAt(0)}
+          </div>
+          <div className="flex-1">
+            <h1 className="text-3xl font-black mb-1">{dp.name}</h1>
+            <p className="text-indigo-200 font-medium mb-3">{dp.role}{dp.salaryRange ? ` · ${dp.salaryRange}` : ''}</p>
+            <div className="flex flex-wrap gap-2">
+              {dp.skills.slice(0, 6).map((skill: string, i: number) => (
+                <span key={i} className="px-3 py-1 bg-white/20 backdrop-blur text-white text-xs font-medium rounded-full">{skill}</span>
+              ))}
+            </div>
+          </div>
+          <div className="text-right hidden md:block">
+            <div className="text-4xl font-black">{dp.experienceYears}<span className="text-lg">年</span></div>
+            <div className="text-indigo-200 text-sm">工作经验</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧边栏 */}
+        <div className="space-y-6">
+          {/* 关于我 */}
+          {dp.summary && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">关于我</h3>
+              <p className="text-slate-700 text-sm leading-relaxed">{dp.summary}</p>
+            </div>
+          )}
+
+          {/* 联系方式 */}
+          <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-100 shadow-sm">
+            <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Phone size={14} /> 联系方式
+            </h3>
+            <div className="space-y-3">
+              {dp.phone && (
+                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-emerald-100">
+                  <Smartphone size={16} className="text-emerald-500 flex-shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-emerald-500 font-bold uppercase">手机</div>
+                    <div className="text-sm font-bold text-slate-800">{dp.phone}</div>
+                  </div>
+                </div>
+              )}
+              {dp.email && (
+                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-emerald-100">
+                  <Mail size={16} className="text-emerald-500 flex-shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-emerald-500 font-bold uppercase">邮箱</div>
+                    <div className="text-sm font-bold text-slate-800">{dp.email}</div>
+                  </div>
+                </div>
+              )}
+              {dp.wechat && (
+                <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-emerald-100">
+                  <MessageCircle size={16} className="text-emerald-500 flex-shrink-0" />
+                  <div>
+                    <div className="text-[10px] text-emerald-500 font-bold uppercase">微信</div>
+                    <div className="text-sm font-bold text-slate-800">{dp.wechat}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 能力雷达图 */}
+          {dp.radarData.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <BarChart3 size={14} /> 核心竞争力
+              </h3>
+              <RadarChart data={dp.radarData} />
+            </div>
+          )}
+
+          {/* 认证 */}
+          {dp.certifications?.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Award size={14} /> 专业认证
+              </h3>
+              <div className="space-y-3">
+                {dp.certifications.map((cert: any, i: number) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                    <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Award size={16} className="text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">{cert.name}</div>
+                      <div className="text-xs text-slate-500">{cert.issuer}{cert.date ? ` · ${cert.date}` : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 获奖 */}
+          {dp.awards?.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Trophy size={14} /> 获奖经历
+              </h3>
+              <div className="space-y-3">
+                {dp.awards.map((award: any, i: number) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                    <div className="w-9 h-9 bg-rose-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Trophy size={16} className="text-rose-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 text-sm truncate">{award.name}</div>
+                      <div className="text-xs text-slate-500">{award.org}{award.year ? ` · ${award.year}` : ''}</div>
+                      {award.description && <div className="text-xs text-slate-400 mt-1">{award.description}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 右侧主要内容 */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* 教育背景 */}
+          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
+              <GraduationCap size={18} className="text-emerald-600" /> 教育背景
+            </h3>
+            <div className="space-y-3">
+              {dp.education.length > 0 ? dp.education.map((edu: any, i: number) => (
+                <div key={i} className="flex gap-4 p-4 bg-slate-50 rounded-lg">
+                  <div className="w-11 h-11 bg-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <GraduationCap size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {typeof edu === 'string' ? (
+                      <p className="text-sm text-slate-700">{edu}</p>
+                    ) : (
+                      <>
+                        <h4 className="font-bold text-slate-900 text-base mb-1">{edu.school || '学校名称'}</h4>
+                        <p className="text-sm text-emerald-600 font-medium">{edu.major}{edu.degree && ` · ${edu.degree}`}</p>
+                        {edu.period && <p className="text-sm text-slate-500 mt-1">{edu.period}</p>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-slate-400">
+                  <GraduationCap size={24} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">暂无教育背景</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 工作经历 */}
+          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
+              <Briefcase size={18} className="text-indigo-600" /> 工作经历
+            </h3>
+            <div className="space-y-3">
+              {dp.experience.length > 0 ? dp.experience.map((exp: any, i: number) => (
+                <div key={i} className="flex gap-4 p-4 bg-slate-50 rounded-lg">
+                  <div className="w-11 h-11 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Briefcase size={20} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {typeof exp === 'string' ? (
+                      <p className="text-sm text-slate-700">{exp}</p>
+                    ) : (
+                      <>
+                        <h4 className="font-bold text-slate-900 text-base mb-1">{exp.position || exp.role || '职位'}</h4>
+                        <p className="text-sm text-indigo-600 font-medium">{exp.company}</p>
+                        {exp.period && <p className="text-sm text-slate-500 mt-1">{exp.period}</p>}
+                        {exp.description && <p className="text-sm text-slate-500 mt-2">{exp.description}</p>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-slate-400">
+                  <Briefcase size={24} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">暂无工作经历</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 项目经验 */}
+          {dp.projects.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
+                <Rocket size={18} className="text-amber-500" /> 项目经验
+              </h3>
+              <div className="space-y-3">
+                {dp.projects.map((proj: any, i: number) => (
+                  <div key={i} className="flex gap-4 p-4 bg-amber-50/50 rounded-lg">
+                    <div className="w-11 h-11 bg-amber-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Rocket size={20} className="text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {typeof proj === 'string' ? (
+                        <p className="text-sm text-slate-700">{proj}</p>
+                      ) : (
+                        <>
+                          <h4 className="font-bold text-slate-900 text-base mb-1">{proj.name || '项目名称'}</h4>
+                          {proj.role && <p className="text-sm text-amber-600 font-medium">{proj.role}</p>}
+                          {proj.description && <p className="text-sm text-slate-500 mt-2">{proj.description}</p>}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI 面试问题 */}
+          {dp.interviewQuestions?.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
+                <Bot size={18} className="text-indigo-600" /> AI 推荐面试题
+              </h3>
+              <div className="space-y-3">
+                {dp.interviewQuestions.map((q: string, i: number) => (
+                  <div key={i} className="flex gap-3 p-3 bg-indigo-50/50 rounded-lg">
+                    <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600 font-black text-xs flex-shrink-0">Q{i+1}</div>
+                    <p className="text-sm text-slate-700 font-medium leading-relaxed">{q}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AI 优化建议 */}
+          {dp.optimizationSuggestions?.length > 0 && (
+            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
+                <Sparkles size={18} className="text-violet-600" /> AI 优化建议
+              </h3>
+              <div className="space-y-2">
+                {dp.optimizationSuggestions.map((s: string, i: number) => (
+                  <div key={i} className="flex items-start gap-3 p-3 bg-violet-50/50 rounded-lg">
+                    <div className="w-6 h-6 bg-violet-100 rounded flex items-center justify-center text-violet-600 text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</div>
+                    <p className="text-sm text-slate-700">{s}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- 企业工作台 ---
 const EmployerDashboard = () => {
   const navigate = useNavigate();
@@ -6765,37 +7591,49 @@ const EmployerDashboard = () => {
         try {
           const { createTodo } = await import('./services/apiService');
           
-          // 检查是否已有进行中的招聘任务
-          const existingRecruitTask = tasks.find((t: any) => 
+          // 检查是否已有未完成的招聘任务（PENDING / IN_PROGRESS / RUNNING）
+          let recruitTask = tasks.find((t: any) => 
             (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
-            (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
+            (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS' || t.status === 'running')
           );
           
-          if (!existingRecruitTask) {
-            // 创建新的招聘任务
+          if (!recruitTask) {
+            // 没有未完成的任务，创建新的
             const taskShortId = `RC${Date.now().toString().slice(-6)}`;
-            await createTodo({
+            recruitTask = await createTodo({
               title: `智能招聘 #${taskShortId}`,
               description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
               priority: 'HIGH',
               source: 'AGENT',
               todo_type: 'RECRUIT',
-              ai_advice: '告诉 AI 助手您的招聘需求，如岗位名称、技能要求、薪资范围等，AI 将为您自动生成专业岗位描述并一键发布。',
+              ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成岗位、匹配候选人、筛选评估直到双方建立联系。',
               steps: [
                 { step: 1, title: '描述招聘需求', status: 'pending' },
                 { step: 2, title: 'AI 生成岗位', status: 'pending' },
                 { step: 3, title: '确认并发布', status: 'pending' },
+                { step: 4, title: '智能邀请投递', status: 'pending' },
+                { step: 5, title: '智能筛选评估', status: 'pending' },
               ],
             }, userId);
+            if (typeof refetchTasks === 'function') refetchTasks();
           }
+          
+          // 直接跳转到 AI 助手并选中该招聘任务
+          const targetTask = recruitTask;
+          setTimeout(() => {
+            setRecruitCheckModal(prev => ({ ...prev, show: false }));
+            // 先导航到 AI 助手页面
+            navigate('/ai-assistant');
+            // 然后选中该招聘任务
+            setTimeout(() => {
+              if (targetTask) {
+                setSelectedTask(targetTask);
+              }
+            }, 300);
+          }, 1200);
         } catch (e) {
           console.error('创建招聘任务失败:', e);
         }
-        
-        setTimeout(() => {
-          setRecruitCheckModal(prev => ({ ...prev, show: false }));
-          navigate('/ai-assistant?task=post');
-        }, 1200);
       }
     } catch (error) {
       console.error('检查招聘前置条件失败:', error);
@@ -6920,7 +7758,7 @@ const EmployerDashboard = () => {
         <div className="absolute top-0 right-0 p-8 opacity-5"><Brain size={120} /></div>
         <div className="flex justify-between items-center mb-6 relative z-10">
            <h3 className="text-xl font-black flex items-center gap-3 text-slate-900">
-             <Database size={20} className="text-indigo-500" /> 企业画像 Memory
+             <Database size={20} className="text-indigo-500" /> 企业记忆 Memory
            </h3>
            <button 
              onClick={() => navigate('/employer/memory')}
@@ -6935,7 +7773,7 @@ const EmployerDashboard = () => {
            ) : memories.length === 0 ? (
               <div className="col-span-4 text-center py-8 text-slate-400">
                 <Database size={32} className="mx-auto mb-2 opacity-50" />
-                <p className="text-sm font-medium">暂无企业画像记忆</p>
+                <p className="text-sm font-medium">暂无企业记忆</p>
                 <button 
                   onClick={() => navigate('/memory/input', { state: { scope: 'employer' } })}
                   className="mt-2 text-indigo-600 text-xs font-bold hover:underline"
@@ -6949,7 +7787,7 @@ const EmployerDashboard = () => {
                     <span className="text-sm font-black uppercase tracking-wider">{memory.type}</span>
                     <span className="text-xs text-slate-400 font-mono">{memory.date}</span>
                  </div>
-                 <p className="text-sm text-slate-600 leading-relaxed">"{memory.content}"</p>
+                 <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>"{memory.content}"</p>
               </div>
            ))}
         </div>
@@ -7031,10 +7869,10 @@ const EmployerDashboard = () => {
              )}
           </div>
 
-          {/* 修改：人才库功能列表 */}
+          {/* 推荐人才列表 */}
           <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow overflow-hidden">
              <h2 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-               <Users2 className="text-indigo-600" /> 人才库
+               <Users2 className="text-indigo-600" /> 推荐人才
              </h2>
              <div className="space-y-4">
                 {MOCK_TALENTS.map((talent, idx) => (
@@ -7076,9 +7914,9 @@ const EmployerDashboard = () => {
                 <div className="flex justify-center pt-4">
                   <button 
                     onClick={() => navigate('/employer/talent-pool')}
-                    className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1"
+                    className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 py-4 rounded font-black text-sm flex items-center justify-center gap-2 transition-all border border-slate-200 border-dashed"
                   >
-                    查看全部 <ChevronRight size={14} />
+                    <ArrowRight size={18} /> 查看全部推荐人才
                   </button>
                 </div>
              </div>
@@ -7573,13 +8411,49 @@ const EnterpriseHomeView = () => {
 const TalentDetailView = () => {
   const { talentId } = useParams();
   const navigate = useNavigate();
-  const talent = useMemo(() => MOCK_TALENTS.find(t => t.id === talentId), [talentId]);
+  const [talent, setTalent] = useState<any>(null);
+  const [talentLoading, setTalentLoading] = useState(true);
+  
+  useEffect(() => {
+    if (!talentId) return;
+    // 先尝试从 MOCK_TALENTS 查找
+    const mock = MOCK_TALENTS.find(t => t.id === talentId);
+    if (mock) {
+      setTalent(mock);
+      setTalentLoading(false);
+      return;
+    }
+    // 从后端加载真实候选人数据
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/public/talents/${talentId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTalent(data);
+        }
+      } catch (e) {
+        console.error('加载候选人详情失败:', e);
+      } finally {
+        setTalentLoading(false);
+      }
+    })();
+  }, [talentId]);
 
-  if (!talent) {
+  if (talentLoading) {
     return (
       <div className="pt-40 text-center animate-pulse">
         <Loader2 className="animate-spin mx-auto text-indigo-600 mb-4" size={48} />
         <p className="text-slate-500 font-bold">正在调取多智能体评估档案...</p>
+      </div>
+    );
+  }
+
+  if (!talent) {
+    return (
+      <div className="pt-40 text-center">
+        <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
+        <p className="text-slate-500 font-bold">候选人档案未找到</p>
+        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">返回</button>
       </div>
     );
   }
@@ -7763,6 +8637,13 @@ const JobPostDetailView = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'score' | 'time'>('time');
   const [showDesc, setShowDesc] = useState(false);
+  const [activeTab, setActiveTab] = useState<'applicants' | 'logs'>('applicants');
+  const [jobLogs, setJobLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [feedbackModal, setFeedbackModal] = useState<{ open: boolean; candidate: any }>({ open: false, candidate: null });
+  const [feedbackRating, setFeedbackRating] = useState<'good' | 'neutral' | 'bad'>('good');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -7784,6 +8665,24 @@ const JobPostDetailView = () => {
     }
   }, [postId, userId]);
 
+  // 加载岗位日志
+  useEffect(() => {
+    if (activeTab === 'logs' && postId) {
+      setLogsLoading(true);
+      (async () => {
+        try {
+          const { getJobLogs } = await import('./services/apiService');
+          const result = await getJobLogs(Number(postId));
+          setJobLogs(result.logs || []);
+        } catch (e) {
+          console.error('加载岗位日志失败:', e);
+        } finally {
+          setLogsLoading(false);
+        }
+      })();
+    }
+  }, [activeTab, postId]);
+
   const formatSalary = (min?: number, max?: number) => {
     if (!min && !max) return '面议';
     if (min && max) return `${(min / 1000).toFixed(0)}k - ${(max / 1000).toFixed(0)}k`;
@@ -7794,30 +8693,42 @@ const JobPostDetailView = () => {
   const statusLabelMap: Record<string, { text: string; color: string }> = {
     parsing: { text: '简历解析中', color: 'bg-blue-100 text-blue-700' },
     benchmarking: { text: '对标分析中', color: 'bg-purple-100 text-purple-700' },
-    screening: { text: '初筛中', color: 'bg-amber-100 text-amber-700' },
+    screening: { text: '邀请/筛选中', color: 'bg-amber-100 text-amber-700' },
     interviewing: { text: '面试中', color: 'bg-orange-100 text-orange-700' },
-    evaluating: { text: '评估中', color: 'bg-indigo-100 text-indigo-700' },
+    evaluating: { text: '筛选通过', color: 'bg-indigo-100 text-indigo-700' },
     offer: { text: 'Offer阶段', color: 'bg-emerald-100 text-emerald-700' },
-    accepted: { text: '已录用', color: 'bg-green-100 text-green-700' },
-    rejected: { text: '已拒绝', color: 'bg-red-100 text-red-600' },
+    accepted: { text: '已通过', color: 'bg-green-100 text-green-700' },
+    rejected: { text: '未通过', color: 'bg-red-100 text-red-600' },
     withdrawn: { text: '已撤回', color: 'bg-slate-100 text-slate-500' },
   };
 
   const stageLabelMap: Record<string, { text: string; color: string }> = {
-    parse: { text: '解析', color: 'text-blue-600' },
-    benchmark: { text: '对标', color: 'text-purple-600' },
+    parse: { text: '已邀请', color: 'text-blue-600' },
+    benchmark: { text: '已筛选', color: 'text-purple-600' },
     first_interview: { text: '初试', color: 'text-indigo-600' },
     second_interview: { text: '复试', color: 'text-orange-600' },
-    final: { text: '终审', color: 'text-emerald-600' },
+    final: { text: '双方通过', color: 'text-emerald-600' },
   };
 
   const getStatusLabel = (s: string) => statusLabelMap[s] || { text: s, color: 'bg-slate-100 text-slate-600' };
   const getStageLabel = (s: string) => stageLabelMap[s] || { text: s, color: 'text-slate-500' };
 
-  // 过滤和排序
+  // 过滤和排序（筛选通过的候选人优先显示）
+  const statusPriority = (app: any): number => {
+    if (app.screen_result?.both_pass) return 0;              // 筛选通过 → 最优先
+    if (app.status === 'accepted' || app.status === 'evaluating') return 1; // 已通过/筛选通过状态
+    if (app.status === 'offer') return 2;                    // Offer 阶段
+    if (app.status === 'screening') return 3;                // 邀请/筛选中
+    if (app.status === 'rejected' || app.status === 'withdrawn') return 5; // 未通过/已撤回 → 最后
+    return 4;                                                 // 其他
+  };
   const filteredApps = applications
     .filter(a => statusFilter === 'all' || a.status === statusFilter)
     .sort((a, b) => {
+      // 先按状态优先级排序
+      const priorityDiff = statusPriority(a) - statusPriority(b);
+      if (priorityDiff !== 0) return priorityDiff;
+      // 同优先级内再按用户选择的排序方式
       if (sortBy === 'score') return (b.match_score || 0) - (a.match_score || 0);
       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
     });
@@ -7917,7 +8828,34 @@ const JobPostDetailView = () => {
         </div>
       </div>
 
+      {/* Tab 切换 */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setActiveTab('applicants')}
+          className={`px-5 py-2.5 rounded-lg font-black text-sm transition-all flex items-center gap-2 ${
+            activeTab === 'applicants' 
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+              : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300'
+          }`}
+        >
+          <Users size={16} /> 求职者列表
+          {applications.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === 'applicants' ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600'}`}>{applications.length}</span>}
+        </button>
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`px-5 py-2.5 rounded-lg font-black text-sm transition-all flex items-center gap-2 ${
+            activeTab === 'logs' 
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+              : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-300'
+          }`}
+        >
+          <ScrollText size={16} /> 岗位日志
+          {jobLogs.length > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === 'logs' ? 'bg-white/20' : 'bg-amber-50 text-amber-600'}`}>{jobLogs.length}</span>}
+        </button>
+      </div>
+
       {/* 投递列表 */}
+      {activeTab === 'applicants' && (
       <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
@@ -7931,13 +8869,10 @@ const JobPostDetailView = () => {
               className="bg-slate-50 border border-slate-200 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
             >
               <option value="all">全部状态</option>
-              <option value="parsing">简历解析中</option>
-              <option value="screening">初筛中</option>
-              <option value="interviewing">面试中</option>
-              <option value="evaluating">评估中</option>
-              <option value="offer">Offer阶段</option>
-              <option value="accepted">已录用</option>
-              <option value="rejected">已拒绝</option>
+              <option value="screening">邀请/筛选中</option>
+              <option value="evaluating">筛选通过</option>
+              <option value="accepted">已通过</option>
+              <option value="rejected">未通过</option>
             </select>
             <select
               value={sortBy}
@@ -7962,44 +8897,133 @@ const JobPostDetailView = () => {
           </div>
         ) : (
           <div className="space-y-4 p-6">
-            {filteredApps.map((app) => {
+            {filteredApps.map((app, appIdx) => {
               const stLabel = getStatusLabel(app.status);
               const sgLabel = getStageLabel(app.current_stage);
               const avatarChar = (app.candidate_name || '?').charAt(0);
+              const isSimulated = app.source === 'ai_simulated';
+              const sr = app.screen_result;
               return (
-                <div key={app.flow_id} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all">
-                  <div className="flex items-center gap-5 w-full md:w-auto">
-                    {/* 头像 */}
-                    {app.candidate_avatar ? (
-                      <img src={app.candidate_avatar} alt="" className="w-14 h-14 rounded shadow-lg ring-4 ring-indigo-50 object-cover flex-shrink-0 group-hover:scale-105 transition-transform" />
-                    ) : (
-                      <div className="w-14 h-14 bg-indigo-600 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform flex-shrink-0">
-                        {avatarChar}
+                <div key={app.flow_id || `sim-${appIdx}`} className="flex flex-col p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
+                    <div 
+                      className="flex items-center gap-5 w-full md:w-auto cursor-pointer"
+                      onClick={() => { if (app.candidate_id) navigate(`/candidate/profile/${app.candidate_id}`); }}
+                      title={app.candidate_id ? '点击查看个人主页' : ''}
+                    >
+                      {/* 头像 */}
+                      {app.candidate_avatar ? (
+                        <img src={app.candidate_avatar} alt="" className="w-14 h-14 rounded shadow-lg ring-4 ring-indigo-50 object-cover flex-shrink-0 group-hover:scale-105 transition-transform" />
+                      ) : (
+                        <div className={`w-14 h-14 ${isSimulated ? 'bg-gradient-to-br from-violet-500 to-indigo-600' : 'bg-indigo-600'} text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform flex-shrink-0`}>
+                          {avatarChar}
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-base font-black tracking-tight ${app.candidate_id ? 'text-indigo-700 hover:text-indigo-900 hover:underline' : 'text-slate-900'}`}>{app.candidate_name}</span>
+                          {isSimulated && (
+                            <span className="text-[10px] font-bold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-100">AI 推荐</span>
+                          )}
+                          {app.source === 'real' && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">数据库</span>
+                          )}
+                        </div>
+                        {app.candidate_role && <div className="text-xs font-bold text-slate-500 mt-0.5">{app.candidate_role}{app.candidate_experience ? ` · ${app.candidate_experience}年经验` : ''}</div>}
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {app.match_score > 0 && (
+                            <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                              <Zap size={10} /> {app.match_score}% 匹配
+                            </span>
+                          )}
+                          <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${stLabel.color}`}>{stLabel.text}</span>
+                          <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg bg-white border border-slate-100 ${sgLabel.color}`}>{sgLabel.text}</span>
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <div className="text-base font-black text-slate-900 tracking-tight">{app.candidate_name}</div>
-                      {app.candidate_role && <div className="text-xs font-bold text-slate-500 mt-0.5">{app.candidate_role}{app.candidate_experience ? ` · ${app.candidate_experience}年经验` : ''}</div>}
-                      <div className="flex items-center gap-2 mt-2">
-                        {app.match_score > 0 && (
-                          <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                            <Zap size={10} /> {app.match_score}% 匹配
+                    </div>
+                    <div className="flex items-center gap-4 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
+                      <div className="text-right">
+                        <div className="text-xs text-slate-400 font-bold">{app.created_at ? new Date(app.created_at).toLocaleDateString('zh-CN') : '-'}</div>
+                        {app.last_action && <div className="text-xs text-slate-400 font-bold mt-1 max-w-[180px] truncate">{app.last_action}</div>}
+                      </div>
+                      {/* 反馈评价按钮已移至联系方式区域 */}
+                      {app.candidate_id ? (
+                        <button onClick={() => navigate(`/employer/talent/${app.candidate_id}`)} className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
+                          <ChevronRight size={18} />
+                        </button>
+                      ) : (
+                        <div className="p-3 text-slate-300"><ChevronRight size={18} /></div>
+                      )}
+                    </div>
+                  </div>
+                  {/* 筛选结果详情 */}
+                  {sr && (sr.employer_pass !== undefined || sr.candidate_pass !== undefined) && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3 text-xs">
+                      {sr.employer_score !== undefined && (
+                        <span className={`font-bold px-2 py-0.5 rounded ${sr.employer_pass ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                          🏢 企业评分 {sr.employer_score}分 {sr.employer_pass ? '✓' : '✗'}
+                        </span>
+                      )}
+                      {sr.candidate_interest !== undefined && (
+                        <span className={`font-bold px-2 py-0.5 rounded ${sr.candidate_pass ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-600'}`}>
+                          👤 候选人意向 {sr.candidate_interest}分 {sr.candidate_pass ? '✓' : '✗'}
+                        </span>
+                      )}
+                      {sr.final_status && (
+                        <span className={`font-black px-2 py-0.5 rounded ${sr.both_pass ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+                          → {sr.final_status}
+                        </span>
+                      )}
+                      {sr.strengths && sr.strengths.length > 0 && (
+                        <span className="text-slate-500 font-medium">优势: {sr.strengths.join('、')}</span>
+                      )}
+                    </div>
+                  )}
+                  {/* 双方通过 — 联系方式 + 查看简历 */}
+                  {sr?.both_pass && (
+                    <div className="mt-3 pt-3 border-t border-dashed border-emerald-200 bg-emerald-50/50 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
+                          <Phone size={13} /> 联系方式（筛选通过）
+                        </div>
+                        <button
+                          onClick={() => { setFeedbackModal({ open: true, candidate: app }); setFeedbackRating('good'); setFeedbackText(''); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all active:scale-95 shadow-sm"
+                        >
+                          <MessageSquare size={12} /> 反馈评价
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4 text-xs">
+                        {app.candidate_phone && (
+                          <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-emerald-100 font-bold text-slate-800">
+                            <Smartphone size={12} className="text-emerald-500" /> {app.candidate_phone}
                           </span>
                         )}
-                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg ${stLabel.color}`}>{stLabel.text}</span>
-                        <span className={`text-xs font-black uppercase px-2 py-0.5 rounded-lg bg-white border border-slate-100 ${sgLabel.color}`}>{sgLabel.text}</span>
+                        {app.candidate_email && (
+                          <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-emerald-100 font-bold text-slate-800">
+                            <Mail size={12} className="text-emerald-500" /> {app.candidate_email}
+                          </span>
+                        )}
+                        {(app.candidate_wechat || app.candidate_phone) && (
+                          <span className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-emerald-100 font-bold text-slate-800">
+                            <MessageCircle size={12} className="text-emerald-500" /> {app.candidate_wechat || app.candidate_phone}
+                          </span>
+                        )}
+                        {!app.candidate_phone && !app.candidate_email && (
+                          <span className="text-slate-400 font-medium">联系方式暂未提供</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-400 font-medium mt-2">
+                        请尽快联系，联系后通过「反馈评价」告诉我们实际体验，帮助 AI 改进。
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400 font-bold">{app.created_at ? new Date(app.created_at).toLocaleDateString('zh-CN') : '-'}</div>
-                      {app.last_action && <div className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">{app.last_action}</div>}
+                  )}
+                  {/* AI 分析详情 */}
+                  {app.details && !sr && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500 font-medium line-clamp-2">
+                      {app.details}
                     </div>
-                    <button onClick={() => navigate(`/employer/talent/${app.candidate_id}`)} className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
-                      <ChevronRight size={18} />
-                    </button>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -8015,6 +9039,252 @@ const JobPostDetailView = () => {
           </div>
         )}
       </div>
+      )}
+
+      {/* 岗位日志 */}
+      {activeTab === 'logs' && (
+      <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
+            <ScrollText size={22} className="text-amber-600" /> 岗位日志
+            {jobLogs.length > 0 && <span className="text-sm font-medium text-slate-400">({jobLogs.length})</span>}
+          </h2>
+          <button
+            onClick={() => {
+              setLogsLoading(true);
+              (async () => {
+                try {
+                  const { getJobLogs } = await import('./services/apiService');
+                  const result = await getJobLogs(Number(postId));
+                  setJobLogs(result.logs || []);
+                } catch { /* ignore */ } finally { setLogsLoading(false); }
+              })();
+            }}
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+          >
+            <RefreshCw size={14} className={logsLoading ? 'animate-spin' : ''} /> 刷新
+          </button>
+        </div>
+
+        {logsLoading ? (
+          <div className="text-center py-16">
+            <Loader2 className="mx-auto animate-spin text-indigo-600 mb-3" size={24} />
+            <p className="text-sm text-slate-400">加载日志中...</p>
+          </div>
+        ) : jobLogs.length === 0 ? (
+          <div className="text-center py-16">
+            <ScrollText className="mx-auto text-slate-300 mb-4" size={40} />
+            <p className="text-slate-900 font-black mb-1">暂无日志记录</p>
+            <p className="text-sm text-slate-500">岗位的发布、邀请、筛选等操作将自动记录在此</p>
+          </div>
+        ) : (
+          <div className="p-6">
+            {/* 日志时间线 */}
+            <div className="relative">
+              {/* 时间线竖线 */}
+              <div className="absolute left-5 top-2 bottom-2 w-px bg-gradient-to-b from-indigo-200 via-amber-200 to-slate-200" />
+              
+              <div className="space-y-0">
+                {jobLogs.map((log, idx) => {
+                  const actionConfig: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
+                    publish: { icon: <Rocket size={14} />, color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
+                    update: { icon: <Pencil size={14} />, color: 'text-blue-600', bgColor: 'bg-blue-100' },
+                    pause: { icon: <Pause size={14} />, color: 'text-amber-600', bgColor: 'bg-amber-100' },
+                    resume: { icon: <Play size={14} />, color: 'text-green-600', bgColor: 'bg-green-100' },
+                    close: { icon: <XCircle size={14} />, color: 'text-red-600', bgColor: 'bg-red-100' },
+                    invite_start: { icon: <Send size={14} />, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+                    invite_match: { icon: <Users size={14} />, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+                    invite_send: { icon: <Mail size={14} />, color: 'text-purple-600', bgColor: 'bg-purple-100' },
+                    screen_start: { icon: <Search size={14} />, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+                    screen_result: { icon: <BarChart3 size={14} />, color: 'text-orange-600', bgColor: 'bg-orange-100' },
+                    exchange_request: { icon: <ArrowLeftRight size={14} />, color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
+                    exchange_confirm: { icon: <CheckCircle size={14} />, color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
+                    ai_analysis: { icon: <Sparkles size={14} />, color: 'text-violet-600', bgColor: 'bg-violet-100' },
+                    user_action: { icon: <UserIcon size={14} />, color: 'text-slate-600', bgColor: 'bg-slate-100' },
+                    system: { icon: <Settings size={14} />, color: 'text-slate-500', bgColor: 'bg-slate-100' },
+                  };
+                  const cfg = actionConfig[log.action] || actionConfig.system;
+                  const actorLabel = log.actor_type === 'ai' 
+                    ? <><Bot size={11} className="inline -mt-0.5" /> AI</>
+                    : log.actor_type === 'system' 
+                    ? <><Settings2 size={11} className="inline -mt-0.5" /> 系统</>
+                    : <><UserIcon size={11} className="inline -mt-0.5" /> 用户</>;
+                  const timeStr = log.created_at ? new Date(log.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  
+                  return (
+                    <div key={log.id} className="relative pl-12 pb-6 group">
+                      {/* 时间线节点 */}
+                      <div className={`absolute left-2.5 top-1 w-5 h-5 rounded-full flex items-center justify-center ${cfg.bgColor} ${cfg.color} ring-4 ring-white shadow-sm`}>
+                        {cfg.icon}
+                      </div>
+                      
+                      <div className="bg-slate-50 rounded-lg p-4 border border-slate-100 group-hover:border-indigo-200 transition-all">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-slate-900 text-sm">{log.title}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${cfg.bgColor} ${cfg.color}`}>
+                              {actorLabel}
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-400 font-mono">{timeStr}</span>
+                        </div>
+                        <p className="text-sm text-slate-600 leading-relaxed">{log.content}</p>
+                        {log.extra_data && Object.keys(log.extra_data).length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-100">
+                            {log.extra_data.candidates_count && (
+                              <span className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded font-bold">
+                                匹配候选人: {log.extra_data.candidates_count} 人
+                              </span>
+                            )}
+                            {log.extra_data.screened_count && (
+                              <span className="text-xs bg-orange-50 text-orange-600 px-2 py-1 rounded font-bold">
+                                筛选推荐: {log.extra_data.screened_count} 人
+                              </span>
+                            )}
+                            {log.extra_data.candidates && Array.isArray(log.extra_data.candidates) && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {log.extra_data.candidates.map((c: any, ci: number) => (
+                                  <span key={ci} className="text-xs bg-white border border-slate-200 px-2 py-1 rounded-lg">
+                                    {c.name} {c.match_score ? `${c.match_score}%` : ''} {c.recommendation || ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {log.extra_data.screened && Array.isArray(log.extra_data.screened) && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {log.extra_data.screened.map((c: any, ci: number) => (
+                                  <span key={ci} className="text-xs bg-white border border-slate-200 px-2 py-1 rounded-lg">
+                                    {c.name} {c.match_score ? `${c.match_score}%` : ''} {c.recommendation || ''}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {log.extra_data.tags && Array.isArray(log.extra_data.tags) && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {log.extra_data.tags.map((t: string, ti: number) => (
+                                  <span key={ti} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* ===== 反馈评价模态框 ===== */}
+      {feedbackModal.open && feedbackModal.candidate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setFeedbackModal({ open: false, candidate: null })}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                <MessageSquare size={20} className="text-amber-500" />
+                反馈评价
+              </h3>
+              <p className="text-sm text-slate-500 mt-1">
+                对候选人 <span className="font-bold text-slate-900">{feedbackModal.candidate.candidate_name}</span> 的实际联系体验
+              </p>
+            </div>
+            <div className="p-6 space-y-5">
+              {/* 评价选择 */}
+              <div>
+                <label className="text-sm font-bold text-slate-700 mb-3 block">整体评价</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    { value: 'good' as const, emoji: '😊', label: '满意', desc: '符合预期', color: 'border-emerald-300 bg-emerald-50 text-emerald-700', activeColor: 'ring-2 ring-emerald-400 border-emerald-400 bg-emerald-100' },
+                    { value: 'neutral' as const, emoji: '😐', label: '一般', desc: '基本符合', color: 'border-slate-200 bg-slate-50 text-slate-700', activeColor: 'ring-2 ring-slate-400 border-slate-400 bg-slate-100' },
+                    { value: 'bad' as const, emoji: '😞', label: '不满意', desc: '需要改进', color: 'border-red-200 bg-red-50 text-red-700', activeColor: 'ring-2 ring-red-400 border-red-400 bg-red-100' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFeedbackRating(opt.value)}
+                      className={`p-4 rounded-xl border-2 text-center transition-all active:scale-95 ${feedbackRating === opt.value ? opt.activeColor : opt.color} hover:shadow-md`}
+                    >
+                      <div className="text-2xl mb-1">{opt.emoji}</div>
+                      <div className="text-sm font-black">{opt.label}</div>
+                      <div className="text-[10px] mt-0.5 opacity-70">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 详细评价 */}
+              <div>
+                <label className="text-sm font-bold text-slate-700 mb-2 block">
+                  具体评价 <span className="text-slate-400 font-medium">{feedbackRating === 'bad' ? '(请描述原因，帮助 AI 改进)' : '(选填)'}</span>
+                </label>
+                <textarea
+                  value={feedbackText}
+                  onChange={e => setFeedbackText(e.target.value)}
+                  placeholder={feedbackRating === 'bad' ? '请描述不满意的原因，如：沟通能力不足、技术水平与描述不符...' : feedbackRating === 'good' ? '可以描述满意的方面，如：技术扎实、沟通顺畅...' : '可以补充您的感受...'}
+                  className="w-full h-24 p-3 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none resize-none bg-slate-50"
+                />
+              </div>
+              {/* 提示 */}
+              <div className="bg-amber-50 rounded-lg p-3 flex items-start gap-2">
+                <Info size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-700 font-medium">
+                  {feedbackRating === 'bad'
+                    ? '不满意的评价将写入企业记忆，AI 后续匹配时会自动规避类似问题。'
+                    : feedbackRating === 'good'
+                    ? '满意的评价将帮助 AI 了解您的人才偏好，优化后续匹配。'
+                    : '您的反馈将记录在岗位日志中，持续优化 AI 对接质量。'}
+                </p>
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setFeedbackModal({ open: false, candidate: null })}
+                className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all"
+              >
+                取消
+              </button>
+              <button
+                disabled={feedbackSubmitting || (feedbackRating === 'bad' && !feedbackText.trim())}
+                onClick={async () => {
+                  setFeedbackSubmitting(true);
+                  try {
+                    const { submitCandidateFeedback } = await import('./services/apiService');
+                    const jobId = jobData?.id;
+                    if (jobId) {
+                      await submitCandidateFeedback({
+                        job_id: jobId,
+                        user_id: userId,
+                        candidate_name: feedbackModal.candidate.candidate_name,
+                        rating: feedbackRating,
+                        feedback_text: feedbackText.trim(),
+                      });
+                    }
+                    setFeedbackModal({ open: false, candidate: null });
+                    // 刷新日志
+                    if (activeTab === 'logs') {
+                      setLogsLoading(true);
+                      const { getJobLogs } = await import('./services/apiService');
+                      const result = await getJobLogs(Number(postId));
+                      setJobLogs(result.logs || []);
+                      setLogsLoading(false);
+                    }
+                  } catch (e) {
+                    console.error('提交反馈失败:', e);
+                  } finally {
+                    setFeedbackSubmitting(false);
+                  }
+                }}
+                className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {feedbackSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                提交反馈
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -8149,7 +9419,7 @@ const MemoryInputView = () => {
             <div>
               <h1 className="text-2xl font-black">手动录入新记忆</h1>
               <p className={`${isEmployerMemory ? 'text-indigo-200' : 'text-emerald-200'} text-sm`}>
-                {isEmployerMemory ? '为企业画像注入新的记忆与偏好' : '为人才画像添加技能、经验与职业目标'}
+                {isEmployerMemory ? '为企业记忆注入新的记忆与偏好' : '为个人记忆添加技能、经验与职业目标'}
               </p>
             </div>
           </div>
@@ -8240,6 +9510,17 @@ const LoginView = () => {
   
   // 获取来源页面（如果有）
   const from = (location.state as any)?.from || null;
+  
+  // 从 URL 获取邀请码 ref 参数（hash 模式：#/login?ref=XXXX 或 #/register?ref=XXXX）
+  const refCode = useMemo(() => {
+    const hash = window.location.hash || '';
+    const qIdx = hash.indexOf('?');
+    if (qIdx >= 0) {
+      const params = new URLSearchParams(hash.slice(qIdx));
+      return params.get('ref') || '';
+    }
+    return '';
+  }, []);
   
   // 表单数据
   const [phone, setPhone] = useState('');
@@ -8390,7 +9671,7 @@ const LoginView = () => {
         const result = await login(emailFormat, 'code_' + verifyCode);
         if (!result.success) {
           // 尝试注册（新用户）
-          const regResult = await register({ email: emailFormat, password: 'code_' + verifyCode, name: phone, role: 'VIEWER' });
+          const regResult = await register({ email: emailFormat, password: 'code_' + verifyCode, name: phone, role: 'VIEWER', ref_code: refCode || undefined });
           if (!regResult.success) {
             setError('验证码错误或已过期');
           } else {
@@ -8955,12 +10236,13 @@ const AIAssistantView = () => {
     analysisResult: string | null;
   }>({ active: false, step: 'resume', resumeText: '', analysisResult: null });
   
-  // 招聘发布模式状态
+  // 招聘发布模式状态（完整流程：需求→生成→优化→发布→邀请→筛选→完成）
   const [postMode, setPostMode] = useState<{
     active: boolean;
-    step: 'requirement' | 'generate' | 'optimize' | 'complete';
+    step: 'requirement' | 'generate' | 'optimize' | 'invite' | 'screen' | 'complete';
     jobDescription: string;
     generatedResult: string | null;
+    publishedJobs?: any[];  // 已发布的岗位列表
   }>({ active: false, step: 'requirement', jobDescription: '', generatedResult: null });
   
   // 邀请好友模式状态
@@ -9290,6 +10572,65 @@ const AIAssistantView = () => {
     return Math.round((completedTypes / requiredTypes.length) * 100);
   }, [memoriesData, userRole]);
   
+  // 提取高优先级企业记忆上下文 — 用于注入大模型 prompt
+  // 筛选条件：类型为"要求"的 + 强度>=2的其他类型记忆
+  const getMemoryContext = useCallback(() => {
+    if (!memoriesData || memoriesData.length === 0) return '';
+    
+    // 1. 所有"要求"类型的记忆
+    const requirementMemories = memoriesData.filter((m: any) => 
+      m.type === '要求' || m.raw_type === 'requirement'
+    );
+    
+    // 2. 强度>=2 的其他类型记忆（被多次强调的偏好）
+    const highEmphasisMemories = memoriesData.filter((m: any) => 
+      (m.emphasis_count || 1) >= 2 && 
+      m.type !== '要求' && m.raw_type !== 'requirement'
+    );
+    
+    // 3. 动作/策略类记忆（行为规则）
+    const actionMemories = memoriesData.filter((m: any) =>
+      (m.type === '动作' || m.raw_type === 'action' || m.type === '策略' || m.raw_type === 'strategy') &&
+      (m.emphasis_count || 1) < 2  // 避免与上面重复
+    );
+    
+    const allRelevant = [...requirementMemories, ...highEmphasisMemories, ...actionMemories];
+    if (allRelevant.length === 0) return '';
+    
+    const lines = allRelevant.map((m: any) => {
+      const strength = (m.emphasis_count || 1) > 1 ? `（强调×${m.emphasis_count}）` : '';
+      return `• [${m.type}] ${m.content}${strength}`;
+    });
+    
+    return `\n\n【企业记忆/偏好要求 — 请严格遵守】\n以下是该企业的历史偏好和明确要求，生成内容时必须参考并遵循：\n${lines.join('\n')}\n`;
+  }, [memoriesData]);
+  
+  // 招聘就绪状态（employer 用于通用助手底部提示"开始招聘"）
+  const [recruitReady, setRecruitReady] = useState(false);
+  // 企业认证是否已实际完成（基于认证数据，而非仅任务状态）
+  const [enterpriseCertDone, setEnterpriseCertDone] = useState(false);
+  useEffect(() => {
+    if (userRole !== 'employer') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getEnterpriseCertifications, getSettings } = await import('./services/apiService');
+        const [certs, settings] = await Promise.all([
+          getEnterpriseCertifications(userId).catch(() => []),
+          getSettings(userId).catch(() => ({})),
+        ]);
+        if (cancelled) return;
+        const hasCert = certs.some((c: any) => c.category === 'qualification' && c.name?.includes('营业执照'));
+        setEnterpriseCertDone(hasCert);
+        const requiredFields = ['display_name', 'industry', 'company_size', 'detail_address', 'description'];
+        const hasVal = (v: any) => v && typeof v === 'string' ? v.trim() !== '' && v.trim() !== '[]' && v.trim() !== '{}' : !!v;
+        const profileDone = requiredFields.every(k => hasVal(settings[k]));
+        setRecruitReady(hasCert && profileDone);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userRole, userId]);
+
   // 选中的任务
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [initialTaskLoaded, setInitialTaskLoaded] = useState(false);
@@ -9339,7 +10680,7 @@ const AIAssistantView = () => {
           (title.includes('企业') && title.includes('资料'));
       });
       
-      const certCompleted = certTask?.status?.toLowerCase() === 'completed';
+      const certCompleted = certTask?.status?.toLowerCase() === 'completed' || enterpriseCertDone;
       const profileCompleted = profileTask?.status?.toLowerCase() === 'completed';
       
       // 收集未完成的任务引导卡片
@@ -9394,7 +10735,7 @@ const AIAssistantView = () => {
   const GENERAL_MESSAGES_KEY = `devnors_general_messages_${userId || 'guest'}`;
   const TASK_MESSAGES_KEY = `devnors_task_messages_${userId || 'guest'}`;
   
-  // 从 localStorage 加载对话
+  // 从 localStorage 加载对话（作为后备）
   const loadSavedMessages = () => {
     try {
       const savedGeneral = localStorage.getItem(GENERAL_MESSAGES_KEY);
@@ -9425,7 +10766,50 @@ const AIAssistantView = () => {
   // 任务专属对话消息（按任务ID存储）
   const [taskMessages, setTaskMessages] = useState<Record<number, {role: 'user' | 'assistant', content: string}[]>>(loadSavedTaskMessages);
   
-  // 保存对话到 localStorage
+  // 聊天持久化相关状态
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false);
+  const loadedTaskIds = useRef<Set<number>>(new Set());
+  const persistedGeneralCount = useRef(0);
+  const persistedTaskCounts = useRef<Record<number, number>>({});
+  
+  // 自动将新增的通用对话消息持久化到后端
+  useEffect(() => {
+    if (!userId || !chatHistoryLoaded) return;
+    const prevCount = persistedGeneralCount.current;
+    const newMessages = generalMessages.slice(prevCount);
+    if (newMessages.length > 0) {
+      persistedGeneralCount.current = generalMessages.length;
+      import('./services/apiService').then(({ saveChatMessage }) => {
+        newMessages.forEach(msg => {
+          saveChatMessage({ role: msg.role, content: msg.content, todo_id: null }, userId).catch(e =>
+            console.error('[Chat Persist] 保存通用消息失败:', e)
+          );
+        });
+      });
+    }
+  }, [generalMessages, userId, chatHistoryLoaded]);
+  
+  // 自动将新增的任务对话消息持久化到后端
+  useEffect(() => {
+    if (!userId || !chatHistoryLoaded) return;
+    for (const [tidStr, msgs] of Object.entries(taskMessages)) {
+      const tid = Number(tidStr);
+      const prevCount = persistedTaskCounts.current[tid] || 0;
+      const newMessages = msgs.slice(prevCount);
+      if (newMessages.length > 0) {
+        persistedTaskCounts.current[tid] = msgs.length;
+        import('./services/apiService').then(({ saveChatMessage }) => {
+          newMessages.forEach(msg => {
+            saveChatMessage({ role: msg.role, content: msg.content, todo_id: tid }, userId).catch(e =>
+              console.error(`[Chat Persist] 保存任务(${tid})消息失败:`, e)
+            );
+          });
+        });
+      }
+    }
+  }, [taskMessages, userId, chatHistoryLoaded]);
+  
+  // 保存对话到 localStorage（作为后备缓存）
   useEffect(() => {
     if (userId) {
       try {
@@ -9446,8 +10830,55 @@ const AIAssistantView = () => {
     }
   }, [taskMessages, userId, TASK_MESSAGES_KEY]);
   
+  // 从后端加载历史对话（首次进入时只加载通用对话，任务对话按需加载）
+  useEffect(() => {
+    if (!userId || chatHistoryLoaded) return;
+    const loadFromBackend = async () => {
+      try {
+        const { getChatMessages } = await import('./services/apiService');
+        
+        // 只加载通用对话
+        const generalMsgs = await getChatMessages(userId, undefined, 100);
+        if (generalMsgs && generalMsgs.length > 0) {
+          const formatted = generalMsgs.map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+          setGeneralMessages(formatted);
+          persistedGeneralCount.current = formatted.length;
+        }
+        
+        console.log('[Chat History] 已从后端加载通用对话历史');
+      } catch (e) {
+        console.error('[Chat History] 从后端加载失败，使用本地缓存:', e);
+      }
+      setChatHistoryLoaded(true);
+    };
+    loadFromBackend();
+  }, [userId, chatHistoryLoaded]);
+  
+  // 按需加载任务对话（选中任务时触发）
+  const loadTaskMessages = async (taskId: number) => {
+    if (!userId || loadedTaskIds.current.has(taskId)) return;
+    loadedTaskIds.current.add(taskId);
+    try {
+      const { getChatMessages } = await import('./services/apiService');
+      const msgs = await getChatMessages(userId, taskId, 100);
+      if (msgs && msgs.length > 0) {
+        const formatted = msgs.map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        setTaskMessages(prev => ({ ...prev, [taskId]: formatted }));
+        persistedTaskCounts.current[taskId] = formatted.length;
+      }
+    } catch (e) {
+      console.error(`[Chat History] 加载任务(${taskId})对话失败:`, e);
+    }
+  };
+  
   // 当用户身份变化时，重新加载对话或显示欢迎消息
   useEffect(() => {
+    // 重置持久化计数器和加载状态，让后端重新加载
+    persistedGeneralCount.current = 0;
+    persistedTaskCounts.current = {};
+    loadedTaskIds.current = new Set();
+    setChatHistoryLoaded(false);
+    
     const savedMessages = loadSavedMessages();
     // 如果没有保存的对话（只有一条默认欢迎消息），则显示新的欢迎消息
     if (savedMessages.length <= 1) {
@@ -9495,7 +10926,7 @@ const AIAssistantView = () => {
         return prev;
       });
     }
-  }, [profileLoading, isNewUser, isLoggedIn, tasksLoading, tasks]);
+  }, [profileLoading, isNewUser, isLoggedIn, tasksLoading, tasks, enterpriseCertDone]);
   
   // 按角色过滤的任务列表（用于统计）
   const roleFilteredTasks = useMemo(() => {
@@ -9529,13 +10960,21 @@ const AIAssistantView = () => {
     roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed').length
   , [roleFilteredTasks]);
   
-  // 过滤后的任务列表（按角色和状态过滤）
+  // 过滤后的任务列表（按角色和状态过滤，已完成按时间倒序）
   const filteredTasks = useMemo(() => {
+    let list: any[];
     if (taskFilter === 'completed') {
-      return roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed');
+      list = roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed');
+      // 已完成任务按创建时间倒序排列（最近创建的任务排前面，最早创建的排后面）
+      list.sort((a: any, b: any) => {
+        const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
+        const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
     } else {
-      return roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() !== 'completed');
+      list = roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() !== 'completed');
     }
+    return list;
   }, [roleFilteredTasks, taskFilter]);
   
   const allModelOptions = ['Devnors 1.0', 'Devnors 1.0 Pro', 'Devnors 1.0 Ultra'];
@@ -9942,15 +11381,17 @@ const AIAssistantView = () => {
               const taskShortId = `RC${Date.now().toString().slice(-6)}`;
               await createTodo({
                 title: `智能招聘 #${taskShortId}`,
-                description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
+                description: 'AI 智能招聘助手 — 从需求到人才对接的全流程招聘',
                 priority: 'HIGH',
                 source: 'AGENT',
                 todo_type: 'RECRUIT',
-                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成专业岗位描述并一键发布。',
+                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成岗位、匹配候选人、筛选评估直到双方建立联系。',
                 steps: [
                   { step: 1, title: '描述招聘需求', status: 'pending' },
                   { step: 2, title: 'AI 生成岗位', status: 'pending' },
                   { step: 3, title: '确认并发布', status: 'pending' },
+                  { step: 4, title: '智能邀请投递', status: 'pending' },
+                  { step: 5, title: '智能筛选评估', status: 'pending' },
                 ],
               }, userId);
             }
@@ -9993,6 +11434,24 @@ const AIAssistantView = () => {
 
   // 处理招聘发布流程
   const handlePostProcess = async (userInput: string) => {
+    // 将岗位描述转为 Markdown 格式（支持对象/数组/字符串）
+    const formatJobDesc = (description: any): string => {
+      if (!description) return '暂无描述';
+      if (typeof description === 'string') return description;
+      if (typeof description === 'object' && !Array.isArray(description)) {
+        return Object.entries(description).map(([key, val]) => {
+          if (Array.isArray(val)) {
+            return `**${key}：**\n${(val as string[]).map(item => `• ${item}`).join('\n')}`;
+          }
+          return `**${key}：** ${val}`;
+        }).join('\n\n');
+      }
+      if (Array.isArray(description)) {
+        return description.map(item => `• ${item}`).join('\n');
+      }
+      return String(description);
+    };
+    
     if (postMode.step === 'requirement') {
       // 用户提交了招聘需求
       setPostMode(prev => ({ ...prev, jobDescription: userInput, step: 'generate' }));
@@ -10011,6 +11470,9 @@ const AIAssistantView = () => {
         const location = settingsData.detail_address || '';
         const benefits = settingsData.benefits || '';
         
+        // 获取企业记忆上下文
+        const memoryContext = getMemoryContext();
+        
         // 用 AI 生成职位描述
         const aiPrompt = `你是一个专业的HR招聘助手。用户只是简单描述了招聘需求，你需要根据企业信息和行业特点，"脑补"完善，生成完整专业的岗位信息。
 
@@ -10020,7 +11482,7 @@ const AIAssistantView = () => {
 - 企业规模：${companySize}
 - 工作地点：${location}
 - 企业福利：${benefits}
-
+${memoryContext}
 用户的大致需求：${userInput}
 
 请严格按照以下JSON格式返回（直接返回JSON数组，不要包含markdown代码块标记）：
@@ -10038,10 +11500,11 @@ const AIAssistantView = () => {
 要求：
 1. 用户只简单说"招前端"，你要脑补成完整的岗位描述，包含合理的技术栈、经验要求、学历要求等
 2. 如果用户提到多个岗位，生成多个对象
-3. 薪资根据行业和岗位级别合理估算
+3. 薪资根据行业和岗位级别合理估算，但如果企业记忆中有明确的薪资范围要求，必须严格遵守
 4. description要专业、完整、有吸引力，体现企业特色
 5. tags包含技术栈、经验要求、学历、工作方式等关键标签
-6. 直接返回JSON，不要有其他文字`;
+6. 如果企业记忆中有特殊要求（如远程办公、学历偏好、工作方式等），必须体现在岗位描述和标签中
+7. 直接返回JSON，不要有其他文字`;
         
         const aiResult = await chatWithAI({
           message: aiPrompt,
@@ -10073,19 +11536,19 @@ const AIAssistantView = () => {
         
         // 保存到 Memory
         try {
-          await createMemory({ type: 'requirement', content: `招聘需求：${userInput.substring(0, 500)}`, importance: 'High', scope: 'employer' }, userId);
+          await createMemory({ type: 'action', content: `招聘需求：${userInput.substring(0, 500)}`, importance: 'High', scope: 'employer' }, userId);
           refetchMemories();
         } catch (e) { console.error('保存招聘需求记忆失败', e); }
         
         // 生成岗位摘要给用户确认
         const jobsSummary = jobs.map((job: any, i: number) => {
-          const desc = typeof job.description === 'string' ? job.description : (job.description ? JSON.stringify(job.description) : '暂无描述');
+          const desc = formatJobDesc(job.description);
           const salaryMin = typeof job.salary_min === 'number' ? job.salary_min : '面议';
           const salaryMax = typeof job.salary_max === 'number' ? job.salary_max : '面议';
           return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${salaryMin}K-${salaryMax}K/月\n\n${desc}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
         }).join('\n\n---\n\n');
         
-        const generatedResult = `📋 **根据您的需求，我为您拟定了以下 ${jobs.length} 个岗位招聘计划：**\n\n${jobsSummary}\n\n---\n\n⬆️ 以上是我根据您的需求和企业信息生成的岗位描述，请您确认：\n\n[[ACTION:✅ 确认发布:确认发布:success]]`;
+        const generatedResult = `📋 **根据您的需求，我为您拟定了以下 ${jobs.length} 个岗位招聘计划：**\n\n${jobsSummary}\n\n---\n\n⬆️ 以上是我根据您的需求和企业信息生成的岗位描述。\n\n您可以直接告诉我要怎么调整，例如：\n• "把薪资调高到30-50K"\n• "加上远程办公"\n• "删掉第二个岗位"\n• "再加一个产品经理"\n\n没问题的话，点击下方 **「确认发布」** 即可上线。`;
         
         // 移除之前的"正在分析"消息，替换为结果
         if (selectedTask) {
@@ -10141,35 +11604,53 @@ const AIAssistantView = () => {
             const companyName = user?.company_name || '未知企业';
             
             const publishResults: string[] = [];
+            const publishedJobIds: number[] = [];
             let successCount = 0;
             
             for (const job of jobs) {
               try {
-                await createJob({
+                const createdJob = await createJob({
                   title: job.title,
                   company: companyName,
                   location: job.location || '不限',
-                  description: job.description || '',
+                  description: typeof job.description === 'string' ? job.description : JSON.stringify(job.description || ''),
                   salary_min: job.salary_min ? job.salary_min * 1000 : undefined,
                   salary_max: job.salary_max ? job.salary_max * 1000 : undefined,
                   tags: job.tags || [],
+                  user_id: userId,
                 });
                 successCount++;
+                if (createdJob?.id) publishedJobIds.push(createdJob.id);
+                // 保留已创建岗位的 ID 到 job 对象上
+                job._publishedId = createdJob?.id;
                 publishResults.push(`✅ **${job.title}** — 发布成功`);
               } catch (e) {
                 publishResults.push(`❌ **${job.title}** — 发布失败: ${(e as any)?.message || '未知错误'}`);
               }
             }
             
-            // 更新招聘任务状态为已完成
+            // 更新招聘任务：进度40%、steps状态、关联已发布岗位ID、当前阶段
             if (selectedTask) {
               try {
-                await updateTodo(selectedTask.id, { status: 'completed', progress: 100 });
+                await updateTodo(selectedTask.id, { 
+                  status: 'in_progress', 
+                  progress: 40,
+                  published_job_ids: publishedJobIds,
+                  current_step: 'invite',
+                  steps: [
+                    { step: 1, title: '描述招聘需求', status: 'completed' },
+                    { step: 2, title: 'AI 生成岗位', status: 'completed' },
+                    { step: 3, title: '确认并发布', status: 'completed' },
+                    { step: 4, title: '智能邀请投递', status: 'in_progress' },
+                    { step: 5, title: '智能筛选评估', status: 'pending' },
+                  ],
+                  ai_advice: `已发布 ${successCount} 个岗位（ID: ${publishedJobIds.join(',')}），正在进行智能邀请投递。`,
+                });
                 if (typeof refetchTasks === 'function') refetchTasks();
-              } catch (e) { console.error('更新任务状态失败:', e); }
+              } catch (e) { console.error('更新任务进度失败:', e); }
             }
             
-            const response = `🎉 **岗位发布完成！**\n\n${publishResults.join('\n')}\n\n共 **${successCount}/${jobs.length}** 个岗位发布成功。\n\n---\n\n🎯 系统已开始为您智能匹配候选人，有合适的人才会第一时间通知您。\n\n您可以：\n• 前往 [职位管理](/employer/post) 查看已发布的岗位\n• 继续说"再招一个XX"快速添加新岗位`;
+            const response = `🎉 **岗位发布完成！**\n\n${publishResults.join('\n')}\n\n共 **${successCount}/${jobs.length}** 个岗位发布成功。\n\n---\n\n📢 **下一步：智能邀请投递**\n\n系统将基于已发布的岗位要求，在人才库中智能匹配合适的候选人，并自动发起投递邀请。\n\n您可以：\n• 点击下方 **「开始智能邀请」** 让 AI 自动匹配并邀请候选人\n• 输入特定要求，例如 "优先邀请有大厂经验的候选人"\n• 前往 [职位管理](/employer/post) 查看已发布的岗位`;
             
             // 移除"正在发布"消息
             if (selectedTask) {
@@ -10185,21 +11666,89 @@ const AIAssistantView = () => {
               });
             }
             
-            setPostMode({ active: false, step: 'requirement', jobDescription: '', generatedResult: null });
+            // 发布成功后，后台自动执行记忆优化（不阻塞用户操作）
+            if (successCount > 0) {
+              (async () => {
+                try {
+                  const { optimizeMemories } = await import('./services/apiService');
+                  await optimizeMemories(userId, 'employer');
+                  console.log('[智能招聘] 岗位发布后记忆优化完成');
+                  if (typeof refetchMemories === 'function') refetchMemories();
+                } catch (e) { console.error('[智能招聘] 记忆优化失败:', e); }
+              })();
+            }
+            
+            // 进入智能邀请阶段，保存已发布岗位
+            setPostMode(prev => ({ ...prev, step: 'invite', publishedJobs: jobs }));
           } else {
-            // 用户要修改 - 用 AI 根据用户反馈重新生成
+            // 用户要修改 - 先尝试本地处理简单操作（删除/移除指定岗位），再fallback到AI
             let currentJobs: any[] = [];
             try { currentJobs = JSON.parse(postMode.jobDescription); } catch { currentJobs = []; }
             
+            // === 本地处理：删除指定序号的岗位 ===
+            const chineseNumMap: Record<string, number> = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10, '第一': 1, '第二': 2, '第三': 3, '第四': 4, '第五': 5, '最后': currentJobs.length };
+            const deleteMatch = userInput.match(/(?:删(?:除|掉)?|去掉|移除|不要|砍掉|取消)\s*(?:第?\s*([一二三四五六七八九十\d]+)\s*(?:个|条)?\s*(?:岗位|职位)?|(?:岗位|职位)\s*(\d+))/);
+            let localHandled = false;
+            
+            if (deleteMatch && currentJobs.length > 0) {
+              const rawNum = deleteMatch[1] || deleteMatch[2];
+              let deleteIndex = -1;
+              if (rawNum) {
+                // 尝试中文数字转换
+                const cleaned = rawNum.replace(/^第/, '');
+                deleteIndex = chineseNumMap[cleaned] || chineseNumMap[rawNum] || parseInt(cleaned, 10);
+              }
+              
+              if (deleteIndex >= 1 && deleteIndex <= currentJobs.length) {
+                const deletedJob = currentJobs[deleteIndex - 1];
+                const updatedJobs = [...currentJobs];
+                updatedJobs.splice(deleteIndex - 1, 1);
+                
+                const jobsSummary = updatedJobs.map((job: any, i: number) => {
+                  const desc = formatJobDesc(job.description);
+                  const salaryMin = typeof job.salary_min === 'number' ? job.salary_min : '面议';
+                  const salaryMax = typeof job.salary_max === 'number' ? job.salary_max : '面议';
+                  return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${salaryMin}K-${salaryMax}K/月\n\n${desc}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
+                }).join('\n\n---\n\n');
+                
+                const updatedResult = `✏️ **已删除岗位 ${deleteIndex}「${deletedJob.title}」，剩余 ${updatedJobs.length} 个岗位：**\n\n${jobsSummary}\n\n---\n\n如需继续调整，直接告诉我即可。没问题请点击下方 **「确认发布」**。`;
+                
+                if (selectedTask) {
+                  setTaskMessages(prev => {
+                    const msgs = prev[selectedTask.id] || [];
+                    return { ...prev, [selectedTask.id]: [...msgs, { role: 'assistant', content: updatedResult }] };
+                  });
+                } else {
+                  setGeneralMessages(prev => [...prev, { role: 'assistant', content: updatedResult }]);
+                }
+                
+                setPostMode(prev => ({ ...prev, jobDescription: JSON.stringify(updatedJobs) }));
+                localHandled = true;
+              }
+            }
+            
+            // === 本地未处理 → 调用 AI 修改 ===
+            if (!localHandled) {
             addPostMsg('🤖 正在根据您的反馈修改岗位信息...');
             
-            const modifyPrompt = `你是一个专业的HR招聘助手。以下是当前已生成的岗位信息：
+            const memCtx = getMemoryContext();
+            // 给每个岗位加上序号标注，方便AI理解
+            const numberedJobs = currentJobs.map((job: any, i: number) => ({ _index: i + 1, ...job }));
+            const modifyPrompt = `你是一个专业的HR招聘助手。以下是当前已生成的 ${currentJobs.length} 个岗位信息（每个岗位都有 _index 序号）：
 
-${JSON.stringify(currentJobs, null, 2)}
-
+${JSON.stringify(numberedJobs, null, 2)}
+${memCtx}
 用户的修改要求：${userInput}
 
-请根据用户的修改要求，返回修改后的完整岗位列表。严格按照JSON数组格式返回（直接返回JSON，不要包含markdown代码块标记）：
+【关键规则 - 必须严格遵守】
+1. 你必须返回修改后的【完整岗位列表】，包含所有未被修改的岗位
+2. 用户没有明确提到的岗位，必须原样保留，一个字都不要改
+3. 如果用户说"删除第N个岗位"，只删除序号为N的那一个岗位，其他全部保留
+4. 如果用户说修改某个岗位的某项内容，只改那一项，其他字段原样保留
+5. 当前共 ${currentJobs.length} 个岗位，如果用户只说删除1个，返回的数组应有 ${currentJobs.length - 1} 个岗位
+6. 必须遵守企业记忆中的偏好要求
+
+严格按照JSON数组格式返回（直接返回JSON，不要包含markdown代码块标记，不要包含 _index 字段）：
 [
   {
     "title": "职位名称",
@@ -10211,11 +11760,7 @@ ${JSON.stringify(currentJobs, null, 2)}
   }
 ]
 
-注意：
-1. 只修改用户提到要改的部分，其他保持不变
-2. 如果用户说删除某个岗位，就从列表中去掉
-3. 如果用户说加岗位，就在列表中新增
-4. 直接返回JSON，不要有其他文字`;
+直接返回JSON，不要有其他文字。`;
             
             try {
               const modifyResult = await chatWithAI({ message: modifyPrompt, context: 'job_modification' });
@@ -10226,19 +11771,21 @@ ${JSON.stringify(currentJobs, null, 2)}
                 responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
                 updatedJobs = JSON.parse(responseText);
                 if (!Array.isArray(updatedJobs)) updatedJobs = [updatedJobs];
+                // 移除可能残留的 _index 字段
+                updatedJobs = updatedJobs.map(({ _index, ...rest }: any) => rest);
               } catch {
                 // 解析失败，保持原样
                 updatedJobs = currentJobs;
               }
               
               const jobsSummary = updatedJobs.map((job: any, i: number) => {
-                const desc = typeof job.description === 'string' ? job.description : (job.description ? JSON.stringify(job.description) : '暂无描述');
+                const desc = formatJobDesc(job.description);
                 const salaryMin = typeof job.salary_min === 'number' ? job.salary_min : '面议';
                 const salaryMax = typeof job.salary_max === 'number' ? job.salary_max : '面议';
                 return `### 岗位 ${i + 1}：${job.title}\n\n📍 **地点：** ${job.location || '不限'} · 💰 **薪资：** ${salaryMin}K-${salaryMax}K/月\n\n${desc}\n\n🏷️ ${(job.tags || []).join(' · ')}`;
               }).join('\n\n---\n\n');
               
-              const updatedResult = `✏️ **已根据您的要求修改，请再次确认：**\n\n${jobsSummary}\n\n---\n\n[[ACTION:✅ 确认发布:确认发布:success]]`;
+              const updatedResult = `✏️ **已根据您的要求修改，请再次确认（共 ${updatedJobs.length} 个岗位）：**\n\n${jobsSummary}\n\n---\n\n如需继续调整，直接告诉我即可。没问题请点击下方 **「确认发布」**。`;
               
               // 移除"正在修改"消息
               if (selectedTask) {
@@ -10258,6 +11805,7 @@ ${JSON.stringify(currentJobs, null, 2)}
             } catch (err) {
               addPostMsg(`⚠️ 修改失败：${(err as any)?.message || '未知错误'}，请重试。`);
             }
+            }
           }
         } catch (err) {
           addPostMsg(`⚠️ 操作失败：${(err as any)?.message || '未知错误'}`);
@@ -10268,6 +11816,377 @@ ${JSON.stringify(currentJobs, null, 2)}
       handleOptimizeAction();
       return true;
     }
+    
+    // ========== 智能邀请投递阶段（云端异步） ==========
+    if (postMode.step === 'invite') {
+      addPostMsg(userInput, 'user');
+      
+      // 检测是否直接跳到筛选
+      const goToScreen = /^(开始智能筛选|进入筛选|智能筛选|跳到筛选)$/i.test(userInput.trim());
+      if (goToScreen) {
+        setPostMode(prev => ({ ...prev, step: 'screen' }));
+        return true;
+      }
+      
+      const handleInviteAsync = async () => {
+        try {
+          const publishedJobs = postMode.publishedJobs || [];
+          const jobIds = publishedJobs.map((j: any) => j._publishedId || j.id).filter(Boolean);
+          const jobTitles = publishedJobs.map((j: any) => j.title).join('、');
+          const isDefaultTrigger = /^(开始智能邀请|开始邀请|邀请)$/i.test(userInput.trim());
+          const extraRequirements = isDefaultTrigger ? '' : userInput;
+          
+          addPostMsg('☁️ 正在提交云端智能匹配任务...');
+          
+          // 启动后端异步任务
+          const { startAsyncTask, getAsyncTaskStatus, updateTodo, seedMockCandidates } = await import('./services/apiService');
+          
+          // 确保有足够的候选人数据
+          try { await seedMockCandidates(); } catch { /* ignore */ }
+          const taskRes = await startAsyncTask({
+            task_type: 'smart_invite',
+            job_ids: jobIds,
+            user_id: userId,
+            todo_id: selectedTask?.id,
+            extra_requirements: extraRequirements,
+          });
+          
+          const asyncTaskId = taskRes.task_id;
+          if (!asyncTaskId) throw new Error('启动异步任务失败');
+          
+          // 轮询进度 — 实时展示后端 AI 思考过程
+          let completed = false;
+          let lastMsg = '';
+          for (let i = 0; i < 80; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            const status = await getAsyncTaskStatus(asyncTaskId);
+            
+            // 只要 message 或 progress 有变化就实时更新 UI
+            const curMsg = `${status.progress}|${status.message || ''}`;
+            if (curMsg !== lastMsg) {
+              lastMsg = curMsg;
+              const progressBar = '█'.repeat(Math.floor(status.progress / 5)) + '░'.repeat(20 - Math.floor(status.progress / 5));
+              if (selectedTask) {
+                setTaskMessages(prev => {
+                  const msgs = prev[selectedTask.id] || [];
+                  const filtered = msgs.filter(m => !m.content.startsWith('☁️') && !m.content.startsWith('⏳') && !m.content.startsWith('🔍') && !m.content.startsWith('🤖') && !m.content.startsWith('📨'));
+                  return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: `☁️ **云端智能邀请** \`${status.progress}%\`\n${progressBar}\n\n${status.message || '处理中...'}` }] };
+                });
+              }
+            }
+            
+            if (status.status === 'completed') {
+              completed = true;
+              const result = status.result || {};
+              const candidates: any[] = result.matches || [];
+              const realCount = result.total_real || 0;
+              const simCount = result.total_simulated || 0;
+              const memoryContext = result.memory_context || '';
+              
+              // 构建候选人卡片
+              const candidateCards = candidates.map((c: any, idx: number) => {
+                const stars = '⭐'.repeat(Math.round((c.match_score || 80) / 20));
+                const sourceBadge = c.source === 'database' ? '`[DB]`' : '`[AI]`';
+                const skillTags = (c.skills || []).slice(0, 5).join(' · ');
+                return [
+                  `**${idx + 1}. ${c.name}** ${sourceBadge} — ${c.title || ''}（${c.experience || ''}）`,
+                  `   ${stars} **${c.match_score || 80}%** 匹配`,
+                  `   💡 ${c.highlight || ''}`,
+                  c.match_reason ? `   📋 ${c.match_reason}` : '',
+                  skillTags ? `   🏷️ ${skillTags}` : '',
+                ].filter(Boolean).join('\n');
+              }).join('\n\n');
+              
+              const statsLine = `📊 匹配统计：共 **${candidates.length}** 人（数据库 ${realCount} 人 + AI 推荐 ${simCount} 人）`;
+              const memLine = memoryContext ? `\n\n📝 *${memoryContext.slice(0, 100)}*` : '';
+              
+              const inviteResponse = `✅ **云端智能匹配完成！**\n\n基于「${jobTitles}」的岗位要求：\n\n${candidateCards}\n\n---\n\n${statsLine}${memLine}\n\n📨 **已自动向以上候选人发送投递邀请**（日志已记录）\n\n下一步将进入 **「智能筛选」** 环节，AI 将对候选人进行独立审核分析。\n\n您可以：\n• 点击 **「开始智能筛选」** 进入筛选\n• 输入 **"再匹配一批"** 获取更多候选人`;
+              
+              if (selectedTask) {
+                setTaskMessages(prev => {
+                  const msgs = prev[selectedTask.id] || [];
+                  const filtered = msgs.filter(m => !m.content.includes('☁️') && !m.content.includes('⏳') && !m.content.includes('云端'));
+                  return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: inviteResponse }] };
+                });
+              }
+              
+              // 更新任务进度
+              if (selectedTask) {
+                try {
+                  await updateTodo(selectedTask.id, { 
+                    progress: 60, current_step: 'screen',
+                    steps: [
+                      { step: 1, title: '描述招聘需求', status: 'completed' },
+                      { step: 2, title: 'AI 生成岗位', status: 'completed' },
+                      { step: 3, title: '确认并发布', status: 'completed' },
+                      { step: 4, title: '智能邀请投递', status: 'completed' },
+                      { step: 5, title: '智能筛选评估', status: 'in_progress' },
+                    ],
+                    ai_advice: `已为 ${jobTitles} 匹配 ${candidates.length} 名候选人并发送邀请（云端异步），等待进入筛选环节。`,
+                  });
+                  if (typeof refetchTasks === 'function') refetchTasks();
+                } catch { /* ignore */ }
+              }
+              break;
+            }
+            
+            if (status.status === 'failed') {
+              throw new Error(status.message || '云端匹配失败');
+            }
+          }
+          
+          if (!completed) {
+            addPostMsg('⏳ 云端匹配仍在处理中，请稍后点击「开始智能邀请」查看进度。');
+          }
+        } catch (err) {
+          addPostMsg(`⚠️ 智能匹配失败：${(err as any)?.message || '未知错误'}，请重试。`);
+        }
+      };
+      
+      handleInviteAsync();
+      return true;
+    }
+    
+    // ========== 智能筛选阶段（云端异步） ==========
+    if (postMode.step === 'screen') {
+      addPostMsg(userInput, 'user');
+      
+      const handleScreenAsync = async () => {
+        try {
+          const publishedJobs = postMode.publishedJobs || [];
+          const jobIds = publishedJobs.map((j: any) => j._publishedId || j.id).filter(Boolean);
+          const jobTitles = publishedJobs.map((j: any) => j.title).join('、');
+          const isDefaultTrigger = /^(开始智能筛选|开始筛选|筛选)$/i.test(userInput.trim());
+          const extraRequirements = isDefaultTrigger ? '' : userInput;
+          
+          addPostMsg('☁️ 正在提交云端智能筛选任务...\n\nAI 将对候选人进行多维度独立审核分析。');
+          
+          const { startAsyncTask, getAsyncTaskStatus, updateTodo, createJobLog } = await import('./services/apiService');
+          const taskRes = await startAsyncTask({
+            task_type: 'smart_screen',
+            job_ids: jobIds,
+            user_id: userId,
+            todo_id: selectedTask?.id,
+            extra_requirements: extraRequirements,
+          });
+          
+          const asyncTaskId = taskRes.task_id;
+          if (!asyncTaskId) throw new Error('启动异步筛选任务失败');
+          
+          // 轮询进度 — 实时展示后端 AI 思考过程（后端每 1.5s 更新一次）
+          let completed = false;
+          let lastMsg = '';
+          for (let i = 0; i < 100; i++) {
+            await new Promise(r => setTimeout(r, 1000));
+            const status = await getAsyncTaskStatus(asyncTaskId);
+            
+            // 只要 message 或 progress 有变化就实时更新 UI
+            const curMsg = `${status.progress}|${status.message || ''}`;
+            if (curMsg !== lastMsg) {
+              lastMsg = curMsg;
+              const progressBar = '█'.repeat(Math.floor(status.progress / 5)) + '░'.repeat(20 - Math.floor(status.progress / 5));
+              if (selectedTask) {
+                setTaskMessages(prev => {
+                  const msgs = prev[selectedTask.id] || [];
+                  const filtered = msgs.filter(m => !m.content.startsWith('☁️') && !m.content.startsWith('⏳') && !m.content.startsWith('🏢') && !m.content.startsWith('👤') && !m.content.startsWith('📊'));
+                  return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: `☁️ **云端智能筛选** \`${status.progress}%\`\n${progressBar}\n\n${status.message || '处理中...'}` }] };
+                });
+              }
+            }
+            
+            if (status.status === 'completed') {
+              completed = true;
+              const result = status.result || {};
+              const bothPass: any[] = result.both_pass || [];
+              const employerOnly: any[] = result.employer_only || [];
+              const candidateOnly: any[] = result.candidate_only || [];
+              const neither: any[] = result.neither || [];
+              const summary = result.summary || {};
+              
+              // 构建筛选报告
+              let reportSections = '';
+              
+              if (bothPass.length > 0) {
+                const passCards = bothPass.map((c: any, i: number) => 
+                  `✅ **${i+1}. ${c.name}** — 匹配 ${c.match_score || 0}%\n   🏢 企业审核：${c.employer_score || 0}分 | ${c.employer_analysis || ''}\n   👤 投递意愿：${c.candidate_interest || 0}% — ${c.response_type || ''}\n   ✅ 优势：${(c.strengths || []).join(' · ')}\n   ⚠️ 关注：${(c.concerns || []).join(' · ')}`
+                ).join('\n\n');
+                reportSections += `### ✅ 筛选通过（${bothPass.length} 人）\n\n${passCards}\n\n`;
+              }
+              
+              if (employerOnly.length > 0) {
+                const eoCards = employerOnly.map((c: any) =>
+                  `🏢 **${c.name}** — 企业通过 (${c.employer_score || 0}分)，候选人${c.response_type || '未响应'}\n   ${c.candidate_analysis || ''}`
+                ).join('\n');
+                reportSections += `### 🏢 待候选人确认（${employerOnly.length} 人）\n\n${eoCards}\n\n`;
+              }
+              
+              if (candidateOnly.length > 0) {
+                const coCards = candidateOnly.map((c: any) =>
+                  `👤 **${c.name}** — 候选人有意向 (${c.candidate_interest || 0}%)，企业方未通过\n   ${c.employer_analysis || ''}`
+                ).join('\n');
+                reportSections += `### 👤 仅候选人意向（${candidateOnly.length} 人）\n\n${coCards}\n\n`;
+              }
+              
+              if (neither.length > 0) {
+                const nCards = neither.map((c: any) => `❌ **${c.name}** — 未通过`).join('\n');
+                reportSections += `### ❌ 未通过（${neither.length} 人）\n\n${nCards}\n\n`;
+              }
+              
+              // 构建每个候选人的详细评审摘要（用于日志）
+              const allResults: any[] = result.final_results || [];
+              const screenDetailLines = allResults.map((r: any) => 
+                `${r.name}：${r.final_status}（企业${r.employer_score || 0}分 / 候选人${r.candidate_interest || 0}%）`
+              ).join('、');
+              
+              if (bothPass.length > 0) {
+                // 有通过的候选人 — 获取联系方式 → 进入互换阶段
+                const passNames = bothPass.map((c: any) => c.name).join('、');
+                
+                // 获取联系方式
+                let contactsInfo = '';
+                try {
+                  const { getExchangeContacts } = await import('./services/apiService');
+                  const exchangeJobIds = publishedJobs.map((pj: any) => pj._publishedId || pj.id).filter(Boolean);
+                  const contactsResult = await getExchangeContacts(exchangeJobIds, bothPass);
+                  const contacts = contactsResult.contacts || [];
+                  contactsInfo = contacts.map((c: any, idx: number) => {
+                    const simTag = c.is_simulated_contact ? ' *(模拟)* ' : '';
+                    return `**${idx + 1}. ${c.name}**${simTag}\n` +
+                      `   📱 电话：\`${c.phone || '未提供'}\`\n` +
+                      `   📧 邮箱：\`${c.email || '未提供'}\`\n` +
+                      `   🎯 匹配 ${c.match_score}% | 企业评分 ${c.employer_score}分` +
+                      (c.strengths?.length ? `\n   ✅ 优势：${c.strengths.join('、')}` : '');
+                  }).join('\n\n');
+                } catch {
+                  contactsInfo = bothPass.map((c: any, idx: number) =>
+                    `**${idx + 1}. ${c.name}** — 匹配 ${c.match_score || 0}% | 企业评分 ${c.employer_score || 0}分`
+                  ).join('\n');
+                }
+                
+                const screenResponse = `📊 **智能筛选报告**\n\n对「${jobTitles}」的候选人完成了 AI 独立审核分析：\n\n📈 **汇总**：共 ${summary.total || 0} 人 → 通过 **${summary.both_pass_count || 0}** 人 | 待确认 ${summary.employer_only_count || 0} 人 | 未通过 ${(summary.candidate_only_count || 0) + (summary.neither_count || 0)} 人\n\n---\n\n${reportSections}---\n\n✅ **筛选通过！联系方式已自动互换：**\n\n${contactsInfo}\n\n---\n\n📞 **请尽快与候选人取得联系！**\n\n联系后请前往岗位详情页通过「反馈评价」告诉我们体验，帮助 AI 优化后续匹配质量。\n\n🎉 **招聘任务已完成！** 如需继续招聘其他岗位，可随时告诉我。`;
+                
+                if (selectedTask) {
+                  setTaskMessages(prev => {
+                    const msgs = prev[selectedTask.id] || [];
+                    const filtered = msgs.filter(m => !m.content.includes('☁️') && !m.content.includes('⏳') && !m.content.includes('云端'));
+                    return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: screenResponse }] };
+                  });
+                }
+                
+                // 筛选通过 → 自动完成互换 → 标记任务完成（保持 complete 状态以显示全完成步骤条）
+                setPostMode(prev => ({ ...prev, active: true, step: 'complete' }));
+                
+                // 更新任务进度 → 完成
+                if (selectedTask) {
+                  try {
+                    await updateTodo(selectedTask.id, { 
+                      status: 'completed', progress: 100, current_step: 'complete',
+                      steps: [
+                        { step: 1, title: '描述招聘需求', status: 'completed' },
+                        { step: 2, title: 'AI 生成岗位', status: 'completed' },
+                        { step: 3, title: '确认并发布', status: 'completed' },
+                        { step: 4, title: '智能邀请投递', status: 'completed' },
+                        { step: 5, title: '智能筛选评估', status: 'completed' },
+                      ],
+                      ai_advice: `智能筛选完成，${bothPass.length} 人通过。联系方式已自动互换，招聘任务完成。`,
+                    });
+                    if (typeof refetchTasks === 'function') refetchTasks();
+                  } catch { /* ignore */ }
+                }
+                
+                // 写入岗位日志 — 筛选结果确认 + 自动互换联系方式
+                for (const pj of publishedJobs) {
+                  const jobId = pj._publishedId || pj.id;
+                  if (jobId) {
+                    try {
+                      await createJobLog({
+                        job_id: jobId, actor_type: 'system', action: 'screen_result',
+                        title: '智能筛选完成 · 联系方式已互换',
+                        content: `岗位「${pj.title}」智能筛选完成：共 ${summary.total || 0} 人，通过 ${bothPass.length} 人（${passNames}）。联系方式已自动互换，招聘流程完成。`,
+                        extra_data: { 
+                          total: summary.total, both_pass: bothPass.length, 
+                          employer_only: employerOnly.length, neither: neither.length,
+                          pass_names: bothPass.map((c: any) => c.name),
+                          contacts_exchanged: true,
+                          task_completed: true,
+                        },
+                        todo_id: selectedTask?.id,
+                      });
+                    } catch { /* ignore */ }
+                  }
+                }
+                
+                // 自动完成 Flow 记录
+                try {
+                  const { completeExchangeFlows } = await import('./services/apiService');
+                  const exchangeJobIds = publishedJobs.map((pj: any) => pj._publishedId || pj.id).filter(Boolean);
+                  if (exchangeJobIds.length > 0) {
+                    await completeExchangeFlows(exchangeJobIds, bothPass.map((c: any) => c.name));
+                  }
+                } catch { /* ignore */ }
+              } else {
+                // 无通过的候选人
+                const screenResponse = `📊 **智能筛选报告**\n\n对「${jobTitles}」的候选人完成了 AI 独立审核分析：\n\n📈 **汇总**：共 ${summary.total || 0} 人，暂无通过筛选的候选人。\n\n---\n\n${reportSections}---\n\n⚠️ **暂无通过筛选的候选人**\n\n您可以：\n• 输入 **"重新筛选"** 调整筛选条件\n• 返回邀请阶段匹配更多候选人`;
+                
+                if (selectedTask) {
+                  setTaskMessages(prev => {
+                    const msgs = prev[selectedTask.id] || [];
+                    const filtered = msgs.filter(m => !m.content.includes('☁️') && !m.content.includes('⏳') && !m.content.includes('云端'));
+                    return { ...prev, [selectedTask.id]: [...filtered, { role: 'assistant', content: screenResponse }] };
+                  });
+                  
+                  try {
+                    await updateTodo(selectedTask.id, { 
+                      progress: 75, current_step: 'screen',
+                      ai_advice: `智能筛选完成但无通过候选人，建议调整条件重新筛选。`,
+                    });
+                    if (typeof refetchTasks === 'function') refetchTasks();
+                  } catch { /* ignore */ }
+                }
+                
+                // 写入岗位日志 — 无通过候选人
+                for (const pj of publishedJobs) {
+                  const jobId = pj._publishedId || pj.id;
+                  if (jobId) {
+                    try {
+                      await createJobLog({
+                        job_id: jobId, actor_type: 'system', action: 'user_action',
+                        title: '智能筛选报告已展示（暂无通过）',
+                        content: `用户查看了岗位「${pj.title}」的智能筛选报告：共 ${summary.total || 0} 人，暂无通过筛选的候选人。详细评审：${screenDetailLines}。等待用户调整条件重新筛选。`,
+                        extra_data: { 
+                          total: summary.total, both_pass: 0, 
+                          employer_only: employerOnly.length, 
+                          candidate_only: candidateOnly.length,
+                          neither: neither.length,
+                          needs_retry: true,
+                        },
+                        todo_id: selectedTask?.id,
+                      });
+                    } catch { /* ignore */ }
+                  }
+                }
+              }
+              break;
+            }
+            
+            if (status.status === 'failed') {
+              throw new Error(status.message || '云端筛选失败');
+            }
+          }
+          
+          if (!completed) {
+            addPostMsg('⏳ 云端筛选仍在处理中，请稍后点击「开始智能筛选」查看进度。');
+          }
+        } catch (err) {
+          addPostMsg(`⚠️ 智能筛选失败：${(err as any)?.message || '未知错误'}，请重试。`);
+        }
+      };
+      
+      handleScreenAsync();
+      return true;
+    }
+    
+    // exchange 阶段已合并到筛选中，筛选通过自动完成互换
     
     return false;
   };
@@ -10838,6 +12757,53 @@ ${JSON.stringify(currentJobs, null, 2)}
     }
   };
   
+  // 补偿检查：身份证认证已完成但 DISC 任务未创建时，自动补创建
+  const [discTaskChecked, setDiscTaskChecked] = useState(false);
+  useEffect(() => {
+    if (!userId || userRole !== 'candidate' || discTaskChecked || tasksLoading) return;
+    const checkDiscTask = async () => {
+      try {
+        const { getTasks, createTodo, getPersonalCertifications } = await import('./services/apiService');
+        const allTasks = await getTasks(userId);
+        
+        // 已有 DISC 任务则无需处理
+        const hasDiscTask = allTasks.some((t: any) => t.title === 'DISC性格测试');
+        if (hasDiscTask) {
+          setDiscTaskChecked(true);
+          return;
+        }
+        
+        // 检查身份证认证是否已完成
+        const certs = await getPersonalCertifications(userId);
+        const hasIdentity = certs.some((c: any) => c.category === 'identity');
+        
+        console.log('[DISC补偿检查] hasIdentity:', hasIdentity, 'hasDiscTask:', hasDiscTask);
+        
+        if (hasIdentity && !hasDiscTask) {
+          await createTodo({
+            title: 'DISC性格测试',
+            description: '通过DISC测试了解您的行为风格，提升求职匹配度',
+            priority: 'MEDIUM',
+            status: 'PENDING',
+            progress: 0,
+            source: 'AGENT',
+            todo_type: 'CANDIDATE',
+            icon: 'UserIcon',
+          }, userId);
+          console.log('[DISC Task] 补偿创建：身份认证已完成，已补创建DISC性格测试任务, userId:', userId);
+          if (typeof refetchTasks === 'function') {
+            refetchTasks();
+          }
+        }
+        setDiscTaskChecked(true);
+      } catch (err) {
+        console.error('[DISC Task] 补偿检查失败:', err);
+        setDiscTaskChecked(true);
+      }
+    };
+    checkDiscTask();
+  }, [userId, userRole, discTaskChecked, tasksLoading]);
+
   // 计算「完善简历资料」任务的动态进度
   const [profileTaskProgress, setProfileTaskProgress] = useState(0);
   
@@ -10924,6 +12890,7 @@ ${JSON.stringify(currentJobs, null, 2)}
             if (typeof refetchTasks === 'function') {
               refetchTasks();
             }
+            
           } catch (err) {
             console.error('自动完成任务失败:', err);
           }
@@ -10940,6 +12907,10 @@ ${JSON.stringify(currentJobs, null, 2)}
   // 当选中任务变化时，计算进度
   useEffect(() => {
     if (selectedTask) {
+      // 按需从后端加载该任务的对话历史
+      const tid = parseInt(selectedTask.id);
+      if (!isNaN(tid)) loadTaskMessages(tid);
+      
       const taskTitle = selectedTask.title || selectedTask.task || '';
       const taskType = selectedTask.todo_type || selectedTask.type || '';
       const isProfileTask = taskType === 'profile_complete' || 
@@ -11036,6 +13007,25 @@ ${JSON.stringify(currentJobs, null, 2)}
       return currentProgress;
     }
     
+    // 检查是否是智能招聘任务
+    const isRecruitTask = taskType?.toUpperCase() === 'RECRUIT' || taskTitle?.includes('智能招聘');
+    if (isRecruitTask) {
+      if (currentStatus === 'completed' || currentProgress >= 100) return 100;
+      // 根据 postMode.step 动态计算进度
+      if (postMode.active) {
+        const stepProgress: Record<string, number> = {
+          'requirement': 5,
+          'generate': 15,
+          'optimize': 25,
+          'invite': 45,
+          'screen': 75,
+          'complete': 100,
+        };
+        return stepProgress[postMode.step] || currentProgress;
+      }
+      return currentProgress;
+    }
+    
     // 检查是否是认证任务
     const isVerificationTask = taskType === 'personal_verification' || 
       taskTitle === '完善个人认证信息' ||
@@ -11075,6 +13065,23 @@ ${JSON.stringify(currentJobs, null, 2)}
     }
     
     return currentProgress;
+  };
+
+  // 获取智能招聘当前阶段显示信息
+  const getRecruitStepInfo = () => {
+    const steps = [
+      { key: 'requirement', label: '描述需求', icon: <PenTool size={10} />, short: '需求' },
+      { key: 'generate',    label: 'AI生成岗位', icon: <Sparkles size={10} />, short: '生成' },
+      { key: 'optimize',    label: '确认发布', icon: <Rocket size={10} />, short: '发布' },
+      { key: 'invite',      label: '智能邀请', icon: <Send size={10} />, short: '邀请' },
+      { key: 'screen',      label: '智能筛选', icon: <Search size={10} />, short: '筛选' },
+    ];
+    // complete 表示全部完成，currentIdx 设为 steps.length 使所有步骤显示为已完成
+    if (postMode.step === 'complete') {
+      return { steps, currentIdx: steps.length };
+    }
+    const currentIdx = steps.findIndex(s => s.key === postMode.step);
+    return { steps, currentIdx: currentIdx >= 0 ? currentIdx : 0 };
   };
   
   // 记录上次选中的任务ID，用于检测任务切换
@@ -11544,7 +13551,139 @@ ${JSON.stringify(currentJobs, null, 2)}
         setDiscTestMode({ active: false, currentQuestion: 0, answers: [], completed: false });
         setJobSearchMode({ active: false, currentQuestion: 0, answers: [], completed: false, tokenUsed: 0, isSearching: false });
         
-        // 启动招聘引导
+        // ===== 恢复逻辑：检查任务后端保存的进度和阶段 =====
+        const existingMessages = taskMessages[selectedTask.id];
+        const hasExistingMessages = existingMessages && existingMessages.length > 0;
+        const progress = selectedTask.progress ?? 0;
+        const taskStatus = (selectedTask.status || '').toLowerCase();
+        
+        // 从后端保存的 steps.metadata 读取精确阶段和已发布岗位
+        const stepsData = selectedTask.steps;
+        const metadata = stepsData?.metadata || {};
+        const savedStep = metadata.current_step;
+        const savedJobIds: number[] = metadata.published_job_ids || [];
+        
+        // 判断是否有后端保存的进度（即非全新任务）
+        const hasBackendProgress = progress > 0 || !!savedStep || savedJobIds.length > 0;
+        
+        if (hasBackendProgress) {
+          // ===== 恢复已有进度的任务 =====
+          let resumeStep: 'requirement' | 'generate' | 'optimize' | 'invite' | 'screen' | 'complete' = 'requirement';
+          
+          if (savedStep && ['requirement','generate','optimize','invite','screen','complete'].includes(savedStep)) {
+            resumeStep = savedStep as any;
+          } else if (savedStep === 'exchange') {
+            // 旧数据兼容：exchange 已合并到 screen，视为 complete
+            resumeStep = 'complete';
+          } else {
+            if (taskStatus === 'completed' || progress >= 100) resumeStep = 'complete';
+            else if (progress >= 60) resumeStep = 'screen';
+            else if (progress >= 40) resumeStep = 'invite';
+            else if (progress >= 25) resumeStep = 'optimize';
+          }
+          
+          // 恢复 postMode
+          setPostMode(prev => ({ ...prev, active: true, step: resumeStep }));
+          
+          // 异步加载关联岗位 + 生成当前阶段的上下文提示
+          const taskId = selectedTask.id;
+          (async () => {
+            let publishedJobNames: string[] = [];
+            
+            // 加载关联岗位详情
+            if (savedJobIds.length > 0) {
+              try {
+                const { getMyJobs } = await import('./services/apiService');
+                const allJobs = await getMyJobs(userId).catch(() => []);
+                const publishedJobs = allJobs.filter((j: any) => savedJobIds.includes(j.id));
+                if (publishedJobs.length > 0) {
+                  setPostMode(prev => ({ ...prev, publishedJobs }));
+                  publishedJobNames = publishedJobs.map((j: any) => j.title);
+                }
+              } catch { /* ignore */ }
+            }
+            
+            // 构建当前阶段的上下文消息
+            const stepLabels: Record<string, string> = {
+              requirement: '📝 描述招聘需求',
+              generate: '🤖 AI 生成岗位',
+              optimize: '📋 优化岗位信息',
+              invite: '📨 智能邀请投递',
+              screen: '🔍 智能筛选评估',
+              complete: '✅ 招聘任务已完成',
+            };
+            const currentLabel = stepLabels[resumeStep] || resumeStep;
+            const jobsDisplay = publishedJobNames.length > 0 
+              ? publishedJobNames.map(n => `「${n}」`).join('、')
+              : savedJobIds.length > 0 ? `${savedJobIds.length} 个岗位` : '';
+            
+            let stageMsg = '';
+            
+            if (resumeStep === 'invite') {
+              stageMsg = `📨 **当前阶段：智能邀请投递（☁️ 云端异步）**\n\n`;
+              if (jobsDisplay) stageMsg += `已发布岗位：${jobsDisplay}\n\n`;
+              stageMsg += `岗位已发布成功！下一步将通过云端异步任务，在人才库中智能匹配候选人。\n\n`;
+              stageMsg += `您可以：\n`;
+              stageMsg += `• 点击下方 **「☁️ 开始智能邀请」** 提交云端匹配任务\n`;
+              stageMsg += `• 输入额外筛选要求，例如 "优先邀请有大厂经验的"\n`;
+              stageMsg += `• 点击 **「跳到筛选」** 直接进入筛选环节`;
+            } else if (resumeStep === 'screen') {
+              stageMsg = `🔍 **当前阶段：智能筛选（☁️ 云端异步）**\n\n`;
+              if (jobsDisplay) stageMsg += `招聘岗位：${jobsDisplay}\n\n`;
+              stageMsg += `候选人邀请已完成！下一步 AI 将对候选人进行多维度独立审核分析：\n`;
+              stageMsg += `🏢 **企业适配性审核** — AI 评估候选人与岗位的匹配程度\n`;
+              stageMsg += `👤 **候选人意愿评估** — AI 评估候选人接受邀请的可能性\n\n`;
+              stageMsg += `通过筛选的候选人将 **自动互换联系方式**，完成招聘流程。\n\n`;
+              stageMsg += `• 点击下方 **「☁️ 开始智能筛选」** 启动云端筛选\n`;
+              stageMsg += `• 输入特定筛选标准，例如 "重点评估项目经验"`;
+            } else if (resumeStep === 'complete') {
+              stageMsg = `✅ **招聘任务已完成**\n\n`;
+              if (jobsDisplay) stageMsg += `招聘岗位：${jobsDisplay}\n\n`;
+              stageMsg += `🎉 该招聘任务全流程已圆满完成！\n\n`;
+              stageMsg += `如需继续招聘其他岗位，请返回首页创建新的招聘任务。`;
+            } else if (resumeStep === 'optimize') {
+              stageMsg = `📋 **当前阶段：确认岗位信息**\n\n`;
+              stageMsg += `AI 已生成岗位描述，请确认后发布。\n\n`;
+              stageMsg += `• 点击 **「确认发布」** 将岗位上线\n`;
+              stageMsg += `• 或输入修改意见，例如 "薪资改为 15-25k"`;
+            } else {
+              stageMsg = `📝 **当前阶段：描述招聘需求**\n\n`;
+              stageMsg += `请告诉我您的招聘需求，AI 将为您智能生成岗位。\n\n`;
+              stageMsg += `例如：\n💡 "招一个高级前端工程师，3年以上经验"\n💡 "技术团队扩招5个人"`;
+            }
+            
+            // 如果已有对话记录，在末尾追加阶段提示；否则作为首条消息
+            if (hasExistingMessages) {
+              // 检查最后一条消息是否已经是阶段提示（避免重复追加）
+              const lastMsg = existingMessages[existingMessages.length - 1];
+              const isAlreadyStageMsg = lastMsg?.content?.includes('当前阶段：');
+              if (!isAlreadyStageMsg && resumeStep !== 'requirement') {
+                setTaskMessages(prev => {
+                  const msgs = prev[taskId] || [];
+                  return { ...prev, [taskId]: [...msgs, { role: 'assistant', content: stageMsg }] };
+                });
+              }
+            } else {
+              // 无对话记录，生成完整的恢复消息
+              let resumeHeader = `🏢 **智能招聘助手 — 任务恢复**\n\n`;
+              resumeHeader += `📊 **进度**：${progress}% | ${currentLabel}\n\n---\n\n`;
+              
+              setTaskMessages(prev => ({
+                ...prev,
+                [taskId]: [{ role: 'assistant', content: resumeHeader + stageMsg }]
+              }));
+            }
+          })();
+          return;
+        }
+        
+        // ===== 全新任务（progress=0，无后端保存的阶段）— 启动招聘引导 =====
+        if (hasExistingMessages) {
+          // 有前端对话记录但无后端进度（极少见），恢复为 requirement
+          setPostMode(prev => ({ ...prev, active: true, step: 'requirement' }));
+          return;
+        }
+        
         setPostMode({
           active: true,
           step: 'requirement',
@@ -11564,8 +13703,12 @@ ${JSON.stringify(currentJobs, null, 2)}
               [taskId]: [{ role: 'assistant', content: `🏢 **${companyName} · 智能招聘助手**\n\n⏳ 正在根据企业资料分析适合您的招聘方向...` }]
             }));
             
-            // 调用后端 API，根据企业资料由大模型生成个性化建议
-            const suggestionsData = await getRecruitmentSuggestions(userId);
+            // 并行调用：获取招聘建议 + 获取企业记忆
+            const { getMemories } = await import('./services/apiService');
+            const [suggestionsData, memoryList] = await Promise.all([
+              getRecruitmentSuggestions(userId),
+              getMemories(userId, 'employer').catch(() => [])
+            ]);
             const finalCompanyName = suggestionsData.company_name || companyName;
             const suggestions = suggestionsData.suggestions || [];
             const companySummary = suggestionsData.company_summary || '';
@@ -11581,13 +13724,31 @@ ${JSON.stringify(currentJobs, null, 2)}
             let welcomeMsg = `🏢 **${finalCompanyName} · 智能招聘助手**\n\n`;
             
             if (companySummary) {
-              welcomeMsg += `📊 **企业画像分析**：${companySummary}\n\n`;
+              welcomeMsg += `📊 **企业记忆分析**：${companySummary}\n\n`;
+            }
+            
+            // 展示生效的企业记忆要求（使用刚获取的 memoryList 保证数据最新）
+            const activeMemories = (memoryList || []).filter((m: any) => 
+              m.raw_type === 'requirement' || m.raw_type === 'action' || m.raw_type === 'strategy' || (m.emphasis_count || 1) >= 2
+            );
+            if (activeMemories.length > 0) {
+              welcomeMsg += `🧠 **已加载 ${activeMemories.length} 条企业记忆偏好**（生成岗位时将自动遵循）：\n`;
+              activeMemories.slice(0, 5).forEach((m: any) => {
+                const strength = (m.emphasis_count || 1) > 1 ? ` ×${m.emphasis_count}` : '';
+                welcomeMsg += `> • ${m.content.substring(0, 60)}${m.content.length > 60 ? '...' : ''}${strength}\n`;
+              });
+              if (activeMemories.length > 5) {
+                welcomeMsg += `> _...等 ${activeMemories.length - 5} 条更多记忆_\n`;
+              }
+              welcomeMsg += `\n`;
             }
             
             welcomeMsg += `我将帮您完成整个招聘流程：\n\n` +
               `**① 描述需求** → 告诉我您想招什么人\n` +
-              `**② AI 生成岗位** → 我会根据您的企业信息自动生成完整的岗位描述\n` +
-              `**③ 确认发布** → 您确认后一键上线\n\n---\n\n` +
+              `**② AI 生成岗位** → 根据企业信息和记忆偏好自动生成岗位描述\n` +
+              `**③ 确认发布** → 确认后岗位上线\n` +
+              `**④ 智能邀请** → AI 从人才库匹配候选人并发送邀请\n` +
+              `**⑤ 智能筛选** → AI 深度评估并自动互换联系方式\n\n---\n\n` +
               `根据您的企业资料，为您智能推荐以下招聘方向：\n\n` +
               `${suggestionsText}\n\n` +
               `您可以直接输入以上建议，也可以自由描述您的招聘需求。`;
@@ -11600,7 +13761,7 @@ ${JSON.stringify(currentJobs, null, 2)}
             console.error('[Recruitment Init] Error:', e);
             setTaskMessages(prev => ({
               ...prev,
-              [taskId]: [{ role: 'assistant', content: `🏢 **智能招聘助手**\n\n我将帮您完成整个招聘流程：\n\n**① 描述需求** → 告诉我您想招什么人\n**② AI 生成岗位** → 根据企业信息自动生成\n**③ 确认发布** → 确认后一键上线\n\n请告诉我您的招聘需求，例如：\n\n💡 "需要一个前端和一个后端"\n💡 "招产品经理，3年经验以上"\n💡 "技术团队扩招5个人"\n\n您想招什么人？` }]
+              [taskId]: [{ role: 'assistant', content: `🏢 **智能招聘助手**\n\n我将帮您完成整个招聘流程：\n\n**① 描述需求** → 告诉我您想招什么人\n**② AI 生成岗位** → 根据企业信息自动生成\n**③ 确认发布** → 确认后岗位上线\n**④ 智能邀请** → AI 匹配候选人并邀请\n**⑤ 智能筛选** → AI 深度评估并自动互换联系方式\n\n请告诉我您的招聘需求，例如：\n\n💡 "需要一个前端和一个后端"\n💡 "招产品经理，3年经验以上"\n💡 "技术团队扩招5个人"\n\n您想招什么人？` }]
             }));
           }
         };
@@ -11697,6 +13858,100 @@ ${JSON.stringify(currentJobs, null, 2)}
       }
       
       setIsTyping(false);
+      return;
+    }
+    
+    // 记忆操作指令检测 — 优先级最高，在所有模式之前拦截
+    const memoryKeywords = ['你记得', '记住', '后面都', '以后都', '添加记忆', '加到记忆', '添加新记忆', '保存记忆', '记到画像', '写入记忆', '记下来', '帮我记', '请记住', '记一下', '存到记忆'];
+    const isMemoryRequest = memoryKeywords.some(kw => userMessage.includes(kw));
+    
+    if (isMemoryRequest) {
+      const addUserMsg = (content: string) => {
+        if (selectedTask) {
+          setTaskMessages(prev => ({ ...prev, [selectedTask.id]: [...(prev[selectedTask.id] || []), {role: 'user' as const, content}] }));
+        } else {
+          setGeneralMessages(prev => [...prev, {role: 'user', content}]);
+        }
+      };
+      const addAiMsg = (content: string) => {
+        if (selectedTask) {
+          setTaskMessages(prev => ({ ...prev, [selectedTask.id]: [...(prev[selectedTask.id] || []), {role: 'assistant' as const, content}] }));
+        } else {
+          setGeneralMessages(prev => [...prev, {role: 'assistant', content}]);
+        }
+      };
+      
+      addUserMsg(userMessage);
+      setInputMessage('');
+      setIsTyping(true);
+      
+      try {
+        const recentContext = currentMessages.slice(-6).map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.content}`).join('\n');
+        const scope = (userRole === 'employer' || userRole === 'recruiter') ? 'employer' : 'candidate';
+        const scopeLabel = scope === 'employer' ? '企业记忆' : '个人记忆';
+        
+        const analyzePrompt = `你是一个智能记忆管理助手。用户希望将某些偏好、要求或规则保存到记忆中。
+
+最近的对话上下文：
+${recentContext}
+
+用户最新消息：${userMessage}
+
+请分析用户想要记住的核心内容，返回JSON格式（直接返回JSON，不要包含markdown代码块标记）：
+{
+  "content": "提炼后的记忆内容（简洁、清晰、可执行，20-80字）",
+  "type": "记忆分类（只能是以下之一：requirement/tech/culture/strategy/experience/skills/preference）",
+  "importance": "重要程度（High/Medium/Low）",
+  "summary": "用一句话概括这条记忆"
+}
+
+注意：
+1. content 应该是精炼后的可执行规则或偏好，不要照搬原文
+2. type 根据内容判断：requirement=招聘/岗位要求, tech=技术偏好, culture=企业文化/工作方式, strategy=招聘/面试策略, experience=工作经验, skills=技能要求, preference=通用偏好
+3. 当前用户身份是${scopeLabel}`;
+        
+        const result = await chatWithAI({ message: analyzePrompt, context: 'memory_extraction' });
+        
+        let memoryData: any = null;
+        try {
+          let responseText = result.response || '';
+          responseText = responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+          memoryData = JSON.parse(responseText);
+        } catch {
+          memoryData = {
+            content: userMessage.replace(/你记得|记住|后面都|以后都|添加记忆|加到记忆|添加新记忆|保存记忆|记到画像|写入记忆|记下来|帮我记|请记住|记一下|存到记忆/g, '').trim(),
+            type: 'requirement',
+            importance: 'Medium',
+          };
+        }
+        
+        if (!memoryData.content || memoryData.content.length < 2) {
+          addAiMsg(`⚠️ 无法提取有效的记忆内容。请更清楚地描述，例如：\n\n• "记住，招聘薪资范围是2-6K"\n• "以后发布岗位都加上远程办公"\n• "记住我偏好985/211学历"`);
+          setIsTyping(false);
+          return;
+        }
+        
+        await createMemory({
+          type: memoryData.type || 'requirement',
+          content: memoryData.content,
+          importance: memoryData.importance || 'Medium',
+          scope: scope,
+        }, userId);
+        
+        refetchMemories();
+        
+        const typeLabels: Record<string, string> = {
+          requirement: '📋 要求', tech: '💻 技术', culture: '🏢 文化',
+          strategy: '🎯 策略', experience: '💼 经验', skills: '🛠️ 技能', preference: '⭐ 偏好',
+        };
+        
+        addAiMsg(`✅ **记下了！已保存到${scopeLabel}记忆**\n\n📌 ${memoryData.content}\n\n🏷️ 分类：${typeLabels[memoryData.type] || memoryData.type} · 强度：×1\n\n后续相关任务会自动参考这条记忆。`);
+      } catch (error) {
+        console.error('保存记忆失败:', error);
+        addAiMsg(`❌ 保存记忆失败，请稍后重试。`);
+      } finally {
+        setIsTyping(false);
+      }
       return;
     }
     
@@ -11812,8 +14067,9 @@ ${JSON.stringify(currentJobs, null, 2)}
             return memoryDate > oneMonthAgo;
           });
           
-          // 获取用户会员等级（模拟）
-          const userMembership = 'pro'; // 实际应从用户数据获取：'basic' | 'pro' | 'ultra'
+          // 根据用户实际 account_tier 获取会员等级
+          const tier = (user?.account_tier || 'FREE').toUpperCase();
+          const userMembership = tier === 'ULTRA' ? 'ultra' : tier === 'PRO' ? 'pro' : 'basic';
           const membershipConfig: Record<string, {name: string; days: number; color: string}> = {
             'basic': { name: 'Devnors 1.0', days: 1, color: 'slate' },
             'pro': { name: 'Devnors 1.0 Pro', days: 7, color: 'indigo' },
@@ -11980,62 +14236,75 @@ ${JSON.stringify(currentJobs, null, 2)}
             return;
           }
           
-          // 前置条件满足，创建招聘任务并启动招聘引导
+          // 前置条件满足，创建招聘任务并自动跳转到该任务
           const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
           
-          // 创建招聘任务
+          // 创建或获取招聘任务，然后自动选中跳转
           try {
             const { createTodo } = await import('./services/apiService');
-            const existingRecruitTask = tasks.find((t: any) => 
+            // 查找未完成的招聘任务（兼容大小写状态值）
+            const isActiveStatus = (s: string) => {
+              const up = (s || '').toUpperCase();
+              return up === 'PENDING' || up === 'RUNNING' || up === 'IN_PROGRESS';
+            };
+            let recruitTask = tasks.find((t: any) => 
               (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
-              (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
+              isActiveStatus(t.status)
             );
-            if (!existingRecruitTask) {
+            if (!recruitTask) {
               const taskShortId = `RC${Date.now().toString().slice(-6)}`;
-              await createTodo({
+              recruitTask = await createTodo({
                 title: `智能招聘 #${taskShortId}`,
-                description: 'AI 智能招聘助手 — 描述您的招聘需求，AI 自动生成岗位并发布',
+                description: 'AI 智能招聘助手 — 从需求到人才对接的全流程招聘',
                 priority: 'HIGH',
                 source: 'AGENT',
                 todo_type: 'RECRUIT',
-                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成专业岗位描述并一键发布。',
+                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成岗位、匹配候选人、筛选评估直到双方建立联系。',
                 steps: [
                   { step: 1, title: '描述招聘需求', status: 'pending' },
                   { step: 2, title: 'AI 生成岗位', status: 'pending' },
                   { step: 3, title: '确认并发布', status: 'pending' },
+                  { step: 4, title: '智能邀请投递', status: 'pending' },
+                  { step: 5, title: '智能筛选评估', status: 'pending' },
                 ],
               }, userId);
               if (typeof refetchTasks === 'function') refetchTasks();
             }
+            
+            // 如果用户消息中已经包含了具体需求，先记录到通用消息，再跳转
+            const hasSpecificNeed = userMessage.length > 10 && (
+              userMessage.includes('工程师') || userMessage.includes('经理') || userMessage.includes('设计') ||
+              userMessage.includes('开发') || userMessage.includes('运营') || /\d+[kK]/.test(userMessage) ||
+              userMessage.includes('经验') || userMessage.includes('年')
+            );
+            
+            // 通用助手显示简短提示 + 跳转通知
+            setGeneralMessages(prev => [...prev, {
+              role: 'assistant', 
+              content: `✅ **${companyName}** 企业认证和资料均已完善！\n\n🚀 正在为您跳转到「智能招聘」任务...`
+            }]);
+            setIsTyping(false);
+            
+            // 短暂延迟后自动跳转到招聘任务
+            setTimeout(() => {
+              if (recruitTask) {
+                setSelectedTask(recruitTask);
+                // 如果带有具体需求，在跳转后自动将需求传入处理
+                if (hasSpecificNeed) {
+                  setTimeout(() => {
+                    handlePostProcess(userMessage);
+                  }, 1500);
+                }
+              }
+            }, 600);
           } catch (e) {
             console.error('创建招聘任务失败:', e);
-          }
-          
-          setPostMode({
-            active: true,
-            step: 'requirement',
-            jobDescription: '',
-            generatedResult: null
-          });
-          
-          // 如果用户消息中已经包含了具体需求，直接处理
-          const hasSpecificNeed = userMessage.length > 10 && (
-            userMessage.includes('工程师') || userMessage.includes('经理') || userMessage.includes('设计') ||
-            userMessage.includes('开发') || userMessage.includes('运营') || /\d+[kK]/.test(userMessage) ||
-            userMessage.includes('经验') || userMessage.includes('年')
-          );
-          
-          if (hasSpecificNeed) {
-            // 用户已经描述了具体需求，直接进入生成流程
-            setGeneralMessages(prev => [...prev, {role: 'assistant', content: `✅ **${companyName}** 企业认证和资料均已完善！\n\n📋 已为您创建「智能招聘」任务，正在根据需求生成岗位...`}]);
-            setIsTyping(false);
-            // 延迟后触发 postProcess
-            setTimeout(() => {
-              handlePostProcess(userMessage);
-            }, 500);
-          } else {
-            // 用户只是表达了招聘意图，引导描述
-            setGeneralMessages(prev => [...prev, {role: 'assistant', content: `✅ **${companyName}** 企业认证和资料均已完善，可以开始招聘！\n\n📋 已为您创建「智能招聘」任务，您可以在任务中心查看进度。\n\n---\n\n**第一步：描述您的招聘需求**\n\n请告诉我您想招什么人，例如：\n\n> "招聘高级前端工程师，3年以上React经验，薪资25-40K"\n> "技术团队扩招，需要前端2人、后端3人、产品经理1人"\n\n**第二步：AI 自动生成岗位**\n我会根据企业信息和需求，生成专业的岗位描述\n\n**第三步：确认并一键发布**\n您确认无误后，岗位将立即上线并开始智能匹配候选人\n\n💡 描述越详细，生成的岗位越精准！`}]);
+            // 降级：无法跳转时就在通用助手中引导
+            setPostMode({ active: true, step: 'requirement', jobDescription: '', generatedResult: null });
+            setGeneralMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `✅ **${companyName}** 企业认证和资料均已完善，可以开始招聘！\n\n请告诉我您的招聘需求，例如：\n\n> "招聘高级前端工程师，3年以上React经验"\n\n💡 描述越详细，生成的岗位越精准！`
+            }]);
             setIsTyping(false);
           }
         } catch (err) {
@@ -12910,8 +15179,9 @@ ${JSON.stringify(currentJobs, null, 2)}
                 }
               }
               
-              // 获取用户会员等级
-              const userMembership = 'pro'; // 实际应从用户数据获取：'basic' | 'pro' | 'ultra'
+              // 根据用户实际 account_tier 获取会员等级
+              const tier = (user?.account_tier || 'FREE').toUpperCase();
+              const userMembership = tier === 'ULTRA' ? 'ultra' : tier === 'PRO' ? 'pro' : 'basic';
               const membershipConfig: Record<string, {name: string; days: number; color: string}> = {
                 'basic': { name: 'Devnors 1.0', days: 1, color: 'slate' },
                 'pro': { name: 'Devnors 1.0 Pro', days: 7, color: 'indigo' },
@@ -13355,11 +15625,19 @@ ${JSON.stringify(currentJobs, null, 2)}
     
     try {
       const taskTitle = selectedTask?.title || selectedTask?.task || '';
+      const memCtx = getMemoryContext();
+      let contextStr = '';
+      if (selectedTask) {
+        contextStr = `当前任务是：${taskTitle}。任务描述：${selectedTask?.description || ''}`;
+      }
+      if (memCtx) {
+        contextStr += memCtx;
+      }
       const result = await chatWithAI({
         message: userMessage,
         history: currentMessages.map(m => ({role: m.role, content: m.content})),
         model: selectedModel,
-        context: selectedTask ? `当前任务是：${taskTitle}。任务描述：${selectedTask?.description || ''}` : undefined,
+        context: contextStr || undefined,
       });
       
       const aiResponse = {role: 'assistant' as const, content: result.response};
@@ -13529,6 +15807,7 @@ ${JSON.stringify(currentJobs, null, 2)}
                   if (typeof refetchTasks === 'function') {
                     refetchTasks();
                   }
+                  
                 }
               }
             } else {
@@ -14037,9 +16316,8 @@ ${JSON.stringify(currentJobs, null, 2)}
                     source: 'AGENT',
                     todo_type: 'CANDIDATE',
                     icon: 'UserIcon',
-                    user_id: userId,
-                  });
-                  console.log('[DISC Task] 已创建DISC性格测试任务');
+                  }, userId);
+                  console.log('[DISC Task] 已创建DISC性格测试任务, userId:', userId);
                   if (typeof refetchTasks === 'function') {
                     refetchTasks();
                   }
@@ -14883,14 +17161,68 @@ ${JSON.stringify(currentJobs, null, 2)}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-slate-500">
                     {/* 云端求职轮巡任务显示特殊信息 */}
-                    {selectedTask.title?.includes('云端求职轮巡') ? (
+                    {/* 智能招聘任务：显示阶段步骤进度条 + 岗位快速入口 */}
+                    {(selectedTask.todo_type?.toUpperCase() === 'RECRUIT' || selectedTask.title?.includes('智能招聘')) && postMode.active ? (() => {
+                      const { steps: recruitSteps, currentIdx } = getRecruitStepInfo();
+                      const stepsMetadata = selectedTask.steps?.metadata || {};
+                      const linkedJobIds: number[] = stepsMetadata.published_job_ids || [];
+                      const hasPublishedJobs = linkedJobIds.length > 0 || (postMode.publishedJobs && postMode.publishedJobs.length > 0);
+                      
+                      return (
+                        <div className="flex flex-col gap-1 w-full">
+                          {/* 步骤进度条 */}
+                          <div className="flex items-center gap-0.5">
+                            {recruitSteps.map((s, i) => (
+                              <div key={s.key} className="flex items-center gap-0.5">
+                                <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-all whitespace-nowrap ${
+                                  i < currentIdx ? 'bg-emerald-100 text-emerald-700' :
+                                  i === currentIdx ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300' :
+                                  'bg-slate-100 text-slate-400'
+                                }`}>
+                                  <span className="flex items-center">{i < currentIdx ? <Check size={10} /> : s.icon}</span>
+                                  <span>{s.short}</span>
+                                </div>
+                                {i < recruitSteps.length - 1 && (
+                                  <div className={`w-2 h-0.5 rounded-full ${i < currentIdx ? 'bg-emerald-300' : 'bg-slate-200'}`} />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {/* 已发布岗位快速入口 */}
+                          {hasPublishedJobs && (
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <Briefcase size={10} className="text-indigo-400 flex-shrink-0" />
+                              <span className="text-[10px] text-slate-400 flex-shrink-0">关联岗位：</span>
+                              <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+                                {(postMode.publishedJobs && postMode.publishedJobs.length > 0 
+                                  ? postMode.publishedJobs 
+                                  : linkedJobIds.map(id => ({ _publishedId: id, id, title: `岗位 #${id}` }))
+                                ).map((job: any, ji: number) => {
+                                  const jobId = job._publishedId || job.id;
+                                  return (
+                                    <button
+                                      key={ji}
+                                      onClick={() => navigate(`/employer/post/${jobId}`)}
+                                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white border border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-all whitespace-nowrap group cursor-pointer"
+                                      title={`查看岗位：${job.title || `#${jobId}`}`}
+                                    >
+                                      <span className="truncate max-w-[100px]">{job.title || `#${jobId}`}</span>
+                                      <ExternalLink size={8} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })() : selectedTask.title?.includes('云端求职轮巡') ? (
                       <>
                         <span className="flex items-center gap-1">
                           <Clock size={12} className="text-amber-500" />
                           已执行 {(() => {
                             const createdStr = selectedTask.created_at || selectedTask.createdAt || selectedTask.updated_at || selectedTask.updatedAt;
                             if (!createdStr) return '1分钟';
-                            // 处理不同的日期格式
                             const created = new Date(createdStr.replace(' ', 'T'));
                             if (isNaN(created.getTime())) return '1分钟';
                             const now = new Date();
@@ -14913,7 +17245,6 @@ ${JSON.stringify(currentJobs, null, 2)}
                             if (!createdStr) return 15;
                             const created = new Date(createdStr.replace(' ', 'T'));
                             if (isNaN(created.getTime())) return 15;
-                            // 基于执行时间计算查看岗位数（每小时约50个）
                             const diffHours = Math.max(0.1, (new Date().getTime() - created.getTime()) / (1000 * 60 * 60));
                             return Math.floor(diffHours * 50) + 15;
                           })()}</strong> 个
@@ -14926,7 +17257,6 @@ ${JSON.stringify(currentJobs, null, 2)}
                             if (!createdStr) return 4;
                             const created = new Date(createdStr.replace(' ', 'T'));
                             if (isNaN(created.getTime())) return 4;
-                            // 基于执行时间计算投递岗位数（每小时约5个）
                             const diffHours = Math.max(0.1, (new Date().getTime() - created.getTime()) / (1000 * 60 * 60));
                             return Math.floor(diffHours * 5) + 4;
                           })()}</strong> 个
@@ -14961,10 +17291,14 @@ ${JSON.stringify(currentJobs, null, 2)}
             {currentMessages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex gap-3 max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
-                    msg.role === 'user' ? 'bg-indigo-600' : 'bg-white border border-slate-200'
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ${
+                    msg.role === 'user' ? (user?.avatar_url ? '' : 'bg-indigo-600') : 'bg-white border border-slate-200'
                   }`}>
-                    {msg.role === 'user' ? <UserIcon size={14} className="text-white" /> : <Bot size={14} className="text-indigo-600" />}
+                    {msg.role === 'user' ? (
+                      user?.avatar_url 
+                        ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : <UserIcon size={14} className="text-white" />
+                    ) : <Bot size={14} className="text-indigo-600" />}
                   </div>
                   <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user' 
@@ -14973,6 +17307,11 @@ ${JSON.stringify(currentJobs, null, 2)}
                   }`}>
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-line">{msg.content}</p>
+                    ) : msg.content.startsWith('☁️') && idx === currentMessages.length - 1 ? (
+                      /* 云端异步进度消息 — 用打字机效果实时展示 */
+                      <div className="markdown-content">
+                        <StreamingMessage targetText={msg.content} speed={12} onTyping={() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)} />
+                      </div>
                     ) : (
                       <div className="markdown-content">
                         {/* 渲染消息内容，支持任务卡片和链接卡片 */}
@@ -15590,23 +17929,32 @@ ${JSON.stringify(currentJobs, null, 2)}
                   return [];
                 }
                 
-                // 招聘发布模式 - optimize步骤显示建议按钮
-                if (postMode.active && postMode.step === 'optimize') {
-                  return [
-                    { label: "✏️ 薪资调整", prompt: "薪资改高一点", autoSend: true },
-                    { label: "🏠 加上远程办公", prompt: "加上远程办公", autoSend: true },
-                    { label: "➕ 继续加岗位", prompt: "继续加岗位", autoSend: true },
-                    { label: "🗑️ 删掉最后一个", prompt: "删掉最后一个岗位", autoSend: true },
-                  ];
-                }
-                
-                // 招聘发布模式 - requirement步骤显示快捷需求
-                if (postMode.active && postMode.step === 'requirement') {
-                  return [
-                    { label: "💡 招前端", prompt: "招一个前端工程师", autoSend: true },
-                    { label: "💡 招后端", prompt: "招一个后端工程师", autoSend: true },
-                    { label: "💡 招产品经理", prompt: "招一个产品经理", autoSend: true },
-                  ];
+                // 招聘流程各阶段底部按钮
+                if (postMode.active) {
+                  if (postMode.step === 'optimize') {
+                    return [
+                      { label: "✅ 确认发布", prompt: "确认发布", autoSend: true },
+                    ];
+                  }
+                  if (postMode.step === 'requirement') {
+                    return [
+                      { label: "💡 招前端", prompt: "招一个前端工程师", autoSend: true },
+                      { label: "💡 招后端", prompt: "招一个后端工程师", autoSend: true },
+                      { label: "💡 招产品经理", prompt: "招一个产品经理", autoSend: true },
+                    ];
+                  }
+                  if (postMode.step === 'invite') {
+                    return [
+                      { label: "☁️ 开始智能邀请", prompt: "开始智能邀请", autoSend: true },
+                      { label: "⏭️ 跳到筛选", prompt: "开始智能筛选", autoSend: true },
+                    ];
+                  }
+                  if (postMode.step === 'screen') {
+                    return [
+                      { label: "☁️ 开始智能筛选", prompt: "开始智能筛选", autoSend: true },
+                    ];
+                  }
+                  // exchange 阶段已合并到筛选中
                 }
                 
                 // 非完善简历模式
@@ -15616,6 +17964,11 @@ ${JSON.stringify(currentJobs, null, 2)}
                     return [
                       { label: "🚀 找工作", prompt: "找工作", autoSend: true },
                       { label: "✏️ 修改偏好", prompt: "修改偏好", autoSend: true },
+                    ];
+                  }
+                  if (userRole === 'employer' && recruitReady) {
+                    return [
+                      { label: "🚀 开始招聘", prompt: "开始招聘", autoSend: true },
                     ];
                   }
                   return [];
@@ -16124,19 +18477,631 @@ const JobManagementView = () => {
     </div>
   );
 };
-// --- 邀请好友任务详情页 (InviteFriendView) ---
-const InviteFriendView = () => {
+// --- 企业岗位推荐列表页 (JobRecommendListView) ---
+const JobRecommendListView = () => {
   const navigate = useNavigate();
-  
+  const { user } = useAuth();
+
+  // 筛选状态
+  const [searchText, setSearchText] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
+  const [location, setLocation] = useState('');
+  const [jobType, setJobType] = useState('');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [salaryRange, setSalaryRange] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  // 数据状态
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [allTags, setAllTags] = useState<{ id: number; name: string; category: string }[]>([]);
+
+  // 加载标签
   useEffect(() => {
-    // 重定向到 AI 助手页面并启动邀请任务
-    navigate('/ai-assistant?taskType=invite', { replace: true });
-  }, [navigate]);
+    const loadTags = async () => {
+      try {
+        const { getJobTags } = await import('./services/apiService');
+        const data = await getJobTags();
+        setAllTags(data);
+      } catch { /* ignore */ }
+    };
+    loadTags();
+  }, []);
+
+  // 加载岗位列表
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { getPublicJobs } = await import('./services/apiService');
+        // 解析薪资范围
+        let salaryMin: number | undefined;
+        let salaryMax: number | undefined;
+        if (salaryRange === '0-10k') { salaryMin = 0; salaryMax = 10000; }
+        else if (salaryRange === '10k-20k') { salaryMin = 10000; salaryMax = 20000; }
+        else if (salaryRange === '20k-40k') { salaryMin = 20000; salaryMax = 40000; }
+        else if (salaryRange === '40k+') { salaryMin = 40000; }
+
+        const data = await getPublicJobs({
+          page,
+          page_size: pageSize,
+          search: activeSearch || undefined,
+          location: location || undefined,
+          job_type: jobType || undefined,
+          tag: selectedTag || undefined,
+          salary_min: salaryMin,
+          salary_max: salaryMax,
+          sort: sortBy,
+        });
+        setJobs(data.items || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.pages || 0);
+      } catch (e) {
+        console.error('加载岗位失败', e);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [page, activeSearch, location, jobType, selectedTag, salaryRange, sortBy]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setActiveSearch(searchText);
+  };
+
+  const clearFilters = () => {
+    setSearchText('');
+    setActiveSearch('');
+    setLocation('');
+    setJobType('');
+    setSelectedTag('');
+    setSalaryRange('');
+    setSortBy('newest');
+    setPage(1);
+  };
+
+  const hasFilters = activeSearch || location || jobType || selectedTag || salaryRange;
+
+  const jobTypeLabels: Record<string, string> = {
+    full_time: '全职',
+    part_time: '兼职',
+    contract: '合同',
+    internship: '实习',
+    remote: '远程',
+  };
+
+  const salaryOptions = [
+    { value: '', label: '不限薪资' },
+    { value: '0-10k', label: '10K以下' },
+    { value: '10k-20k', label: '10K-20K' },
+    { value: '20k-40k', label: '20K-40K' },
+    { value: '40k+', label: '40K以上' },
+  ];
+
+  const sortOptions = [
+    { value: 'newest', label: '最新发布' },
+    { value: 'salary_desc', label: '薪资从高到低' },
+    { value: 'salary_asc', label: '薪资从低到高' },
+  ];
 
   return (
-    <div className="pt-40 text-center">
-      <Loader2 className="mx-auto text-amber-600 animate-spin mb-4" size={48} />
-      <p className="text-slate-500">正在跳转到 AI 助手...</p>
+    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+      {/* 顶部标题 */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">企业岗位推荐</h1>
+          <p className="text-sm text-slate-500">AI 智能体为您匹配的优质岗位，共 <span className="font-black text-indigo-600">{total}</span> 个岗位</p>
+        </div>
+        <button
+          onClick={() => navigate('/candidate/delivery')}
+          className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
+        >
+          <Rocket size={16} /> AI 对接投递
+        </button>
+      </div>
+
+      {/* 搜索 + 筛选合并 */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-4 shadow-sm">
+        {/* 搜索栏 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex-1 min-w-0">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="搜索岗位名称、公司、关键词..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all placeholder:text-slate-400"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            className="flex-shrink-0 px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-1.5"
+          >
+            <Search size={14} /> 搜索
+          </button>
+        </div>
+
+        {/* 筛选行 */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 地区 */}
+          <div className="flex items-center gap-1.5">
+            <MapPin size={13} className="text-slate-400" />
+            <select
+              value={location}
+              onChange={(e) => { setLocation(e.target.value); setPage(1); }}
+              className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+            >
+              <option value="">全部地区</option>
+              {['北京', '上海', '深圳', '广州', '杭州', '成都', '武汉', '南京', '远程'].map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 职位类型 */}
+          <select
+            value={jobType}
+            onChange={(e) => { setJobType(e.target.value); setPage(1); }}
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+          >
+            <option value="">全部类型</option>
+            {Object.entries(jobTypeLabels).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+
+          {/* 薪资范围 */}
+          <select
+            value={salaryRange}
+            onChange={(e) => { setSalaryRange(e.target.value); setPage(1); }}
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+          >
+            {salaryOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {/* 排序 */}
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+          >
+            {sortOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
+            >
+              <X size={12} /> 清除筛选
+            </button>
+          )}
+        </div>
+
+        {/* 热门标签 */}
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+            <span className="text-[10px] font-bold text-slate-400 mr-1">
+              <Tag size={10} className="inline -mt-0.5" /> 标签:
+            </span>
+            <button
+              onClick={() => { setSelectedTag(''); setPage(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                !selectedTag ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              全部
+            </button>
+            {allTags.slice(0, 15).map(t => (
+              <button
+                key={t.id}
+                onClick={() => { setSelectedTag(selectedTag === t.name ? '' : t.name); setPage(1); }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  selectedTag === t.name ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 岗位列表 */}
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="animate-spin text-indigo-600" size={36} />
+        </div>
+      ) : jobs.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-16 text-center shadow-sm">
+          <Briefcase size={48} className="mx-auto text-slate-200 mb-4" />
+          <p className="text-slate-500 font-bold mb-2">暂无匹配的岗位</p>
+          <p className="text-slate-400 text-sm">请尝试调整筛选条件或搜索关键词</p>
+          {hasFilters && (
+            <button onClick={clearFilters} className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-all">
+              清除所有筛选
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {jobs.map((job: any) => {
+            const salary = (job.salary_min && job.salary_max)
+              ? `¥${(job.salary_min / 1000).toFixed(0)}k - ¥${(job.salary_max / 1000).toFixed(0)}k`
+              : (job.salary_display || '面议');
+            const tags = job.tags ? (Array.isArray(job.tags) ? job.tags : []) : [];
+            const tagNames = tags.map((t: any) => typeof t === 'string' ? t : t.name);
+            const matchScore = 85 + (job.id % 15);
+
+            return (
+              <div
+                key={job.id}
+                onClick={() => navigate(`/candidate/job/${job.id}`)}
+                className="group bg-white rounded-xl border border-slate-100 hover:border-indigo-200 p-5 cursor-pointer transition-all hover:shadow-md"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center shadow-sm border border-slate-100 text-xl font-bold flex-shrink-0 group-hover:scale-105 transition-transform">
+                      {job.logo || '💼'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors truncate">{job.title}</h3>
+                        <span className="px-2 py-0.5 bg-emerald-100 rounded text-[10px] font-black text-emerald-700 flex-shrink-0">{matchScore}% 匹配</span>
+                      </div>
+                      <p className="text-sm text-slate-500 font-medium mt-0.5">{job.company} · {job.location || '全国'}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="px-2.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs font-black text-amber-700">{salary}</span>
+                        {job.job_type && (
+                          <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[10px] font-bold text-indigo-600">
+                            {jobTypeLabels[job.job_type] || job.job_type}
+                          </span>
+                        )}
+                        {job.experience_required && (
+                          <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-500">{job.experience_required}</span>
+                        )}
+                        {tagNames.slice(0, 3).map((t: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-500">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate('/candidate/delivery'); }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    >
+                      <Rocket size={13} /> AI 投递
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/candidate/job/${job.id}`); }}
+                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"
+                    >
+                      详情 <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {(job.ai_intro || job.aiIntro) && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                      <Zap size={11} className="text-amber-500" />
+                      {job.ai_intro || job.aiIntro}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 分页 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+            let pageNum: number;
+            if (totalPages <= 7) {
+              pageNum = i + 1;
+            } else if (page <= 4) {
+              pageNum = i + 1;
+            } else if (page >= totalPages - 3) {
+              pageNum = totalPages - 6 + i;
+            } else {
+              pageNum = page - 3 + i;
+            }
+            return (
+              <button
+                key={pageNum}
+                onClick={() => setPage(pageNum)}
+                className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+                  page === pageNum
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronRight size={14} />
+          </button>
+          <span className="text-xs text-slate-400 font-bold ml-3">共 {total} 条</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- 邀请好友页面 (InviteFriendView) ---
+const InviteFriendView = () => {
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const userId = user?.id || 0;
+
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
+
+  // 加载邀请统计
+  useEffect(() => {
+    if (!isLoggedIn || !userId) return;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { getInviteStats } = await import('./services/apiService');
+        const data = await getInviteStats(userId);
+        setStats(data);
+      } catch (e) {
+        console.error('获取邀请数据失败', e);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [userId, isLoggedIn]);
+
+  // 未登录
+  if (!isLoggedIn) {
+    return (
+      <div className="pt-40 text-center">
+        <Lock className="mx-auto text-slate-300 mb-4" size={48} />
+        <p className="text-slate-500 mb-4">请先登录再查看邀请页面</p>
+        <button onClick={() => navigate('/login')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">去登录</button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="pt-40 text-center">
+        <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
+        <p className="text-slate-500">加载邀请数据...</p>
+      </div>
+    );
+  }
+
+  const inviteCode = stats?.invite_code || '------';
+  const inviteLink = stats?.invite_link || `https://devnors.ai/register?ref=${inviteCode}`;
+  const inviteCount = stats?.invite_count || 0;
+  const totalReward = stats?.total_reward_tokens || 0;
+  const tokenBalance = stats?.token_balance || 0;
+  const records = stats?.records || [];
+  const rules = stats?.rules || { per_invite_reward: 500, new_user_bonus: 200, milestone_5: 1000, milestone_10: 3000, milestone_20: 8000 };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  // 里程碑进度
+  const milestones = [
+    { count: 5, bonus: rules.milestone_5, label: '5人' },
+    { count: 10, bonus: rules.milestone_10, label: '10人' },
+    { count: 20, bonus: rules.milestone_20, label: '20人' },
+  ];
+
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-700">
+      {/* 返回按钮 + 标题 */}
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">邀请好友</h1>
+          <p className="text-sm text-slate-500">邀请好友注册，双方都能获得 Token 奖励</p>
+        </div>
+      </div>
+
+      {/* 邀请链接卡片 */}
+      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-2xl p-6 md:p-8 text-white mb-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Gift size={20} />
+            <span className="font-bold text-lg">您的专属邀请链接</span>
+          </div>
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <div className="flex-1 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 text-sm font-mono truncate border border-white/20">
+              {inviteLink}
+            </div>
+            <button
+              onClick={handleCopy}
+              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all active:scale-95 whitespace-nowrap ${
+                copied 
+                  ? 'bg-emerald-500 text-white' 
+                  : 'bg-white text-indigo-700 hover:bg-indigo-50'
+              }`}
+            >
+              {copied ? <><Check size={16} /> 已复制</> : <><Link2 size={16} /> 复制链接</>}
+            </button>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-indigo-200 text-xs">
+            <Shield size={12} />
+            <span>邀请码：<span className="font-mono font-bold text-white">{inviteCode}</span></span>
+          </div>
+        </div>
+      </div>
+
+      {/* 统计卡片区 */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-2">
+            <UserPlus size={14} />
+            已邀请好友
+          </div>
+          <div className="text-3xl font-black text-slate-900">{inviteCount}<span className="text-base font-bold text-slate-400 ml-1">人</span></div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-2">
+            <Coins size={14} />
+            累计获得奖励
+          </div>
+          <div className="text-3xl font-black text-amber-600">{totalReward.toLocaleString()}<span className="text-base font-bold text-slate-400 ml-1">Token</span></div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-2">
+            <Wallet size={14} />
+            Token 余额
+          </div>
+          <div className="text-3xl font-black text-indigo-600">{tokenBalance.toLocaleString()}<span className="text-base font-bold text-slate-400 ml-1">Token</span></div>
+        </div>
+      </div>
+
+      {/* 里程碑进度 */}
+      <div className="bg-white rounded-xl border border-slate-100 p-6 shadow-sm mb-6">
+        <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4">
+          <Trophy size={16} className="text-amber-500" />
+          邀请里程碑奖励
+        </h3>
+        <div className="flex items-center gap-4">
+          {milestones.map((m, i) => {
+            const reached = inviteCount >= m.count;
+            return (
+              <div key={i} className="flex-1">
+                <div className={`relative rounded-xl p-4 text-center border-2 transition-all ${
+                  reached 
+                    ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-100' 
+                    : 'bg-slate-50 border-slate-200'
+                }`}>
+                  {reached && <div className="absolute -top-2 -right-2 w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center"><Check size={12} className="text-white" /></div>}
+                  <div className={`text-2xl font-black ${reached ? 'text-amber-600' : 'text-slate-300'}`}>{m.label}</div>
+                  <div className={`text-xs font-bold mt-1 ${reached ? 'text-amber-700' : 'text-slate-400'}`}>+{m.bonus.toLocaleString()} Token</div>
+                </div>
+                {i < milestones.length - 1 && <div className="hidden md:block" />}
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-3">
+          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-700"
+              style={{ width: `${Math.min(100, (inviteCount / 20) * 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-1">
+            <span>0</span>
+            <span>5</span>
+            <span>10</span>
+            <span>20</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 邀请记录 */}
+      <div className="bg-white rounded-xl border border-slate-100 p-6 shadow-sm mb-6">
+        <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4">
+          <History size={16} className="text-indigo-500" />
+          邀请记录
+        </h3>
+        {records.length === 0 ? (
+          <div className="text-center py-10">
+            <UserPlus size={40} className="mx-auto text-slate-200 mb-3" />
+            <p className="text-slate-400 text-sm font-bold">暂无邀请记录</p>
+            <p className="text-slate-300 text-xs mt-1">分享您的邀请链接，好友注册后即可获得奖励</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {records.map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-sm font-black">
+                    {r.invitee_name?.[0] || '?'}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-slate-700">{r.invitee_name}</div>
+                    <div className="text-[10px] text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString('zh-CN') : '—'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                    r.status === 'rewarded' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {r.status === 'rewarded' ? '已发放' : '已注册'}
+                  </span>
+                  <span className="text-sm font-black text-amber-600">+{r.reward_tokens}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 奖励规则 */}
+      <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl border border-slate-100 p-6 shadow-sm">
+        <h3 className="text-sm font-black text-slate-700 flex items-center gap-2 mb-4">
+          <Info size={16} className="text-indigo-500" />
+          奖励规则
+        </h3>
+        <div className="space-y-3 text-sm text-slate-600">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">1</div>
+            <div><span className="font-bold text-slate-700">基础奖励</span>：每成功邀请 1 位好友注册，您获得 <span className="font-black text-amber-600">{rules.per_invite_reward} Token</span>，好友获得 <span className="font-black text-emerald-600">{rules.new_user_bonus} Token</span></div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">2</div>
+            <div><span className="font-bold text-slate-700">里程碑奖励</span>：累计邀请达到 5 / 10 / 20 人时，额外获得 <span className="font-black text-amber-600">{rules.milestone_5} / {rules.milestone_10} / {rules.milestone_20} Token</span></div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">3</div>
+            <div><span className="font-bold text-slate-700">分享方式</span>：复制邀请链接发送给好友，好友通过链接注册后即自动发放奖励</div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">4</div>
+            <div><span className="font-bold text-slate-700">Token 用途</span>：Token 可用于 AI 智能招聘、简历解析、面试模拟、市场分析等全部 AI 功能</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -16410,314 +19375,339 @@ const AIDeliveryView = () => {
   );
 };
 
-// --- 人才库列表页 (TalentPoolView) ---
+// --- 推荐人才列表页 (TalentPoolView) ---
 const TalentPoolView = () => {
   const navigate = useNavigate();
-  const [selectedTalent, setSelectedTalent] = useState<any>(null);
 
-  const talents = [
-    {
-      id: '1',
-      name: '陈伟',
-      initial: '陈',
-      title: '高级 AI 工程师',
-      match: 96,
-      tokens: 4250,
-      status: 'interviewing',
-      statusText: 'AI 初试中',
-      company: '得若智能科技',
-      location: '北京',
-      salary: '50-80K',
-      tags: ['生成式 AI', 'Python', '智能体协同'],
-      experience: '8年',
-      education: '硕士',
-      skills: ['PyTorch', 'LangChain', 'React', 'Rust', '大模型训练'],
-      lastActive: '2小时前',
-      appliedJobs: ['高级 AI 工程师', '算法科学家'],
-      progress: 75,
-    },
-    {
-      id: '2',
-      name: '李芳',
-      initial: '李',
-      title: '产品设计主管',
-      match: 89,
-      tokens: 2840,
-      status: 'screening',
-      statusText: '简历筛选',
-      company: '创意科技',
-      location: '上海',
-      salary: '35-55K',
-      tags: ['产品设计', '用户体验', 'AI 产品'],
-      experience: '6年',
-      education: '本科',
-      skills: ['Figma', 'AI 辅助设计', '用户研究', '产品规划'],
-      lastActive: '5小时前',
-      appliedJobs: ['产品设计主管'],
-      progress: 30,
-    },
-    {
-      id: '3',
-      name: '张明',
-      initial: '张',
-      title: '全栈开发专家',
-      match: 92,
-      tokens: 5620,
-      status: 'offer',
-      statusText: '已发 offer',
-      company: 'Devnors',
-      location: '深圳',
-      salary: '45-70K',
-      tags: ['Rust', 'React', 'TypeScript', 'Web3'],
-      experience: '7年',
-      education: '硕士',
-      skills: ['Rust', 'React', 'Web3.js', 'PostgreSQL', 'Docker'],
-      lastActive: '1天前',
-      appliedJobs: ['全栈开发专家', '技术架构师'],
-      progress: 100,
-    },
-    {
-      id: '4',
-      name: '王芳',
-      initial: '王',
-      title: '大模型算法科学家',
-      match: 94,
-      tokens: 8930,
-      status: 'interviewing',
-      statusText: 'AI 面试中',
-      company: 'AI Lab',
-      location: '杭州',
-      salary: '60-100K',
-      tags: ['大模型', 'NLP', '深度学习'],
-      experience: '5年',
-      education: '博士',
-      skills: ['Transformer', 'BERT', 'GPT', 'PyTorch', 'CUDA'],
-      lastActive: '30分钟前',
-      appliedJobs: ['大模型算法科学家', 'AI 研发负责人'],
-      progress: 60,
-    },
-    {
-      id: '5',
-      name: '刘强',
-      initial: '刘',
-      title: 'AI 解决方案架构师',
-      match: 88,
-      tokens: 3200,
-      status: 'new',
-      statusText: '新入库',
-      company: '云智科技',
-      location: '北京',
-      salary: '55-85K',
-      tags: ['云计算', 'AI 架构', 'DevOps'],
-      experience: '10年',
-      education: '硕士',
-      skills: ['AWS', 'Kubernetes', 'MLOps', 'AI Pipeline'],
-      lastActive: '3小时前',
-      appliedJobs: ['AI 解决方案架构师'],
-      progress: 10,
-    },
+  // 筛选状态
+  const [searchText, setSearchText] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
+  const [selectedSkill, setSelectedSkill] = useState('');
+  const [experienceRange, setExperienceRange] = useState('');
+  const [sortBy, setSortBy] = useState('match');
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
+
+  // 数据状态
+  const [talents, setTalents] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [allSkills, setAllSkills] = useState<string[]>([]);
+
+  // 加载技能标签
+  useEffect(() => {
+    const loadSkills = async () => {
+      try {
+        const { getTalentSkills } = await import('./services/apiService');
+        const data = await getTalentSkills();
+        setAllSkills(data);
+      } catch { /* ignore */ }
+    };
+    loadSkills();
+  }, []);
+
+  // 加载人才列表
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { getPublicTalentsPaged } = await import('./services/apiService');
+        let expMin: number | undefined;
+        let expMax: number | undefined;
+        if (experienceRange === '0-3') { expMin = 0; expMax = 3; }
+        else if (experienceRange === '3-5') { expMin = 3; expMax = 5; }
+        else if (experienceRange === '5-10') { expMin = 5; expMax = 10; }
+        else if (experienceRange === '10+') { expMin = 10; }
+
+        const data = await getPublicTalentsPaged({
+          page,
+          page_size: pageSize,
+          search: activeSearch || undefined,
+          skill: selectedSkill || undefined,
+          experience_min: expMin,
+          experience_max: expMax,
+          sort: sortBy,
+        });
+        setTalents(data.items || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.pages || 0);
+      } catch (e) {
+        console.error('加载人才失败', e);
+      }
+      setLoading(false);
+    };
+    load();
+  }, [page, activeSearch, selectedSkill, experienceRange, sortBy]);
+
+  const handleSearch = () => {
+    setPage(1);
+    setActiveSearch(searchText);
+  };
+
+  const clearFilters = () => {
+    setSearchText('');
+    setActiveSearch('');
+    setSelectedSkill('');
+    setExperienceRange('');
+    setSortBy('match');
+    setPage(1);
+  };
+
+  const hasFilters = activeSearch || selectedSkill || experienceRange;
+
+  const experienceOptions = [
+    { value: '', label: '不限经验' },
+    { value: '0-3', label: '0-3年' },
+    { value: '3-5', label: '3-5年' },
+    { value: '5-10', label: '5-10年' },
+    { value: '10+', label: '10年以上' },
   ];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'interviewing': return 'bg-emerald-500';
-      case 'screening': return 'bg-amber-500';
-      case 'offer': return 'bg-indigo-500';
-      case 'new': return 'bg-slate-400';
-      default: return 'bg-slate-400';
-    }
-  };
-
-  const getStatusBg = (status: string) => {
-    switch (status) {
-      case 'interviewing': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'screening': return 'bg-amber-50 text-amber-700 border-amber-200';
-      case 'offer': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'new': return 'bg-slate-50 text-slate-600 border-slate-200';
-      default: return 'bg-slate-50 text-slate-600 border-slate-200';
-    }
-  };
+  const sortOptions = [
+    { value: 'match', label: '匹配度优先' },
+    { value: 'newest', label: '最近加入' },
+    { value: 'experience', label: '经验最丰富' },
+  ];
 
   return (
-    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
-        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回控制台
-      </button>
-
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-900 mb-3 flex items-center gap-3">
-          <Users2 size={28} className="text-indigo-600" /> 人才库
-        </h1>
-        <p className="text-slate-500 font-medium">管理和追踪所有候选人状态</p>
+    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+      {/* 顶部标题 */}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate('/employer')} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">推荐人才</h1>
+          <p className="text-sm text-slate-500">AI 智能匹配推荐给企业的优质候选人，共 <span className="font-black text-indigo-600">{total}</span> 位人才</p>
+        </div>
+        <button
+          onClick={() => navigate('/workbench')}
+          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+        >
+          <Sparkles size={16} /> AI 智能邀请
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-500">共</span>
-              <span className="text-lg font-black text-slate-900">{talents.length}</span>
-              <span className="text-sm text-slate-500">位人才</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <select className="px-3 py-2 bg-white border border-slate-200 rounded text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option>全部状态</option>
-                <option>AI 初试中</option>
-                <option>简历筛选</option>
-                <option>已发 offer</option>
-                <option>新入库</option>
-              </select>
-            </div>
+      {/* 搜索 + 筛选合并 */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-4 shadow-sm">
+        {/* 搜索栏 */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex-1 min-w-0">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="搜索姓名、职位、技能关键词..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all placeholder:text-slate-400"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            className="flex-shrink-0 px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-1.5"
+          >
+            <Search size={14} /> 搜索
+          </button>
+        </div>
+
+        {/* 筛选行 */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 经验 */}
+          <div className="flex items-center gap-1.5">
+            <Briefcase size={13} className="text-slate-400" />
+            <select
+              value={experienceRange}
+              onChange={(e) => { setExperienceRange(e.target.value); setPage(1); }}
+              className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+            >
+              {experienceOptions.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
 
-          {talents.map((talent) => (
-            <div 
-              key={talent.id}
-              onClick={() => setSelectedTalent(talent)}
-              className={`p-6 bg-white rounded-lg border cursor-pointer transition-all ${
-                selectedTalent?.id === talent.id 
-                  ? 'border-indigo-300 shadow-lg ring-2 ring-indigo-100' 
-                  : 'border-slate-100 hover:border-indigo-200 hover:shadow-md'
-              }`}
+          {/* 排序 */}
+          <select
+            value={sortBy}
+            onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-600"
+          >
+            {sortOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-14 h-14 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 ${
-                    selectedTalent?.id === talent.id ? 'bg-indigo-600' : 'bg-indigo-600'
-                  }`}>
-                    {talent.initial}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900">{talent.name}</h3>
-                    <p className="text-sm font-bold text-slate-500">{talent.title}</p>
-                    <p className="text-xs text-slate-400 mt-1">{talent.company} · {talent.location}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusBg(talent.status)}`}>
-                    {talent.statusText}
-                  </div>
-                  <ChevronRight size={20} className="text-slate-300" />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-slate-50">
-                <span className="px-2.5 py-1 bg-emerald-50 rounded-lg text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <Zap size={12} /> {talent.match}% 匹配
-                </span>
-                <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-600">
-                  {talent.experience}经验
-                </span>
-                <span className="px-2.5 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-600">
-                  {talent.education}
-                </span>
-                {talent.tags.slice(0, 2).map((tag, i) => (
-                  <span key={i} className="px-2.5 py-1 bg-indigo-50 rounded-lg text-xs font-bold text-indigo-600">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-                  <span>进度</span>
-                  <span className="font-medium">{talent.progress}%</span>
-                </div>
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all ${
-                      talent.status === 'offer' ? 'bg-indigo-500' : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${talent.progress}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="lg:col-span-1">
-          {selectedTalent ? (
-            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-xl sticky top-8">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-indigo-600 text-white flex items-center justify-center text-2xl font-black rounded shadow-lg">
-                  {selectedTalent.initial}
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">{selectedTalent.name}</h3>
-                  <p className="text-sm font-bold text-indigo-600">{selectedTalent.title}</p>
-                  <p className="text-xs text-slate-500">{selectedTalent.company}</p>
-                </div>
-              </div>
-
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold mb-6 ${getStatusBg(selectedTalent.status)}`}>
-                <div className={`w-2 h-2 rounded-full ${getStatusColor(selectedTalent.status)} ${selectedTalent.status === 'interviewing' ? 'animate-pulse' : ''}`} />
-                {selectedTalent.statusText}
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">期望薪资</span>
-                  <span className="text-sm font-black text-slate-900">{selectedTalent.salary}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">工作地点</span>
-                  <span className="text-sm font-medium text-slate-900">{selectedTalent.location}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">工作经验</span>
-                  <span className="text-sm font-medium text-slate-900">{selectedTalent.experience}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">学历</span>
-                  <span className="text-sm font-medium text-slate-900">{selectedTalent.education}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">最后活跃</span>
-                  <span className="text-sm font-medium text-slate-900">{selectedTalent.lastActive}</span>
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h4 className="text-sm font-black text-slate-900 mb-3">技能标签</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedTalent.skills.map((skill, i) => (
-                    <span key={i} className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded text-xs font-bold">
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mb-6">
-                <h4 className="text-sm font-black text-slate-900 mb-3">申请职位</h4>
-                <div className="space-y-2">
-                  {selectedTalent.appliedJobs.map((job, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                      <span className="text-xs font-medium text-slate-700">{job}</span>
-                      <ChevronRight size={14} className="text-slate-400" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded font-bold text-sm transition-all">
-                  查看详情
-                </button>
-                <button className="flex-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded font-bold text-sm transition-all">
-                  联系
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-slate-50 rounded-lg p-8 border border-dashed border-slate-200 text-center">
-              <Users2 size={48} className="mx-auto text-slate-300 mb-4" />
-              <p className="text-slate-500 font-medium">选择一个候选人查看详情</p>
-            </div>
+              <X size={12} /> 清除筛选
+            </button>
           )}
         </div>
+
+        {/* 技能标签 */}
+        {allSkills.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+            <span className="text-[10px] font-bold text-slate-400 mr-1">
+              <Tag size={10} className="inline -mt-0.5" /> 技能:
+            </span>
+            <button
+              onClick={() => { setSelectedSkill(''); setPage(1); }}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                !selectedSkill ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              全部
+            </button>
+            {allSkills.slice(0, 20).map(sk => (
+              <button
+                key={sk}
+                onClick={() => { setSelectedSkill(selectedSkill === sk ? '' : sk); setPage(1); }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                  selectedSkill === sk ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {sk}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* 人才列表 */}
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="animate-spin text-indigo-600" size={36} />
+        </div>
+      ) : talents.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-16 text-center shadow-sm">
+          <Users2 size={48} className="mx-auto text-slate-200 mb-4" />
+          <p className="text-slate-500 font-bold mb-2">暂无匹配的人才</p>
+          <p className="text-slate-400 text-sm">请尝试调整筛选条件或搜索关键词</p>
+          {hasFilters && (
+            <button onClick={clearFilters} className="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-all">
+              清除所有筛选
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {talents.map((t: any) => {
+            const matchScore = t.matchScore || (85 + ((t.id || 0) % 15));
+            const skills: string[] = t.skills || [];
+
+            return (
+              <div
+                key={t.id}
+                onClick={() => navigate(`/candidate/profile/${t.id}`)}
+                className="group bg-white rounded-xl border border-slate-100 hover:border-indigo-200 p-5 cursor-pointer transition-all hover:shadow-md"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="w-12 h-12 bg-indigo-600 text-white rounded-lg flex items-center justify-center text-lg font-black shadow-sm ring-2 ring-indigo-100 flex-shrink-0 group-hover:scale-105 transition-transform">
+                      {(t.name || '?').charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors truncate">{t.name}</h3>
+                        <span className="px-2 py-0.5 bg-emerald-100 rounded text-[10px] font-black text-emerald-700 flex-shrink-0 flex items-center gap-0.5">
+                          <Zap size={10} /> {matchScore}% 匹配
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-500 font-medium mt-0.5">{t.role || '未知职位'} · {t.experienceYears || 0}年经验</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {t.salary_range && (
+                          <span className="px-2.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs font-black text-amber-700">{t.salary_range}</span>
+                        )}
+                        {skills.slice(0, 4).map((sk: string, i: number) => (
+                          <span key={i} className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[10px] font-bold text-indigo-600">{sk}</span>
+                        ))}
+                        {skills.length > 4 && (
+                          <span className="px-2 py-0.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-bold text-slate-400">+{skills.length - 4}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate('/workbench'); }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                    >
+                      <Sparkles size={13} /> AI 邀请
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); navigate(`/candidate/profile/${t.id}`); }}
+                      className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"
+                    >
+                      查看 <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+
+                {t.summary && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 line-clamp-2">
+                      <Zap size={11} className="text-amber-500 flex-shrink-0" />
+                      {t.summary}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 分页 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+            let pageNum: number;
+            if (totalPages <= 7) {
+              pageNum = i + 1;
+            } else if (page <= 4) {
+              pageNum = i + 1;
+            } else if (page >= totalPages - 3) {
+              pageNum = totalPages - 6 + i;
+            } else {
+              pageNum = page - 3 + i;
+            }
+            return (
+              <button
+                key={pageNum}
+                onClick={() => setPage(pageNum)}
+                className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+                  page === pageNum
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronRight size={14} />
+          </button>
+          <span className="text-xs text-slate-400 font-bold ml-3">共 {total} 位</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -16756,6 +19746,7 @@ const AppContent = () => {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginView />} />
+          <Route path="/register" element={<LoginView />} />
           <Route path="/select-role" element={<RoleSelectionView />} />
           <Route path="/workbench" element={<WorkbenchView />} />
           <Route path="/workbench/todos" element={<TodoListView />} />
@@ -16766,7 +19757,9 @@ const AppContent = () => {
           <Route path="/candidate/home" element={<CandidateHomeView />} />
           <Route path="/candidate/memory" element={<CandidateMemoryView />} />
           <Route path="/candidate/profile" element={<CandidateProfileView />} />
+          <Route path="/candidate/profile/:candidateId" element={<PublicCandidateProfileView />} />
           <Route path="/candidate/apply" element={<ApplyDetailView />} />
+          <Route path="/candidate/jobs" element={<JobRecommendListView />} />
           <Route path="/candidate/job/:jobId" element={<JobDetailView />} />
           <Route path="/employer" element={<EmployerDashboard />} />
           <Route path="/employer/memory" element={<EnterpriseMemoryView />} />

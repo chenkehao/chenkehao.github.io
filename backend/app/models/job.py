@@ -1,12 +1,12 @@
 """
-Job and Job Tags Models
+Job, Job Tags, and Job Log Models
 """
 
 import enum
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Integer, Float, DateTime, Enum, ForeignKey, Text, Boolean, Table, Column
+from sqlalchemy import String, Integer, Float, DateTime, Enum, ForeignKey, Text, Boolean, Table, Column, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -95,6 +95,12 @@ class Job(Base):
         secondary=job_tags_association,
         back_populates="jobs"
     )
+    logs: Mapped[List["JobLog"]] = relationship(
+        "JobLog",
+        back_populates="job",
+        order_by="JobLog.created_at.desc()",
+        cascade="all, delete-orphan"
+    )
     
     def __repr__(self):
         return f"<Job(id={self.id}, title={self.title})>"
@@ -118,3 +124,57 @@ class JobTag(Base):
     
     def __repr__(self):
         return f"<JobTag(id={self.id}, name={self.name})>"
+
+
+class JobLogAction(str, enum.Enum):
+    """岗位日志操作类型"""
+    PUBLISH = "publish"           # 岗位发布
+    UPDATE = "update"             # 岗位修改
+    PAUSE = "pause"               # 岗位暂停
+    RESUME = "resume"             # 岗位恢复
+    CLOSE = "close"               # 岗位关闭
+    INVITE_START = "invite_start"     # 开始智能邀请
+    INVITE_MATCH = "invite_match"     # 候选人匹配
+    INVITE_SEND = "invite_send"       # 发送邀请
+    SCREEN_START = "screen_start"     # 开始智能筛选
+    SCREEN_RESULT = "screen_result"   # 筛选结果
+    EXCHANGE_REQUEST = "exchange_request"  # 请求互换联系方式
+    EXCHANGE_CONFIRM = "exchange_confirm"  # 确认互换联系方式
+    AI_ANALYSIS = "ai_analysis"   # AI 分析/建议
+    USER_ACTION = "user_action"   # 用户自定义操作
+    SYSTEM = "system"             # 系统操作
+
+
+class JobLog(Base):
+    """岗位交互日志 — 记录岗位全生命周期的所有操作"""
+    
+    __tablename__ = "job_logs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    
+    # 关联岗位
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), index=True)
+    
+    # 操作者（可以是用户，也可以是 AI/系统）
+    actor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    actor_type: Mapped[str] = mapped_column(String(20), default="user")  # user / ai / system
+    
+    # 操作类型和内容
+    action: Mapped[JobLogAction] = mapped_column(Enum(JobLogAction), index=True)
+    title: Mapped[str] = mapped_column(String(200))  # 日志标题，如"岗位发布成功"
+    content: Mapped[str] = mapped_column(Text)  # 日志详细内容
+    
+    # 额外元数据（JSON）—— 存储结构化数据，如候选人列表、匹配分数等
+    extra_data: Mapped[Optional[str]] = mapped_column(JSON, nullable=True)
+    
+    # 关联的招聘任务（Todo）
+    todo_id: Mapped[Optional[int]] = mapped_column(ForeignKey("todos.id"), nullable=True)
+    
+    # 时间戳
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    job: Mapped["Job"] = relationship("Job", back_populates="logs")
+    
+    def __repr__(self):
+        return f"<JobLog(id={self.id}, job_id={self.job_id}, action={self.action})>"

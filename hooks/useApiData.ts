@@ -81,11 +81,11 @@ export function usePublicJob(jobId: number | null) {
 
 // ============ 工作流相关 Hooks ============
 
-export function useFlows(limit: number = 10) {
+export function useFlows(limit: number = 10, userId?: number) {
   return useApiData(
-    () => getPublicFlows(limit),
+    () => getPublicFlows(limit, userId),
     [],
-    [limit]
+    [limit, userId]
   );
 }
 

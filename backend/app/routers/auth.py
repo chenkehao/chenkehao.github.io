@@ -4,6 +4,8 @@ Authentication Router
 
 import os
 import uuid
+import string
+import random
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
@@ -14,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
+from app.models.invitation import Invitation
+from app.models.token import TokenUsage, TokenPackage, TokenAction, PackageType
 from app.schemas.user import UserCreate, UserResponse, UserLogin, UserUpdate, Token
 from app.utils.security import (
     verify_password,
@@ -21,6 +25,12 @@ from app.utils.security import (
     create_access_token,
     get_current_user,
 )
+
+
+def _generate_invite_code() -> str:
+    """Generate a random 6-char uppercase+digit invite code"""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=6))
 
 # 头像上传目录
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "avatars")
@@ -35,12 +45,13 @@ async def register(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    注册新用户
+    注册新用户（支持邀请码）
     
     - **email**: 邮箱地址（唯一）
     - **password**: 密码（至少6位）
     - **name**: 用户名
-    - **role**: 用户角色（candidate/recruiter）
+    - **role**: 用户角色
+    - **ref_code**: 可选，邀请人的邀请码
     """
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == user_in.email))
@@ -50,6 +61,21 @@ async def register(
             detail="该邮箱已被注册"
         )
     
+    # Generate unique invite code for new user
+    invite_code = _generate_invite_code()
+    for _ in range(10):
+        dup = await db.execute(select(User).where(User.invite_code == invite_code))
+        if not dup.scalar_one_or_none():
+            break
+        invite_code = _generate_invite_code()
+    
+    # Look up inviter if ref_code provided
+    inviter = None
+    ref_code = (user_in.ref_code or "").strip().upper()
+    if ref_code:
+        inviter_result = await db.execute(select(User).where(User.invite_code == ref_code))
+        inviter = inviter_result.scalar_one_or_none()
+    
     # Create user
     user = User(
         email=user_in.email,
@@ -58,9 +84,69 @@ async def register(
         phone=user_in.phone,
         role=user_in.role,
         company_name=user_in.company_name,
+        invite_code=invite_code,
+        invited_by=inviter.id if inviter else None,
     )
     
     db.add(user)
+    await db.flush()  # get user.id
+    
+    # Process referral rewards
+    if inviter:
+        inviter_reward = 500
+        newuser_bonus = 200
+        
+        # Create invitation record
+        invitation = Invitation(
+            inviter_id=inviter.id,
+            invitee_id=user.id,
+            invite_code=ref_code,
+            reward_tokens=inviter_reward,
+            status="rewarded",
+        )
+        db.add(invitation)
+        
+        # Award tokens to inviter — find or create active package
+        inviter_pkg_result = await db.execute(
+            select(TokenPackage)
+            .where(TokenPackage.user_id == inviter.id, TokenPackage.is_active == True)
+            .order_by(TokenPackage.purchased_at.desc())
+            .limit(1)
+        )
+        inviter_pkg = inviter_pkg_result.scalar_one_or_none()
+        if inviter_pkg:
+            inviter_pkg.total_tokens += inviter_reward
+            inviter_pkg.remaining_tokens += inviter_reward
+        else:
+            db.add(TokenPackage(
+                user_id=inviter.id,
+                package_type=PackageType.FREE,
+                total_tokens=inviter_reward,
+                remaining_tokens=inviter_reward,
+            ))
+        
+        # Record inviter token usage (positive = earned)
+        db.add(TokenUsage(
+            user_id=inviter.id,
+            action=TokenAction.INVITE_REWARD,
+            tokens_used=-inviter_reward,  # negative = earned
+            description=f"邀请奖励：用户 {user.name} 通过邀请码注册 (+{inviter_reward} Token)",
+        ))
+        
+        # Award bonus tokens to new user
+        db.add(TokenPackage(
+            user_id=user.id,
+            package_type=PackageType.FREE,
+            total_tokens=100000 + newuser_bonus,
+            remaining_tokens=100000 + newuser_bonus,
+        ))
+        db.add(TokenUsage(
+            user_id=user.id,
+            action=TokenAction.INVITE_REWARD,
+            tokens_used=-newuser_bonus,
+            description=f"新用户邀请奖励：通过邀请码 {ref_code} 注册 (+{newuser_bonus} Token)",
+        ))
+    
     await db.commit()
     await db.refresh(user)
     

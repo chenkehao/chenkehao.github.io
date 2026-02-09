@@ -24,6 +24,7 @@ export interface User {
   is_verified: boolean;
   created_at: string;
   last_login?: string;
+  invite_code?: string;
 }
 
 // Context 类型
@@ -51,6 +52,7 @@ interface RegisterData {
   phone?: string;
   role?: string;
   company_name?: string;
+  ref_code?: string;
 }
 
 // 创建 Context

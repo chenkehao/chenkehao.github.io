@@ -38,6 +38,7 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=6, max_length=100)
     role: UserRole = UserRole.CANDIDATE
     company_name: Optional[str] = None
+    ref_code: Optional[str] = Field(None, max_length=20, description="邀请码（推荐人的邀请码）")
 
 
 class UserLogin(BaseModel):
@@ -67,6 +68,7 @@ class UserResponse(UserBase):
     is_verified: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    invite_code: Optional[str] = None
 
     class Config:
         from_attributes = True

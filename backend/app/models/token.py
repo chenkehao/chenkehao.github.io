@@ -21,6 +21,7 @@ class TokenAction(str, enum.Enum):
     MARKET_ANALYSIS = "market_analysis"
     ROUTE_DISPATCH = "route_dispatch"
     CHAT = "chat"
+    INVITE_REWARD = "invite_reward"
     OTHER = "other"
 
 

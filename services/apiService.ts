@@ -96,6 +96,7 @@ export interface RegisterRequest {
   name: string;
   role?: 'candidate' | 'recruiter';
   company_name?: string;
+  ref_code?: string;
 }
 
 export interface AuthResponse {
@@ -403,6 +404,119 @@ export const getJobDetail = async (jobId: number, userId: number): Promise<any> 
 };
 
 /**
+ * 创建岗位日志
+ */
+export const createJobLog = async (data: {
+  job_id: number;
+  actor_id?: number;
+  actor_type?: string;
+  action: string;
+  title: string;
+  content: string;
+  extra_data?: any;
+  todo_id?: number;
+}): Promise<any> => {
+  return request('/public/job-logs', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 获取岗位日志列表
+ */
+export const getJobLogs = async (jobId: number, action?: string, limit?: number): Promise<any> => {
+  const params = new URLSearchParams();
+  if (action) params.append('action', action);
+  if (limit) params.append('limit', String(limit));
+  const qs = params.toString();
+  return request(`/public/job-logs/${jobId}${qs ? '?' + qs : ''}`);
+};
+
+/**
+ * 批量创建岗位日志
+ */
+export const createJobLogsBatch = async (logs: Array<{
+  job_id: number;
+  actor_id?: number;
+  actor_type?: string;
+  action: string;
+  title: string;
+  content: string;
+  extra_data?: any;
+  todo_id?: number;
+}>): Promise<any> => {
+  return request('/public/job-logs/batch', {
+    method: 'POST',
+    body: JSON.stringify(logs),
+  });
+};
+
+/**
+ * 智能候选人匹配 — 结合数据库真实人才 + AI 模拟
+ */
+export const smartMatchCandidates = async (data: {
+  job_ids: number[];
+  user_id: number;
+  extra_requirements?: string;
+}): Promise<{
+  matches: Array<{
+    id: number | null;
+    name: string;
+    title: string;
+    experience: string;
+    match_score: number;
+    highlight: string;
+    skills: string[];
+    source: 'database' | 'ai_simulated';
+    match_reason: string;
+  }>;
+  total_real: number;
+  total_simulated: number;
+  job_titles: string[];
+  memory_context: string;
+}> => {
+  return request('/public/smart-match', {
+    method: 'POST',
+    body: JSON.stringify({
+      job_ids: data.job_ids,
+      user_id: data.user_id,
+      extra_requirements: data.extra_requirements || '',
+    }),
+  });
+};
+
+/**
+ * 启动异步任务（智能邀请 / 智能筛选）
+ */
+export const startAsyncTask = async (data: {
+  task_type: 'smart_invite' | 'smart_screen';
+  job_ids: number[];
+  user_id: number;
+  todo_id?: number;
+  extra_requirements?: string;
+}): Promise<{ task_id: string; status: string; message: string }> => {
+  return request('/public/async-task', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 查询异步任务状态
+ */
+export const getAsyncTaskStatus = async (taskId: string): Promise<{
+  task_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'not_found';
+  progress: number;
+  stage: string;
+  message: string;
+  result?: any;
+}> => {
+  return request(`/public/async-task/${taskId}`);
+};
+
+/**
  * 更新职位
  */
 export const updateJob = async (id: number, data: Partial<Job> & { user_id?: number }): Promise<any> => {
@@ -543,13 +657,32 @@ export const getPublicJobs = async (params?: {
   page_size?: number;
   search?: string;
   location?: string;
+  job_type?: string;
+  tag?: string;
+  experience?: string;
+  salary_min?: number;
+  salary_max?: number;
+  sort?: string;
 }): Promise<any> => {
   const query = new URLSearchParams();
   if (params?.page) query.append('page', params.page.toString());
   if (params?.page_size) query.append('page_size', params.page_size.toString());
   if (params?.search) query.append('search', params.search);
   if (params?.location) query.append('location', params.location);
+  if (params?.job_type) query.append('job_type', params.job_type);
+  if (params?.tag) query.append('tag', params.tag);
+  if (params?.experience) query.append('experience', params.experience);
+  if (params?.salary_min) query.append('salary_min', params.salary_min.toString());
+  if (params?.salary_max) query.append('salary_max', params.salary_max.toString());
+  if (params?.sort) query.append('sort', params.sort);
   return request(`/public/jobs?${query.toString()}`);
+};
+
+/**
+ * 获取所有岗位标签
+ */
+export const getJobTags = async (): Promise<{ id: number; name: string; category: string }[]> => {
+  return request('/public/job-tags');
 };
 
 /**
@@ -562,8 +695,10 @@ export const getPublicJob = async (jobId: number): Promise<any> => {
 /**
  * 获取工作流列表
  */
-export const getPublicFlows = async (limit: number = 10): Promise<any[]> => {
-  return request(`/public/flows?limit=${limit}`);
+export const getPublicFlows = async (limit: number = 10, userId?: number): Promise<any[]> => {
+  const params = new URLSearchParams({ limit: limit.toString() });
+  if (userId) params.append('user_id', userId.toString());
+  return request(`/public/flows?${params.toString()}`);
 };
 
 /**
@@ -578,6 +713,36 @@ export const getPublicFlow = async (flowId: number): Promise<any> => {
  */
 export const getPublicTalents = async (limit: number = 10): Promise<any[]> => {
   return request(`/public/talents?limit=${limit}`);
+};
+
+/**
+ * 获取推荐人才列表（分页 + 筛选）
+ */
+export const getPublicTalentsPaged = async (params?: {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  skill?: string;
+  experience_min?: number;
+  experience_max?: number;
+  sort?: string;
+}): Promise<any> => {
+  const query = new URLSearchParams();
+  if (params?.page) query.append('page', params.page.toString());
+  if (params?.page_size) query.append('page_size', params.page_size.toString());
+  if (params?.search) query.append('search', params.search);
+  if (params?.skill) query.append('skill', params.skill);
+  if (params?.experience_min != null) query.append('experience_min', params.experience_min.toString());
+  if (params?.experience_max != null) query.append('experience_max', params.experience_max.toString());
+  if (params?.sort) query.append('sort', params.sort);
+  return request(`/public/talents?${query.toString()}`);
+};
+
+/**
+ * 获取所有人才技能标签
+ */
+export const getTalentSkills = async (): Promise<string[]> => {
+  return request('/public/talent-skills');
 };
 
 // Token 统计已移到文件末尾的新 API
@@ -609,6 +774,21 @@ export const createMemory = async (data: {
 }, userId: number = 1): Promise<any> => {
   return request(`/public/memories?user_id=${userId}`, {
     method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 更新记忆
+ */
+export const updateMemory = async (memoryId: number, data: {
+  type: string;
+  content: string;
+  importance?: string;
+  scope?: 'candidate' | 'employer';
+}): Promise<any> => {
+  return request(`/public/memories/${memoryId}`, {
+    method: 'PUT',
     body: JSON.stringify(data),
   });
 };
@@ -667,10 +847,31 @@ export const createTodo = async (data: {
 export const updateTodo = async (todoId: number, data: {
   status?: string;
   progress?: number;
+  steps?: any[];
+  ai_advice?: string;
+  published_job_ids?: number[];
+  current_step?: string;
 }): Promise<any> => {
   const params = new URLSearchParams();
   if (data.status) params.append('status', data.status);
   if (data.progress !== undefined) params.append('progress', String(data.progress));
+  
+  // 如果有 body 字段（steps/ai_advice/published_job_ids/current_step），用 PUT + body 发送
+  const hasBody = data.steps !== undefined || data.ai_advice !== undefined || 
+                  data.published_job_ids !== undefined || data.current_step !== undefined;
+  
+  if (hasBody) {
+    const body: any = {};
+    if (data.steps !== undefined) body.steps = data.steps;
+    if (data.ai_advice !== undefined) body.ai_advice = data.ai_advice;
+    if (data.published_job_ids !== undefined) body.published_job_ids = data.published_job_ids;
+    if (data.current_step !== undefined) body.current_step = data.current_step;
+    
+    return request(`/public/todos/${todoId}?${params.toString()}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  }
   
   return request(`/public/todos/${todoId}?${params.toString()}`, {
     method: 'PUT',
@@ -719,6 +920,35 @@ export const chatWithAI = async (data: {
       model: data.model || 'Devnors 1.0',
       context: data.context || '',
     }),
+  });
+};
+
+/**
+ * 获取聊天历史消息
+ */
+export const getChatMessages = async (userId: number, todoId?: number, limit: number = 100): Promise<any[]> => {
+  const params = new URLSearchParams({ user_id: String(userId), limit: String(limit) });
+  if (todoId !== undefined && todoId !== null) params.append('todo_id', String(todoId));
+  return request(`/public/chat-messages?${params.toString()}`);
+};
+
+/**
+ * 保存单条聊天消息
+ */
+export const saveChatMessage = async (data: { role: string; content: string; todo_id?: number | null }, userId: number): Promise<any> => {
+  return request(`/public/chat-messages?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 批量保存聊天消息
+ */
+export const saveChatMessagesBatch = async (messages: Array<{ role: string; content: string; todo_id?: number | null }>, userId: number): Promise<any> => {
+  return request(`/public/chat-messages/batch?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ messages }),
   });
 };
 
@@ -1059,10 +1289,13 @@ export default {
   getPublicFlows,
   getPublicFlow,
   getPublicTalents,
+  getPublicTalentsPaged,
+  getTalentSkills,
   getTokenStats,
   getQualifications,
   getMemories,
   createMemory,
+  updateMemory,
   deleteMemory,
   getTodos,
   createTodo,
@@ -1397,3 +1630,115 @@ export async function certOCRReview(
     throw error;
   }
 }
+
+/**
+ * 创建模拟候选人数据（用于智能邀请/筛选测试）
+ */
+export const seedMockCandidates = async (): Promise<{
+  message: string;
+  created: number;
+  total_candidates: number;
+}> => {
+  return request('/public/seed-candidates', { method: 'POST' });
+};
+
+/**
+ * 互换联系方式后批量完成 Flow 记录
+ */
+export const completeExchangeFlows = async (jobIds: number[], candidateNames?: string[]): Promise<{
+  updated: number;
+  message: string;
+}> => {
+  return request('/public/flows/complete-exchange', {
+    method: 'POST',
+    body: JSON.stringify({ job_ids: jobIds, candidate_names: candidateNames || [] }),
+  });
+};
+
+/**
+ * 获取双方通过候选人的联系方式
+ */
+export const getExchangeContacts = async (jobIds: number[], passedCandidates: any[]): Promise<{
+  contacts: Array<{
+    name: string;
+    id: number | null;
+    source: string;
+    match_score: number;
+    employer_score: number;
+    strengths: string[];
+    phone: string | null;
+    email: string | null;
+    is_simulated_contact?: boolean;
+  }>;
+}> => {
+  return request('/public/exchange-contacts', {
+    method: 'POST',
+    body: JSON.stringify({ job_ids: jobIds, passed_candidates: passedCandidates }),
+  });
+};
+
+/**
+ * 提交候选人反馈评价
+ */
+export const submitCandidateFeedback = async (params: {
+  job_id: number;
+  user_id: number;
+  candidate_name: string;
+  rating: 'good' | 'neutral' | 'bad';
+  feedback_text: string;
+  todo_id?: number;
+}): Promise<{
+  success: boolean;
+  rating: string;
+  rating_label: string;
+  memory_created: boolean;
+  message: string;
+}> => {
+  return request('/public/candidate-feedback', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+};
+
+// ========== 邀请奖励系统 ==========
+
+export interface InviteStats {
+  invite_code: string;
+  invite_link: string;
+  invite_count: number;
+  total_reward_tokens: number;
+  token_balance: number;
+  records: InviteRecord[];
+  rules: {
+    per_invite_reward: number;
+    new_user_bonus: number;
+    milestone_5: number;
+    milestone_10: number;
+    milestone_20: number;
+  };
+}
+
+export interface InviteRecord {
+  id: number;
+  invitee_name: string;
+  reward_tokens: number;
+  status: string;
+  created_at: string | null;
+}
+
+/**
+ * 获取邀请统计信息
+ */
+export const getInviteStats = async (userId: number): Promise<InviteStats> => {
+  return request(`/public/invite/stats?user_id=${userId}`, { method: 'GET' });
+};
+
+/**
+ * 获取邀请记录（分页）
+ */
+export const getInviteRecords = async (userId: number, limit = 20, offset = 0): Promise<{
+  total: number;
+  items: InviteRecord[];
+}> => {
+  return request(`/public/invite/records?user_id=${userId}&limit=${limit}&offset=${offset}`, { method: 'GET' });
+};

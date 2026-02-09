@@ -4,9 +4,10 @@ Database Models
 
 from app.models.user import User, TeamMember, UserRole, AccountTier
 from app.models.candidate import Candidate, CandidateProfile, Skill, CareerPath, SkillGap
-from app.models.job import Job, JobTag
+from app.models.job import Job, JobTag, JobLog, JobLogAction
 from app.models.flow import Flow, FlowStep, FlowTimeline, FlowStatus
-from app.models.token import TokenUsage, TokenPackage
+from app.models.token import TokenUsage, TokenPackage, TokenAction
+from app.models.invitation import Invitation
 from app.models.memory import Memory, MemoryType, MemoryImportance, MemoryScope
 from app.models.todo import Todo, ChatMessage, TodoStatus, TodoPriority, TodoSource, TodoType
 from app.models.settings import (
@@ -35,6 +36,8 @@ __all__ = [
     # Job
     "Job",
     "JobTag",
+    "JobLog",
+    "JobLogAction",
     # Flow
     "Flow",
     "FlowStep",
@@ -43,6 +46,9 @@ __all__ = [
     # Token
     "TokenUsage",
     "TokenPackage",
+    "TokenAction",
+    # Invitation
+    "Invitation",
     # Memory
     "Memory",
     "MemoryType",

@@ -6,7 +6,7 @@ import enum
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String, Boolean, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import String, Integer, Boolean, DateTime, Enum, ForeignKey, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -70,6 +70,10 @@ class User(Base):
         foreign_keys="Enterprise.admin_user_id",
         uselist=False
     )
+    
+    # Invitation / Referral
+    invite_code: Mapped[Optional[str]] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    invited_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
     # Memory/Preferences stored as JSON
     memory_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -6,7 +6,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import String, Integer, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import String, Integer, DateTime, Enum, ForeignKey, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,6 +28,8 @@ class MemoryType(str, enum.Enum):
     COMPANY = "company"      # 公司介绍
     REQUIREMENT = "requirement" # 招聘需求
     BENEFIT = "benefit"      # 福利待遇
+    ACTION = "action"        # 动作/行为记忆
+    STRATEGY = "strategy"    # 策略
 
 
 class MemoryImportance(str, enum.Enum):
@@ -79,6 +81,10 @@ class Memory(Base):
     
     # 颜色标记
     color: Mapped[str] = mapped_column(String(50), default="border-slate-300")
+    
+    # 版本历史 - JSON数组，记录每次合并/修改的历史
+    # 格式: [{"version": 1, "action": "create|merge|edit|optimize", "content": "旧内容", "date": "2026-02-09", "source": "说明"}]
+    version_history: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     
     # 时间戳
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

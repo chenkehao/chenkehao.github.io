@@ -503,57 +503,40 @@ async def seed_database():
         hr_user = hr_user.scalar_one_or_none()
         
         if hr_user:
+            # 企业用户的真实业务任务（认证、资料完善）会在实际流程中动态创建
+            # 不再预置虚假的"筛选简历"、"安排面试"等占位任务
             hr_todos = [
                 {
-                    "title": "筛选候选人简历",
-                    "description": "AI 正在分析收到的简历，筛选优质候选人",
-                    "status": TodoStatus.IN_PROGRESS,
+                    "title": "完成企业认证",
+                    "description": "上传营业执照等企业资质认证文件",
+                    "status": TodoStatus.PENDING,
                     "priority": TodoPriority.HIGH,
                     "source": TodoSource.AGENT,
                     "todo_type": TodoType.EMPLOYER,
-                    "progress": 45,
-                    "icon": "UserIcon",
-                    "ai_advice": "已筛选出 12 份高匹配简历，建议优先查看",
-                    "steps": json.dumps([
-                        {"name": "简历收集", "done": True},
-                        {"name": "初步筛选", "done": True},
-                        {"name": "深度分析", "done": False},
-                    ]),
-                    "due_date": datetime.utcnow() + timedelta(days=1),
-                },
-                {
-                    "title": "安排面试日程",
-                    "description": "协调候选人和面试官时间",
-                    "status": TodoStatus.PENDING,
-                    "priority": TodoPriority.MEDIUM,
-                    "source": TodoSource.USER,
-                    "todo_type": TodoType.EMPLOYER,
                     "progress": 0,
-                    "icon": "Calendar",
-                    "ai_advice": "建议在本周内完成首轮面试",
+                    "icon": "Shield",
+                    "ai_advice": "完成企业认证可提升招聘可信度",
                     "steps": json.dumps([
-                        {"name": "确认时间", "done": False},
-                        {"name": "发送邀请", "done": False},
-                        {"name": "面试准备", "done": False},
+                        {"name": "上传营业执照", "done": False},
+                        {"name": "认证审核", "done": False},
                     ]),
-                    "due_date": datetime.utcnow() + timedelta(days=3),
+                    "due_date": datetime.utcnow() + timedelta(days=7),
                 },
                 {
-                    "title": "生成人才分析报告",
-                    "description": "AI 自动生成候选人综合评估报告",
-                    "status": TodoStatus.COMPLETED,
-                    "priority": TodoPriority.LOW,
+                    "title": "完善企业资料",
+                    "description": "补充企业基本信息，提升招聘效果",
+                    "status": TodoStatus.PENDING,
+                    "priority": TodoPriority.HIGH,
                     "source": TodoSource.AGENT,
                     "todo_type": TodoType.EMPLOYER,
-                    "progress": 100,
+                    "progress": 0,
                     "icon": "Building2",
-                    "ai_advice": "报告已生成，包含技能评估、文化匹配度等",
+                    "ai_advice": "完善企业资料后可开始智能招聘",
                     "steps": json.dumps([
-                        {"name": "数据收集", "done": True},
-                        {"name": "AI 分析", "done": True},
-                        {"name": "报告生成", "done": True},
+                        {"name": "填写企业信息", "done": False},
+                        {"name": "设置福利待遇", "done": False},
                     ]),
-                    "due_date": datetime.utcnow() - timedelta(days=1),
+                    "due_date": datetime.utcnow() + timedelta(days=7),
                 },
             ]
             
