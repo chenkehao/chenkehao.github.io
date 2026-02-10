@@ -798,11 +798,18 @@ async def seed_database():
         
         # 18. 创建审计日志
         audit_logs_data = [
-            {"action": "API Key 被用于导出简历", "actor": "System Bot", "ip_address": "192.168.1.1"},
-            {"action": "账户设置被修改: 联系邮箱", "actor": "王经理", "ip_address": "172.16.0.42"},
-            {"action": "新成员被邀请加入团队", "actor": "王经理", "ip_address": "172.16.0.42"},
-            {"action": "用户登录成功", "actor": "系统管理员", "ip_address": "127.0.0.1"},
-            {"action": "职位信息更新: 高级AI工程师", "actor": "李招聘", "ip_address": "192.168.1.100"},
+            {"action": "API Key 被用于导出简历", "actor": "System Bot", "ip_address": "192.168.1.1", "category": "api", "risk_level": "info"},
+            {"action": "账户设置被修改: 联系邮箱", "actor": "王经理", "ip_address": "172.16.0.42", "category": "data", "risk_level": "info"},
+            {"action": "新成员被邀请加入团队", "actor": "王经理", "ip_address": "172.16.0.42", "category": "data", "risk_level": "warning"},
+            {"action": "用户登录成功", "actor": "系统管理员", "ip_address": "127.0.0.1", "category": "auth", "risk_level": "info"},
+            {"action": "登录失败（密码错误）：admin@test.com", "actor": "未知用户", "ip_address": "203.0.113.42", "category": "auth", "risk_level": "danger"},
+            {"action": "移交管理员权限给用户 3", "actor": "管理员", "ip_address": "172.16.0.42", "category": "system", "risk_level": "danger"},
+            {"action": "生成新API密钥", "actor": "王经理", "ip_address": "172.16.0.42", "category": "api", "risk_level": "warning"},
+            {"action": "AI 对话（消耗 1240 tokens）", "actor": "系统", "ip_address": "127.0.0.1", "category": "ai", "risk_level": "info"},
+            {"action": "职位信息更新: 高级AI工程师", "actor": "李招聘", "ip_address": "192.168.1.100", "category": "data", "risk_level": "info"},
+            {"action": "AI 对话（消耗 856 tokens）", "actor": "系统", "ip_address": "127.0.0.1", "category": "ai", "risk_level": "info"},
+            {"action": "用户登录成功", "actor": "王经理", "ip_address": "172.16.0.42", "category": "auth", "risk_level": "info"},
+            {"action": "新用户注册：test@devnors.com", "actor": "test", "ip_address": "10.0.0.5", "category": "auth", "risk_level": "info"},
         ]
         
         for log_data in audit_logs_data:
@@ -812,6 +819,79 @@ async def seed_database():
             )
             db.add(log)
         
+        await db.commit()
+
+        # 19. 创建版本更新记录（基于真实 git 提交记录）
+        from app.models.changelog import Changelog
+        NC = 'text-emerald-600 bg-emerald-50'
+        OC = 'text-indigo-600 bg-indigo-50'
+        FC = 'text-amber-600 bg-amber-50'
+        changelog_records = [
+            # v1.0.0 - 2026-02-02 - commit aea9a9f
+            Changelog(version='v1.0.0', date='2026-02-02', tag='首发', tag_color='bg-indigo-100 text-indigo-700', item_type='新功能', item_color=NC, description='AI 助手底部新增快捷操作提示栏，引导用户快速使用核心功能', commit_hash='aea9a9f', sort_order=1),
+            Changelog(version='v1.0.0', date='2026-02-02', tag='首发', tag_color='bg-indigo-100 text-indigo-700', item_type='新功能', item_color=NC, description='定价方案页面上线，展示默认/Pro/Ultra 三档套餐及功能对比', commit_hash='aea9a9f', sort_order=2),
+            Changelog(version='v1.0.0', date='2026-02-02', tag='首发', tag_color='bg-indigo-100 text-indigo-700', item_type='新功能', item_color=NC, description='页脚新增定价方案入口链接', commit_hash='aea9a9f', sort_order=3),
+            # v1.0.1 - 2026-02-03 - commit 994484b
+            Changelog(version='v1.0.1', date='2026-02-03', item_type='优化', item_color=OC, description='定价方案套餐内容和价格调整优化', commit_hash='994484b', sort_order=1),
+            Changelog(version='v1.0.1', date='2026-02-03', item_type='优化', item_color=OC, description='全站 UI 样式细节优化', commit_hash='994484b', sort_order=2),
+            # v1.0.2 - 2026-02-04 - commit 90051e5
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='完整后端 API 系统搭建（FastAPI + SQLAlchemy + SQLite）', commit_hash='90051e5', sort_order=1),
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='后端模型层：用户、候选人、岗位、Flow 工作流、Token 计费、记忆系统等全部数据模型', commit_hash='90051e5', sort_order=2),
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='AI Agent 体系搭建：简历解析 Agent、面试评估 Agent、市场分析 Agent、路由调度 Agent', commit_hash='90051e5', sort_order=3),
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='简历智能解析功能：上传 PDF/Word 后 AI 自动提取结构化信息并填充个人资料', commit_hash='90051e5', sort_order=4),
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='用户认证系统（注册、登录、JWT Token 鉴权）', commit_hash='90051e5', sort_order=5),
+            Changelog(version='v1.0.2', date='2026-02-04', item_type='新功能', item_color=NC, description='种子数据初始化脚本，包含测试用户、岗位、候选人等基础数据', commit_hash='90051e5', sort_order=6),
+            # v1.0.3 - 2026-02-05 - commit 0cf7a6d
+            Changelog(version='v1.0.3', date='2026-02-05', item_type='新功能', item_color=NC, description='企业认证任务功能上线，支持企业资质认证流程', commit_hash='0cf7a6d', sort_order=1),
+            Changelog(version='v1.0.3', date='2026-02-05', item_type='新功能', item_color=NC, description='数据库迁移方案文档和 SQLite → MySQL 迁移脚本', commit_hash='0cf7a6d', sort_order=2),
+            Changelog(version='v1.0.3', date='2026-02-05', item_type='新功能', item_color=NC, description='MySQL 索引优化 SQL 脚本，为生产环境部署做准备', commit_hash='0cf7a6d', sort_order=3),
+            Changelog(version='v1.0.3', date='2026-02-05', item_type='优化', item_color=OC, description='系统设置页面功能扩展', commit_hash='0cf7a6d', sort_order=4),
+            Changelog(version='v1.0.3', date='2026-02-05', item_type='优化', item_color=OC, description='前端 apiService 新增多个后端接口调用方法', commit_hash='0cf7a6d', sort_order=5),
+            # v1.0.4 - 2026-02-06 - commits 767687e + e3d0533
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='新功能', item_color=NC, description='深色模式支持与优化', commit_hash='767687e', sort_order=1),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='新功能', item_color=NC, description='团队成员管理功能：邀请、角色分配、成员列表', commit_hash='767687e', sort_order=2),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='新功能', item_color=NC, description='登录系统重构：支持手机号验证码登录和密码登录双模式', commit_hash='767687e', sort_order=3),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='新功能', item_color=NC, description='系统设置后端 API 大幅扩展：AI 引擎配置、API Key 管理、审计日志基础功能', commit_hash='767687e', sort_order=4),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='新功能', item_color=NC, description='.gitignore 配置完善，排除敏感文件和编译产物', commit_hash='767687e', sort_order=5),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='修复', item_color=FC, description='修复点击岗位卡片跳转到岗位列表而非岗位详情页的问题', commit_hash='e3d0533', sort_order=6),
+            Changelog(version='v1.0.4', date='2026-02-06', item_type='优化', item_color=OC, description='前端大量页面组件优化重构（3500+ 行变更）', commit_hash='e3d0533', sort_order=7),
+            # v1.0.5 - 2026-02-07 - commits 3920cc2 + 18162f3
+            Changelog(version='v1.0.5', date='2026-02-07', item_type='新功能', item_color=NC, description='账户体系完善：身份切换（求职者/企业方）、角色权限区分', commit_hash='3920cc2', sort_order=1),
+            Changelog(version='v1.0.5', date='2026-02-07', item_type='新功能', item_color=NC, description='任务中心筛选功能：支持按来源（Agent 分发/我创建的/已完成）快速过滤', commit_hash='3920cc2', sort_order=2),
+            Changelog(version='v1.0.5', date='2026-02-07', item_type='新功能', item_color=NC, description='AI 模型选择功能：用户可在设置中切换 AI 引擎偏好', commit_hash='3920cc2', sort_order=3),
+            Changelog(version='v1.0.5', date='2026-02-07', item_type='优化', item_color=OC, description='Todo 数据模型重构优化', commit_hash='3920cc2', sort_order=4),
+            Changelog(version='v1.0.5', date='2026-02-07', item_type='优化', item_color=OC, description='Navbar 下拉菜单宽度优化，防止文字换行导致布局错乱', commit_hash='18162f3', sort_order=5),
+            # v1.0.6 - 2026-02-08 - commit 8e32887
+            Changelog(version='v1.0.6', date='2026-02-08', item_type='新功能', item_color=NC, description='招聘助手快捷操作按钮，支持从 AI 对话中快速触发常用功能', commit_hash='8e32887', sort_order=1),
+            Changelog(version='v1.0.6', date='2026-02-08', item_type='新功能', item_color=NC, description='个性化招聘建议功能，AI 基于企业记忆生成定制化招聘策略', commit_hash='8e32887', sort_order=2),
+            Changelog(version='v1.0.6', date='2026-02-08', item_type='优化', item_color=OC, description='后端系统设置 API 重构优化（549+ 行变更）', commit_hash='8e32887', sort_order=3),
+            Changelog(version='v1.0.6', date='2026-02-08', item_type='优化', item_color=OC, description='种子数据精简，移除冗余测试数据', commit_hash='8e32887', sort_order=4),
+            # v1.0.7 - 2026-02-09 - commit 0e5bcef
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='新功能', item_color=NC, description='工作台 AI 对接队列动态化，按用户角色展示智能招聘/智能投递数据', commit_hash='0e5bcef', sort_order=1),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='新功能', item_color=NC, description='后端新增 Invitation 邀请模型，支持 AI 智能邀请数据持久化', commit_hash='0e5bcef', sort_order=2),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='新功能', item_color=NC, description='公共 API 大幅扩展（3581 行新增）：智能邀请、智能投递、消息通知、工单系统、帮助中心等', commit_hash='0e5bcef', sort_order=3),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='新功能', item_color=NC, description='Token 计费模型新增动作类型字段，精确记录各 AI 功能消耗', commit_hash='0e5bcef', sort_order=4),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='优化', item_color=OC, description='前端 App.tsx 大规模功能整合（4491 行变更），新增多个页面组件', commit_hash='0e5bcef', sort_order=5),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='优化', item_color=OC, description='用户认证接口优化，新增用户 Schema 字段', commit_hash='0e5bcef', sort_order=6),
+            Changelog(version='v1.0.7', date='2026-02-09', item_type='优化', item_color=OC, description='前端 API 服务层新增 349 行接口调用方法', commit_hash='0e5bcef', sort_order=7),
+            # v1.0.8 - 2026-02-10
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='反馈建议页面上线，支持用户提交 Bug 反馈、功能建议、问题咨询、投诉工单', sort_order=1),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='帮助中心页面上线，集成 FAQ 列表 + AI 智能问答，支持多分类', sort_order=2),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='版本更新页面上线，支持平台更新日志 + Agent 版本说明双 Tab 展示', sort_order=3),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='法律合规页面矩阵上线：服务条款、隐私政策、个人信息保护、算法说明、版权声明、未成年人保护', sort_order=4),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Token 余额不足智能提醒弹窗，AI 调用失败时自动触发充值引导', sort_order=5),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='后端新增 Notification、Ticket、Changelog 数据模型及完整 CRUD API', sort_order=6),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='审计日志增强：支持分类筛选、统计概览、CSV 导出', sort_order=7),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Webhook API 上线：支持创建、更新、删除、测试回调端点', sort_order=8),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='API 密钥管理增强：支持切换启用/禁用、重新生成密钥、调用统计', sort_order=9),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='6 个法律页面视觉样式统一美化，页头卡片 + 文档容器 + prose 排版优化', sort_order=10),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='Agent 更新内容精简，技术参数从 7 条缩减为 2 条，展示更紧凑', sort_order=11),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='页脚社交图标更换为微信/抖音/小红书/轻识，法律链接改为 React Router 跳转', sort_order=12),
+            Changelog(version='v1.0.8', date='2026-02-10', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='前端 App.tsx 功能整合（4746 行变更），后端 API 大幅扩展（6367 行新增）', sort_order=13),
+        ]
+        for cl in changelog_records:
+            db.add(cl)
+
         await db.commit()
         print("Database seeded successfully!")
 

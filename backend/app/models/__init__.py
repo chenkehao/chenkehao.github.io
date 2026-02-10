@@ -20,6 +20,9 @@ from app.models.settings import (
     CertificationStatus
 )
 from app.models.profile import UserProfile, ProfileType
+from app.models.notification import Notification, NotificationType, NotificationImportance
+from app.models.ticket import Ticket
+from app.models.changelog import Changelog
 
 __all__ = [
     # User
@@ -72,4 +75,12 @@ __all__ = [
     # Profile
     "UserProfile",
     "ProfileType",
+    # Notification
+    "Notification",
+    "NotificationType",
+    "NotificationImportance",
+    # Ticket
+    "Ticket",
+    # Changelog
+    "Changelog",
 ]

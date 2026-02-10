@@ -2,12 +2,15 @@
 设置相关 API 路由
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func as sa_func
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import secrets
+import csv
+import io
 
 from app.database import get_db
 from app.models.settings import (
@@ -17,7 +20,8 @@ from app.models.settings import (
     AIEngineConfig,
     APIKey,
     AuditLog,
-    CertificationStatus
+    CertificationStatus,
+    Webhook,
 )
 from app.models.user import TeamMember, UserRole, Enterprise, User
 
@@ -97,6 +101,9 @@ class AuditLogCreate(BaseModel):
     action: str
     actor: str
     ip_address: Optional[str] = None
+    category: Optional[str] = "system"
+    risk_level: Optional[str] = "info"
+    user_agent: Optional[str] = None
 
 
 class EnterpriseCertificationCreate(BaseModel):
@@ -247,7 +254,9 @@ async def update_settings(
         user_id=user_id,
         action="用户设置被更新",
         actor="用户",
-        ip_address="127.0.0.1"
+        ip_address="127.0.0.1",
+        category="data",
+        risk_level="info",
     )
     db.add(audit_log)
     await db.commit()
@@ -777,7 +786,9 @@ async def create_team_member(
         user_id=user_id,
         action=f"邀请新成员: {invite_target}",
         actor="管理员",
-        ip_address="127.0.0.1"
+        ip_address="127.0.0.1",
+        category="data",
+        risk_level="warning",
     )
     db.add(audit_log)
     await db.commit()
@@ -874,7 +885,9 @@ async def transfer_admin(
         user_id=user_id,
         action=f"移交管理员权限给用户 {data.new_admin_id}",
         actor="管理员",
-        ip_address="127.0.0.1"
+        ip_address="127.0.0.1",
+        category="system",
+        risk_level="danger",
     )
     db.add(audit_log)
     await db.commit()
@@ -1202,7 +1215,9 @@ async def create_api_key(
         user_id=user_id,
         action="生成新API密钥",
         actor="用户",
-        ip_address="127.0.0.1"
+        ip_address="127.0.0.1",
+        category="api",
+        risk_level="warning",
     )
     db.add(audit_log)
     await db.commit()
@@ -1233,21 +1248,251 @@ async def delete_api_key(
     return {"message": "API密钥已删除"}
 
 
+@router.put("/api-keys/{key_id}/toggle")
+async def toggle_api_key(
+    key_id: int,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """切换 API 密钥启用/禁用"""
+    result = await db.execute(
+        select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user_id)
+    )
+    api_key = result.scalar_one_or_none()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API密钥不存在")
+    api_key.is_active = not api_key.is_active
+    await db.commit()
+    return {"message": "状态已切换", "is_active": api_key.is_active}
+
+
+@router.post("/api-keys/{key_id}/regenerate")
+async def regenerate_api_key(
+    key_id: int,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """重新生成 API 密钥"""
+    result = await db.execute(
+        select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user_id)
+    )
+    api_key = result.scalar_one_or_none()
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API密钥不存在")
+    new_key = f"devnors_sk_live_{secrets.token_hex(16)}"
+    api_key.key = new_key
+    # 记录审计日志
+    db.add(AuditLog(
+        user_id=user_id, action="重新生成API密钥",
+        actor="用户", ip_address="127.0.0.1",
+        category="api", risk_level="warning",
+    ))
+    await db.commit()
+    return {"message": "密钥已重新生成", "key": new_key}
+
+
+@router.get("/api-keys/usage")
+async def get_api_key_usage(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取 API 调用统计（近 7 天，基于 audit_logs category=api）"""
+    from datetime import timedelta
+    now = datetime.utcnow()
+    seven_days_ago = now - timedelta(days=7)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # 近7天总量
+    r7 = await db.execute(
+        select(sa_func.count(AuditLog.id))
+        .where(AuditLog.user_id == user_id, AuditLog.category == "api",
+               AuditLog.created_at >= seven_days_ago)
+    )
+    week_total = r7.scalar() or 0
+
+    # 今日
+    rt = await db.execute(
+        select(sa_func.count(AuditLog.id))
+        .where(AuditLog.user_id == user_id, AuditLog.category == "api",
+               AuditLog.created_at >= today_start)
+    )
+    today_total = rt.scalar() or 0
+
+    return {"today": today_total, "week": week_total}
+
+
+# === Webhook API ===
+
+class WebhookCreate(BaseModel):
+    url: str
+    events: Optional[str] = "*"
+    description: Optional[str] = None
+
+class WebhookUpdate(BaseModel):
+    url: Optional[str] = None
+    events: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/webhooks")
+async def get_webhooks(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取 Webhook 列表"""
+    result = await db.execute(
+        select(Webhook).where(Webhook.user_id == user_id).order_by(Webhook.created_at.desc())
+    )
+    hooks = result.scalars().all()
+    return [{
+        "id": h.id,
+        "url": h.url,
+        "secret": h.secret,
+        "events": h.events or "*",
+        "is_active": h.is_active,
+        "description": h.description or "",
+        "last_triggered_at": h.last_triggered_at.isoformat() if h.last_triggered_at else None,
+        "last_status_code": h.last_status_code,
+        "created_at": h.created_at.isoformat() if h.created_at else None,
+    } for h in hooks]
+
+
+@router.post("/webhooks")
+async def create_webhook(
+    data: WebhookCreate,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """创建 Webhook"""
+    hook = Webhook(
+        user_id=user_id,
+        url=data.url,
+        secret=f"whsec_{secrets.token_hex(16)}",
+        events=data.events or "*",
+        description=data.description,
+        is_active=True,
+    )
+    db.add(hook)
+    db.add(AuditLog(
+        user_id=user_id, action=f"创建 Webhook: {data.url}",
+        actor="用户", ip_address="127.0.0.1",
+        category="api", risk_level="info",
+    ))
+    await db.commit()
+    return {
+        "message": "Webhook 已创建",
+        "id": hook.id,
+        "secret": hook.secret,
+    }
+
+
+@router.put("/webhooks/{hook_id}")
+async def update_webhook(
+    hook_id: int,
+    data: WebhookUpdate,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新 Webhook"""
+    result = await db.execute(
+        select(Webhook).where(Webhook.id == hook_id, Webhook.user_id == user_id)
+    )
+    hook = result.scalar_one_or_none()
+    if not hook:
+        raise HTTPException(status_code=404, detail="Webhook 不存在")
+    if data.url is not None:
+        hook.url = data.url
+    if data.events is not None:
+        hook.events = data.events
+    if data.description is not None:
+        hook.description = data.description
+    if data.is_active is not None:
+        hook.is_active = data.is_active
+    await db.commit()
+    return {"message": "Webhook 已更新"}
+
+
+@router.delete("/webhooks/{hook_id}")
+async def delete_webhook(
+    hook_id: int,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """删除 Webhook"""
+    result = await db.execute(
+        select(Webhook).where(Webhook.id == hook_id, Webhook.user_id == user_id)
+    )
+    hook = result.scalar_one_or_none()
+    if not hook:
+        raise HTTPException(status_code=404, detail="Webhook 不存在")
+    await db.delete(hook)
+    await db.commit()
+    return {"message": "Webhook 已删除"}
+
+
+@router.post("/webhooks/{hook_id}/test")
+async def test_webhook(
+    hook_id: int,
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """发送测试 payload 到 Webhook 端点"""
+    import httpx
+
+    result = await db.execute(
+        select(Webhook).where(Webhook.id == hook_id, Webhook.user_id == user_id)
+    )
+    hook = result.scalar_one_or_none()
+    if not hook:
+        raise HTTPException(status_code=404, detail="Webhook 不存在")
+
+    test_payload = {
+        "event": "test.ping",
+        "timestamp": datetime.utcnow().isoformat(),
+        "data": {"message": "This is a test event from Devnors."},
+    }
+
+    status_code = 0
+    error_msg = None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                hook.url,
+                json=test_payload,
+                headers={"X-Devnors-Secret": hook.secret or ""},
+            )
+            status_code = resp.status_code
+    except Exception as e:
+        error_msg = str(e)
+
+    hook.last_triggered_at = datetime.utcnow()
+    hook.last_status_code = status_code
+    await db.commit()
+
+    return {
+        "status_code": status_code,
+        "success": 200 <= status_code < 300,
+        "error": error_msg,
+    }
+
+
 # === 审计日志 API ===
 
 @router.get("/audit-logs")
 async def get_audit_logs(
     user_id: int = Query(1, description="用户ID"),
     limit: int = Query(50, description="返回数量"),
+    category: Optional[str] = Query(None, description="分类筛选: auth/data/ai/api/system"),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取审计日志"""
-    result = await db.execute(
-        select(AuditLog)
-        .where(AuditLog.user_id == user_id)
-        .order_by(AuditLog.created_at.desc())
-        .limit(limit)
-    )
+    """获取审计日志（支持分类筛选）"""
+    query = select(AuditLog).where(AuditLog.user_id == user_id)
+    if category:
+        query = query.where(AuditLog.category == category)
+    query = query.order_by(AuditLog.created_at.desc()).limit(limit)
+
+    result = await db.execute(query)
     logs = result.scalars().all()
     
     def format_time_ago(dt):
@@ -1271,8 +1516,70 @@ async def get_audit_logs(
         "action": log.action,
         "user": log.actor,
         "time": format_time_ago(log.created_at),
-        "ip": log.ip_address or "未知"
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+        "ip": log.ip_address or "未知",
+        "category": getattr(log, 'category', None) or "system",
+        "risk_level": getattr(log, 'risk_level', None) or "info",
     } for log in logs]
+
+
+@router.get("/audit-logs/stats")
+async def get_audit_log_stats(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取审计日志统计（各分类数量）"""
+    result = await db.execute(
+        select(AuditLog.category, sa_func.count(AuditLog.id))
+        .where(AuditLog.user_id == user_id)
+        .group_by(AuditLog.category)
+    )
+    rows = result.all()
+    stats = {row[0] or "system": row[1] for row in rows}
+    total = sum(stats.values())
+    return {
+        "total": total,
+        "auth": stats.get("auth", 0),
+        "data": stats.get("data", 0),
+        "ai": stats.get("ai", 0),
+        "api": stats.get("api", 0),
+        "system": stats.get("system", 0),
+    }
+
+
+@router.get("/audit-logs/export")
+async def export_audit_logs(
+    user_id: int = Query(1, description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """导出审计日志为 CSV"""
+    result = await db.execute(
+        select(AuditLog)
+        .where(AuditLog.user_id == user_id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    logs = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "时间", "分类", "风险等级", "操作", "执行者", "IP地址"])
+    for log in logs:
+        writer.writerow([
+            log.id,
+            log.created_at.isoformat() if log.created_at else "",
+            getattr(log, 'category', '') or "system",
+            getattr(log, 'risk_level', '') or "info",
+            log.action,
+            log.actor,
+            log.ip_address or "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_logs.csv"}
+    )
 
 
 @router.post("/audit-logs")
@@ -1286,7 +1593,10 @@ async def create_audit_log(
         user_id=user_id,
         action=data.action,
         actor=data.actor,
-        ip_address=data.ip_address
+        ip_address=data.ip_address,
+        category=data.category or "system",
+        risk_level=data.risk_level or "info",
+        user_agent=data.user_agent,
     )
     db.add(log)
     await db.commit()
@@ -1392,7 +1702,7 @@ async def upgrade_account_tier(
     price_map = {
         "free": {"monthly": 0, "annual": 0},
         "pro": {"monthly": 199, "annual": 1990},
-        "ultra": {"monthly": 599, "annual": 5990},
+        "ultra": {"monthly": 1797, "annual": 17970},
     }
     
     price = price_map.get(new_tier_key, {}).get(req.billing_cycle, 0)
@@ -1473,6 +1783,16 @@ async def cert_ocr_review(request: CertOCRRequest):
         print("[OCR Review] Aliyun OCR not available, falling back to MiniMax Vision...")
         result = await _call_minimax_vision_ocr(minimax_api_key, image_base64, cert_type, prompt)
         if result:
+            # 记录 token 消耗 (~1500 tokens for vision OCR)
+            if request.user_id:
+                try:
+                    from app.database import AsyncSessionLocal
+                    from app.models.token import TokenUsage, TokenPackage, TokenAction
+                    from app.routers.public import record_and_deduct_tokens
+                    async with AsyncSessionLocal() as _tdb:
+                        await record_and_deduct_tokens(_tdb, request.user_id, TokenAction.OTHER, 1500, model_name="minimax-vision", description="证件OCR识别")
+                        await _tdb.commit()
+                except: pass
             return result
     
     # Gemini 视觉 fallback
@@ -1481,6 +1801,15 @@ async def cert_ocr_review(request: CertOCRRequest):
         print("[OCR Review] Trying Gemini Vision fallback...")
         result = await _call_gemini_vision_ocr(gemini_api_key, image_base64, cert_type, prompt)
         if result:
+            if request.user_id:
+                try:
+                    from app.database import AsyncSessionLocal
+                    from app.models.token import TokenUsage, TokenPackage, TokenAction
+                    from app.routers.public import record_and_deduct_tokens
+                    async with AsyncSessionLocal() as _tdb:
+                        await record_and_deduct_tokens(_tdb, request.user_id, TokenAction.OTHER, 1500, model_name="gemini-2.0-flash", description="证件OCR识别")
+                        await _tdb.commit()
+                except: pass
             return result
     
     # 所有 OCR 服务都不可用

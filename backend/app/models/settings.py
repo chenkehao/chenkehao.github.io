@@ -173,6 +173,25 @@ class APIKey(Base):
     last_used_at = Column(DateTime(timezone=True))
 
 
+# === Webhook ===
+class Webhook(Base):
+    """Webhook 回调端点"""
+    __tablename__ = "webhooks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    url = Column(String(500), nullable=False)         # 回调地址
+    secret = Column(String(100))                      # 签名密钥
+    events = Column(String(500), default="*")         # 订阅事件，逗号分隔
+    is_active = Column(Boolean, default=True)
+    description = Column(String(200))                 # 备注
+    last_triggered_at = Column(DateTime(timezone=True))
+    last_status_code = Column(Integer)                # 最近一次响应码
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 # === 审计日志 ===
 class AuditLog(Base):
     """系统安全日志"""
@@ -184,5 +203,8 @@ class AuditLog(Base):
     action = Column(String(500), nullable=False)  # 操作描述
     actor = Column(String(100), nullable=False)  # 执行者
     ip_address = Column(String(50))  # IP地址
+    category = Column(String(50), default="system")  # auth/data/ai/system/api
+    risk_level = Column(String(20), default="info")  # info/warning/danger
+    user_agent = Column(String(500))  # 浏览器 UA
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())

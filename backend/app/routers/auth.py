@@ -8,7 +8,7 @@ import string
 import random
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from app.utils.security import (
     create_access_token,
     get_current_user,
 )
+from app.utils.audit import log_audit
 
 
 def _generate_invite_code() -> str:
@@ -42,6 +43,7 @@ router = APIRouter()
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_in: UserCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -91,17 +93,19 @@ async def register(
     db.add(user)
     await db.flush()  # get user.id
     
+    # 新用户默认免费额度: 50,000 tokens
+    DEFAULT_FREE_TOKENS = 50000
+    INVITER_REWARD = 50000   # 邀请人奖励
+    INVITEE_BONUS = 20000    # 被邀请人额外奖励
+    
     # Process referral rewards
     if inviter:
-        inviter_reward = 500
-        newuser_bonus = 200
-        
         # Create invitation record
         invitation = Invitation(
             inviter_id=inviter.id,
             invitee_id=user.id,
             invite_code=ref_code,
-            reward_tokens=inviter_reward,
+            reward_tokens=INVITER_REWARD,
             status="rewarded",
         )
         db.add(invitation)
@@ -115,38 +119,68 @@ async def register(
         )
         inviter_pkg = inviter_pkg_result.scalar_one_or_none()
         if inviter_pkg:
-            inviter_pkg.total_tokens += inviter_reward
-            inviter_pkg.remaining_tokens += inviter_reward
+            inviter_pkg.total_tokens += INVITER_REWARD
+            inviter_pkg.remaining_tokens += INVITER_REWARD
         else:
             db.add(TokenPackage(
                 user_id=inviter.id,
                 package_type=PackageType.FREE,
-                total_tokens=inviter_reward,
-                remaining_tokens=inviter_reward,
+                total_tokens=INVITER_REWARD,
+                remaining_tokens=INVITER_REWARD,
             ))
         
         # Record inviter token usage (positive = earned)
         db.add(TokenUsage(
             user_id=inviter.id,
             action=TokenAction.INVITE_REWARD,
-            tokens_used=-inviter_reward,  # negative = earned
-            description=f"邀请奖励：用户 {user.name} 通过邀请码注册 (+{inviter_reward} Token)",
+            tokens_used=-INVITER_REWARD,  # negative = earned
+            description=f"邀请奖励：用户 {user.name} 通过邀请码注册 (+{INVITER_REWARD:,} Token)",
         ))
         
-        # Award bonus tokens to new user
+        # Award bonus tokens to new user (default + bonus)
         db.add(TokenPackage(
             user_id=user.id,
             package_type=PackageType.FREE,
-            total_tokens=100000 + newuser_bonus,
-            remaining_tokens=100000 + newuser_bonus,
+            total_tokens=DEFAULT_FREE_TOKENS + INVITEE_BONUS,
+            remaining_tokens=DEFAULT_FREE_TOKENS + INVITEE_BONUS,
         ))
         db.add(TokenUsage(
             user_id=user.id,
             action=TokenAction.INVITE_REWARD,
-            tokens_used=-newuser_bonus,
-            description=f"新用户邀请奖励：通过邀请码 {ref_code} 注册 (+{newuser_bonus} Token)",
+            tokens_used=-INVITEE_BONUS,
+            description=f"新用户邀请奖励：通过邀请码 {ref_code} 注册 (+{INVITEE_BONUS:,} Token)",
+        ))
+    else:
+        # 无邀请码的新用户，给默认免费额度
+        db.add(TokenPackage(
+            user_id=user.id,
+            package_type=PackageType.FREE,
+            total_tokens=DEFAULT_FREE_TOKENS,
+            remaining_tokens=DEFAULT_FREE_TOKENS,
         ))
     
+    # 记录审计日志
+    await log_audit(
+        db, user_id=user.id, action=f"新用户注册：{user.email}",
+        actor=user.name or user.email,
+        category="auth", risk_level="info",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    # 发送欢迎通知
+    from app.models.notification import Notification, NotificationType, NotificationImportance
+    db.add(Notification(
+        user_id=user.id,
+        type=NotificationType.SYSTEM,
+        importance=NotificationImportance.NORMAL,
+        title="欢迎加入 Devnors！",
+        content="感谢注册！您已获得 50,000 免费 Token，可用于 AI 简历分析、智能匹配等功能。开始探索吧！",
+        icon="Zap", color="text-amber-600", bg_color="bg-amber-50",
+        link="/workbench",
+        sender="系统",
+    ))
+
     await db.commit()
     await db.refresh(user)
     
@@ -155,6 +189,7 @@ async def register(
 
 @router.post("/login", response_model=Token)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
@@ -163,11 +198,21 @@ async def login(
     
     使用 OAuth2 密码模式
     """
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
     # Find user
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
     
     if not user or not verify_password(form_data.password, user.hashed_password):
+        # 登录失败审计
+        if user:
+            await log_audit(
+                db, user_id=user.id, action=f"登录失败（密码错误）：{form_data.username}",
+                actor=form_data.username, category="auth", risk_level="danger",
+                ip_address=ip, user_agent=ua, auto_commit=True,
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="邮箱或密码错误",
@@ -180,6 +225,13 @@ async def login(
             detail="用户已被禁用"
         )
     
+    # 登录成功审计
+    await log_audit(
+        db, user_id=user.id, action=f"用户登录成功：{user.email}",
+        actor=user.name or user.email, category="auth", risk_level="info",
+        ip_address=ip, user_agent=ua, auto_commit=True,
+    )
+
     # Create access token
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
@@ -193,6 +245,7 @@ async def login(
 @router.post("/login/json", response_model=Token)
 async def login_json(
     user_in: UserLogin,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -200,11 +253,21 @@ async def login_json(
     
     前端友好的登录接口
     """
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
     # Find user
     result = await db.execute(select(User).where(User.email == user_in.email))
     user = result.scalar_one_or_none()
     
     if not user or not verify_password(user_in.password, user.hashed_password):
+        # 登录失败审计
+        if user:
+            await log_audit(
+                db, user_id=user.id, action=f"登录失败（密码错误）：{user_in.email}",
+                actor=user_in.email, category="auth", risk_level="danger",
+                ip_address=ip, user_agent=ua, auto_commit=True,
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="邮箱或密码错误"
@@ -216,6 +279,13 @@ async def login_json(
             detail="用户已被禁用"
         )
     
+    # 登录成功审计
+    await log_audit(
+        db, user_id=user.id, action=f"用户登录成功：{user.email}",
+        actor=user.name or user.email, category="auth", risk_level="info",
+        ip_address=ip, user_agent=ua, auto_commit=True,
+    )
+
     # Create access token
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
@@ -295,11 +365,20 @@ async def update_user_role(
 async def change_password(
     old_password: str,
     new_password: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """修改密码"""
     if not verify_password(old_password, current_user.hashed_password):
+        await log_audit(
+            db, user_id=current_user.id, action="密码修改失败（原密码错误）",
+            actor=current_user.name or current_user.email,
+            category="auth", risk_level="danger",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            auto_commit=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="原密码错误"
@@ -312,6 +391,28 @@ async def change_password(
         )
     
     current_user.hashed_password = get_password_hash(new_password)
+
+    await log_audit(
+        db, user_id=current_user.id, action="用户修改密码",
+        actor=current_user.name or current_user.email,
+        category="auth", risk_level="warning",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    # 安全通知：密码已修改（关键）
+    from app.models.notification import Notification, NotificationType, NotificationImportance
+    db.add(Notification(
+        user_id=current_user.id,
+        type=NotificationType.SYSTEM,
+        importance=NotificationImportance.CRITICAL,
+        title="密码已修改",
+        content="您的账户密码已成功修改。如非本人操作，请立即联系客服",
+        icon="AlertCircle", color="text-rose-600", bg_color="bg-rose-50",
+        link="/settings",
+        sender="系统",
+    ))
+
     await db.commit()
     
     return {"message": "密码修改成功"}

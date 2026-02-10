@@ -247,8 +247,9 @@ export interface ResumeAnalysisResult {
 /**
  * AI 简历分析
  */
-export const analyzeResumeAPI = async (resumeText: string): Promise<ResumeAnalysisResult> => {
-  return request<ResumeAnalysisResult>('/ai/analyze-resume', {
+export const analyzeResumeAPI = async (resumeText: string, userId?: number): Promise<ResumeAnalysisResult> => {
+  const params = userId ? `?user_id=${userId}` : '';
+  return request<ResumeAnalysisResult>(`/ai/analyze-resume${params}`, {
     method: 'POST',
     body: JSON.stringify({ resume_text: resumeText }),
   });
@@ -259,11 +260,12 @@ export const analyzeResumeAPI = async (resumeText: string): Promise<ResumeAnalys
  */
 export const chatWithInterviewerAPI = async (
   history: { role: string; content: string }[],
-  message: string
+  message: string,
+  userId?: number
 ): Promise<{ response: string; tokens_used: number }> => {
   return request('/ai/interview/chat', {
     method: 'POST',
-    body: JSON.stringify({ history, message }),
+    body: JSON.stringify({ history, message, user_id: userId || 0 }),
   });
 };
 
@@ -288,6 +290,7 @@ export const analyzeMarketAPI = async (data: {
   skills: string[];
   experience_years: number;
   location?: string;
+  user_id?: number;
 }): Promise<{
   salary_range: string;
   market_demand: string;
@@ -702,6 +705,15 @@ export const getPublicFlows = async (limit: number = 10, userId?: number): Promi
 };
 
 /**
+ * 获取工作流统计数据
+ */
+export const getFlowStats = async (userId?: number): Promise<any> => {
+  const params = new URLSearchParams();
+  if (userId) params.append('user_id', userId.toString());
+  return request(`/public/flows/stats?${params.toString()}`);
+};
+
+/**
  * 获取工作流详情
  */
 export const getPublicFlow = async (flowId: number): Promise<any> => {
@@ -911,7 +923,8 @@ export const chatWithAI = async (data: {
   history?: Array<{role: string; content: string}>;
   model?: string;
   context?: string;
-}): Promise<{response: string; tokens_used: number; model: string}> => {
+  user_id?: number;
+}): Promise<{response: string; tokens_used: number; model: string; error?: string; balance?: number; required?: number}> => {
   return request('/public/chat', {
     method: 'POST',
     body: JSON.stringify({
@@ -919,6 +932,7 @@ export const chatWithAI = async (data: {
       history: data.history || [],
       model: data.model || 'Devnors 1.0',
       context: data.context || '',
+      user_id: data.user_id || 0,
     }),
   });
 };
@@ -1222,10 +1236,108 @@ export const createAPIKey = async (
 };
 
 /**
- * 获取审计日志
+ * 删除 API 密钥
  */
-export const getAuditLogs = async (userId: number = 1, limit: number = 50): Promise<any[]> => {
-  return request(`/settings/audit-logs?user_id=${userId}&limit=${limit}`);
+export const deleteAPIKey = async (keyId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/api-keys/${keyId}?user_id=${userId}`, { method: 'DELETE' });
+};
+
+/**
+ * 切换 API 密钥启用/禁用
+ */
+export const toggleAPIKey = async (keyId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/api-keys/${keyId}/toggle?user_id=${userId}`, { method: 'PUT' });
+};
+
+/**
+ * 重新生成 API 密钥
+ */
+export const regenerateAPIKey = async (keyId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/api-keys/${keyId}/regenerate?user_id=${userId}`, { method: 'POST' });
+};
+
+/**
+ * 获取 API 调用统计
+ */
+export const getAPIKeyUsage = async (userId: number = 1): Promise<any> => {
+  return request(`/settings/api-keys/usage?user_id=${userId}`);
+};
+
+// ============ Webhook API ============
+
+/**
+ * 获取 Webhook 列表
+ */
+export const getWebhooks = async (userId: number = 1): Promise<any[]> => {
+  return request(`/settings/webhooks?user_id=${userId}`);
+};
+
+/**
+ * 创建 Webhook
+ */
+export const createWebhook = async (data: { url: string; events?: string; description?: string }, userId: number = 1): Promise<any> => {
+  return request(`/settings/webhooks?user_id=${userId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 更新 Webhook
+ */
+export const updateWebhook = async (hookId: number, data: { url?: string; events?: string; description?: string; is_active?: boolean }, userId: number = 1): Promise<any> => {
+  return request(`/settings/webhooks/${hookId}?user_id=${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 删除 Webhook
+ */
+export const deleteWebhook = async (hookId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/webhooks/${hookId}?user_id=${userId}`, { method: 'DELETE' });
+};
+
+/**
+ * 测试 Webhook
+ */
+export const testWebhook = async (hookId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/webhooks/${hookId}/test?user_id=${userId}`, { method: 'POST' });
+};
+
+/**
+ * 获取审计日志（支持分类筛选）
+ */
+export const getAuditLogs = async (userId: number = 1, limit: number = 50, category?: string): Promise<any[]> => {
+  let url = `/settings/audit-logs?user_id=${userId}&limit=${limit}`;
+  if (category) url += `&category=${category}`;
+  return request(url);
+};
+
+/**
+ * 获取审计日志统计
+ */
+export const getAuditLogStats = async (userId: number = 1): Promise<any> => {
+  return request(`/settings/audit-logs/stats?user_id=${userId}`);
+};
+
+/**
+ * 导出审计日志 CSV
+ */
+export const exportAuditLogs = async (userId: number = 1): Promise<void> => {
+  const token = getToken();
+  const response = await fetch(`${API_BASE_URL}/settings/audit-logs/export?user_id=${userId}`, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error('导出失败');
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'audit_logs.csv';
+  a.click();
+  window.URL.revokeObjectURL(url);
 };
 
 /**
@@ -1287,11 +1399,24 @@ export default {
   getPublicJobs,
   getPublicJob,
   getPublicFlows,
+  getFlowStats,
   getPublicFlow,
   getPublicTalents,
   getPublicTalentsPaged,
   getTalentSkills,
   getTokenStats,
+  getAuditLogs,
+  getAuditLogStats,
+  exportAuditLogs,
+  deleteAPIKey,
+  toggleAPIKey,
+  regenerateAPIKey,
+  getAPIKeyUsage,
+  getWebhooks,
+  createWebhook,
+  updateWebhook,
+  deleteWebhook,
+  testWebhook,
   getQualifications,
   getMemories,
   createMemory,
@@ -1433,6 +1558,13 @@ export async function getTokenChart(userId: number, days: number = 7): Promise<a
  */
 export async function getTokenPackages(): Promise<any> {
   return request('/public/tokens/packages');
+}
+
+/**
+ * 获取按智能体分组的 Token 消耗统计
+ */
+export async function getTokenStatsByAgent(userId: number): Promise<any> {
+  return request(`/public/tokens/stats/by-agent?user_id=${userId}`);
 }
 
 /**
@@ -1741,4 +1873,27 @@ export const getInviteRecords = async (userId: number, limit = 20, offset = 0): 
   items: InviteRecord[];
 }> => {
   return request(`/public/invite/records?user_id=${userId}&limit=${limit}&offset=${offset}`, { method: 'GET' });
+};
+
+// ============ 版本更新记录 ============
+
+export interface ChangelogItem {
+  type: string;
+  color: string;
+  desc: string;
+}
+
+export interface ChangelogRelease {
+  version: string;
+  date: string;
+  tag: string;
+  tagColor: string;
+  items: ChangelogItem[];
+}
+
+/**
+ * 获取平台版本更新记录
+ */
+export const getChangelog = async (): Promise<ChangelogRelease[]> => {
+  return request('/public/changelog', { method: 'GET' });
 };

@@ -32,7 +32,7 @@ const checkBackendAvailable = async (): Promise<boolean> => {
 /**
  * AI 简历分析
  */
-export const analyzeResume = async (resumeText: string): Promise<CandidateProfile> => {
+export const analyzeResume = async (resumeText: string, userId?: number): Promise<CandidateProfile> => {
   console.log('[AI Service] analyzeResume called, text length:', resumeText.length);
   
   // 优先使用后端 API
@@ -43,7 +43,7 @@ export const analyzeResume = async (resumeText: string): Promise<CandidateProfil
     if (isBackendUp) {
       try {
         console.log('[AI Service] Calling backend API...');
-        const result = await analyzeResumeAPI(resumeText);
+        const result = await analyzeResumeAPI(resumeText, userId);
         console.log('[AI Service] Backend API success:', result.name);
         return result as CandidateProfile;
       } catch (error) {
@@ -156,7 +156,8 @@ const analyzeResumeDirectly = async (resumeText: string): Promise<CandidateProfi
  */
 export const chatWithInterviewer = async (
   history: { role: string, parts: { text: string }[] }[], 
-  userMessage: string
+  userMessage: string,
+  userId?: number
 ): Promise<string> => {
   console.log('[AI Service] chatWithInterviewer called');
   
@@ -173,7 +174,7 @@ export const chatWithInterviewer = async (
         }));
         
         console.log('[AI Service] Calling interview API...');
-        const result = await chatWithInterviewerAPI(convertedHistory, userMessage);
+        const result = await chatWithInterviewerAPI(convertedHistory, userMessage, userId);
         console.log('[AI Service] Interview API success');
         return result.response;
       } catch (error) {

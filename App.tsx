@@ -19,7 +19,7 @@ import { analyzeResume, chatWithInterviewer } from './services/geminiService';
 import { CandidateProfile, Job, SkillGap, AgentFeedback, AccountTier, TeamMember, CustomLLMConfig } from './types';
 import RadarChart from './components/RadarChart';
 import { 
-  useRecommendedJobs, usePublicJobs, useFlows, useFlow, useTalents, 
+  useRecommendedJobs, usePublicJobs, useFlows, useFlowStats, useFlow, useTalents, 
   useTokenStats, useQualifications, useMemories, useTodos, useTasks, useProfile 
 } from './hooks/useApiData';
 import { 
@@ -39,7 +39,19 @@ import {
   approveMember,
   getAIConfigs,
   getAPIKeys,
+  createAPIKey,
+  deleteAPIKey,
+  toggleAPIKey,
+  regenerateAPIKey,
+  getAPIKeyUsage,
+  getWebhooks,
+  createWebhook,
+  updateWebhook,
+  deleteWebhook,
+  testWebhook,
   getAuditLogs,
+  getAuditLogStats,
+  exportAuditLogs,
   getAccountTier,
   getMyJobs,
   deleteJob,
@@ -868,6 +880,13 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                       <Building2 size={16} /> 企业主页
                     </Link>
                   )}
+                  <Link 
+                    to="/feedback" 
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <MessageSquare size={16} /> 反馈工单
+                  </Link>
                   {/* 切换身份 */}
                   <div className="border-t border-slate-100 mt-2 pt-2">
                     <button 
@@ -1334,7 +1353,17 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   const [transferTargetId, setTransferTargetId] = useState<number | null>(null);
   const [llmConfigs, setLlmConfigs] = useState<any[]>([]);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [webhooks, setWebhooks] = useState<any[]>([]);
+  const [apiKeyUsage, setApiKeyUsage] = useState<any>({ today: 0, week: 0 });
+  const [showNewKeyModal, setShowNewKeyModal] = useState(false);
+  const [newKeyForm, setNewKeyForm] = useState({ name: 'Production Key', environment: 'production' });
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [editingWebhook, setEditingWebhook] = useState<any>(null);
+  const [webhookForm, setWebhookForm] = useState({ url: '', events: '*', description: '' });
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditStats, setAuditStats] = useState<any>({ total: 0, auth: 0, data: 0, ai: 0, api: 0, system: 0 });
+  const [auditCategory, setAuditCategory] = useState<string | null>(null);
+  const [auditExporting, setAuditExporting] = useState(false);
   const [accountTierInfo, setAccountTierInfo] = useState<any>({ tier: 'free', tierName: 'Devnors 1.0', privileges: [] });
 
   // 加载所有设置数据
@@ -1354,7 +1383,10 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           teamMembersData,
           aiConfigsData,
           apiKeysData,
+          webhooksData,
+          apiKeyUsageData,
           auditLogsData,
+          auditStatsData,
           accountTierData
         ] = await Promise.all([
           getSettings(userId).catch(() => ({})),
@@ -1363,7 +1395,10 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           getTeamMembers(userId).catch(() => []),
           getAIConfigs(userId).catch(() => []),
           getAPIKeys(userId).catch(() => []),
+          getWebhooks(userId).catch(() => []),
+          getAPIKeyUsage(userId).catch(() => ({ today: 0, week: 0 })),
           getAuditLogs(userId).catch(() => []),
+          getAuditLogStats(userId).catch(() => ({ total: 0, auth: 0, data: 0, ai: 0, api: 0, system: 0 })),
           getAccountTier(userId).catch(() => ({ tier: 'free', tierName: 'Devnors 1.0', privileges: [] }))
         ]);
         
@@ -1383,7 +1418,10 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
         }
         setLlmConfigs(aiConfigsData);
         setApiKeys(apiKeysData);
+        setWebhooks(webhooksData);
+        setApiKeyUsage(apiKeyUsageData);
         setAuditLogs(auditLogsData);
+        setAuditStats(auditStatsData);
         setAccountTierInfo(accountTierData);
         // 初始化账号信息
         setAccountInfo({
@@ -1573,7 +1611,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             <h3 className="text-2xl font-black text-slate-900">基础信息设置</h3>
             
             {/* 企业信息 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
                   <label className="text-xs font-bold text-slate-500 block mb-1.5">企业全称</label>
@@ -1650,7 +1688,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 联系方式 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">联系方式</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
@@ -1690,7 +1728,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 企业简介 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">企业简介</h4>
               <textarea 
                 rows={3} 
@@ -1706,7 +1744,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 福利标签 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">企业福利</h4>
               <div className="flex flex-wrap gap-2">
                 {benefitOptions.map(benefit => (
@@ -2267,7 +2305,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 个人信息 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">个人信息</h4>
               <div className="flex items-center gap-5 mb-5 pb-5 border-b border-slate-100">
                 <div className="relative group flex-shrink-0">
@@ -2382,7 +2420,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 安全设置 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">安全设置</h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -2435,7 +2473,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 第三方账号绑定 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-1">第三方账号绑定</h4>
               <p className="text-xs text-slate-400 mb-4">绑定后可使用第三方账号快速登录</p>
               <div className="space-y-3">
@@ -2458,7 +2496,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             </div>
 
             {/* 偏好设置 */}
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h4 className="text-sm font-bold text-slate-700 mb-4">偏好设置</h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
@@ -2674,54 +2712,301 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           </div>
         );
       case 'API':
-        const currentKey = apiKeys.length > 0 ? apiKeys[0] : null;
+        // --- 事件名映射 ---
+        const WEBHOOK_EVENTS: Record<string,string> = {
+          '*': '全部事件',
+          'flow.stage_changed': '流程阶段变更',
+          'flow.completed': '流程完成',
+          'candidate.matched': '候选人匹配',
+          'job.created': '岗位创建',
+          'job.updated': '岗位更新',
+        };
+        const allEventKeys = Object.keys(WEBHOOK_EVENTS).filter(k => k !== '*');
+
+        // --- handlers ---
+        const handleCreateKey = async () => {
+          try {
+            await createAPIKey(newKeyForm.name, newKeyForm.environment, userId);
+            const keys = await getAPIKeys(userId);
+            setApiKeys(keys);
+            setShowNewKeyModal(false);
+            setNewKeyForm({ name: 'Production Key', environment: 'production' });
+            showToast('API Key 已生成', 'success');
+          } catch { showToast('生成失败', 'error'); }
+        };
+        const handleToggleKey = async (id: number) => {
+          try {
+            await toggleAPIKey(id, userId);
+            setApiKeys(await getAPIKeys(userId));
+          } catch {}
+        };
+        const handleRegenKey = async (id: number) => {
+          if (!confirm('重新生成将使旧密钥立即失效，确认？')) return;
+          try {
+            await regenerateAPIKey(id, userId);
+            setApiKeys(await getAPIKeys(userId));
+            showToast('密钥已重新生成', 'success');
+          } catch { showToast('操作失败', 'error'); }
+        };
+        const handleDeleteKey = async (id: number) => {
+          if (!confirm('确认删除该 API Key？')) return;
+          try {
+            await deleteAPIKey(id, userId);
+            setApiKeys(await getAPIKeys(userId));
+            showToast('已删除', 'success');
+          } catch {}
+        };
+
+        const openWebhookModal = (hook?: any) => {
+          if (hook) {
+            setEditingWebhook(hook);
+            setWebhookForm({ url: hook.url, events: hook.events || '*', description: hook.description || '' });
+          } else {
+            setEditingWebhook(null);
+            setWebhookForm({ url: '', events: '*', description: '' });
+          }
+          setShowWebhookModal(true);
+        };
+        const handleSaveWebhook = async () => {
+          if (!webhookForm.url) { showToast('请输入 URL', 'error'); return; }
+          try {
+            if (editingWebhook) {
+              await updateWebhook(editingWebhook.id, webhookForm, userId);
+            } else {
+              await createWebhook(webhookForm, userId);
+            }
+            setWebhooks(await getWebhooks(userId));
+            setShowWebhookModal(false);
+            showToast(editingWebhook ? 'Webhook 已更新' : 'Webhook 已创建', 'success');
+          } catch { showToast('操作失败', 'error'); }
+        };
+        const handleDeleteWebhook = async (id: number) => {
+          if (!confirm('确认删除该 Webhook？')) return;
+          try {
+            await deleteWebhook(id, userId);
+            setWebhooks(await getWebhooks(userId));
+            showToast('已删除', 'success');
+          } catch {}
+        };
+        const handleTestWebhook = async (id: number) => {
+          try {
+            const res = await testWebhook(id, userId);
+            setWebhooks(await getWebhooks(userId));
+            if (res.success) {
+              showToast(`测试成功 (${res.status_code})`, 'success');
+            } else {
+              showToast(`测试失败: ${res.error || res.status_code}`, 'error');
+            }
+          } catch { showToast('测试请求失败', 'error'); }
+        };
+        const handleToggleWebhook = async (hook: any) => {
+          try {
+            await updateWebhook(hook.id, { is_active: !hook.is_active }, userId);
+            setWebhooks(await getWebhooks(userId));
+          } catch {}
+        };
+
+        // toggle event in webhook form
+        const toggleWebhookEvent = (ev: string) => {
+          const current = webhookForm.events === '*' ? [] : webhookForm.events.split(',').filter(Boolean);
+          let next: string[];
+          if (current.includes(ev)) {
+            next = current.filter(e => e !== ev);
+          } else {
+            next = [...current, ev];
+          }
+          setWebhookForm({ ...webhookForm, events: next.length === 0 || next.length === allEventKeys.length ? '*' : next.join(',') });
+        };
+        const isEventSelected = (ev: string) => {
+          if (webhookForm.events === '*') return true;
+          return webhookForm.events.split(',').includes(ev);
+        };
+
+        const maskKey = (key: string) => {
+          if (!key || key.length < 16) return key;
+          return key.slice(0, 16) + '••••••••••••••••';
+        };
+
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
+            {/* 标题 + 统计 */}
             <div className="flex justify-between items-end">
               <div>
                 <h3 className="text-2xl font-black text-slate-900">API 与 Webhooks 集成</h3>
                 <p className="text-slate-500 font-medium mt-1">将 Devnors 智能招聘能力深度嵌入您的业务流程中。</p>
               </div>
-              <button className="bg-indigo-600 text-white px-6 py-2.5 rounded font-black text-xs">查看 API 文档</button>
-            </div>
-            <div className="space-y-6">
-              <div className="bg-indigo-600 rounded p-8 text-white shadow-xl relative overflow-hidden group">
-                 <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:scale-110 transition-transform"><Key size={140} /></div>
-                 <div className="relative z-10">
-                    <div className="text-xs font-black uppercase text-white mb-4 tracking-widest flex items-center gap-2">
-                       <ShieldCheck size={12} /> {currentKey ? currentKey.name : 'Production Environment Key'}
-                    </div>
-                    <div className="flex flex-col md:flex-row items-center gap-6">
-                       <div className="flex-1 bg-white/5 border border-white/10 rounded px-6 py-4 font-mono text-lg tracking-tighter text-white truncate w-full">
-                          {currentKey ? currentKey.key : '暂无 API Key，请点击生成'}
-                       </div>
-                       <button 
-                         onClick={() => currentKey && handleCopyAPIKey(currentKey.key)}
-                         className="bg-white/10 hover:bg-white/20 text-white px-8 py-4 rounded font-black text-sm transition-all whitespace-nowrap"
-                       >
-                          复制 API Key
-                       </button>
-                    </div>
-                    <p className="mt-6 text-xs text-indigo-200 font-medium">请妥善保管您的密钥。如发生泄露，请立即重新生成。</p>
-                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-sm">
-                   <h4 className="text-base font-black text-slate-900 mb-2">事件通知 Webhooks</h4>
-                   <p className="text-xs text-slate-500 font-medium mb-6">当系统内发生关键招聘节点变化时（如面试通过），主动向您的服务器发送数据。</p>
-                   <button className="w-full py-3 bg-slate-50 border border-slate-200 rounded text-xs font-black text-slate-600 hover:bg-white hover:border-indigo-600 hover:text-indigo-600 transition-all">
-                      配置 Webhook 端点
-                   </button>
+              <div className="flex items-center gap-4 text-right">
+                <div>
+                  <div className="text-xl font-black text-slate-900">{apiKeyUsage.today}</div>
+                  <div className="text-[10px] text-slate-400 font-bold">今日调用</div>
                 </div>
-                <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-sm">
-                   <h4 className="text-base font-black text-slate-900 mb-2">结构化数据导出 API</h4>
-                   <p className="text-xs text-slate-500 font-medium mb-6">通过 REST 接口获取已解析的人才画像数据，支持 JSON/PDF 格式流式导出。</p>
-                   <button className="w-full py-3 bg-slate-50 border border-slate-200 rounded text-xs font-black text-slate-600 hover:bg-white hover:border-indigo-600 hover:text-indigo-600 transition-all">
-                      生成临时访问令牌
-                   </button>
+                <div className="w-px h-8 bg-slate-200" />
+                <div>
+                  <div className="text-xl font-black text-slate-900">{apiKeyUsage.week}</div>
+                  <div className="text-[10px] text-slate-400 font-bold">近 7 天</div>
                 </div>
               </div>
             </div>
+
+            {/* === 区块 1: API Key 管理 === */}
+            <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Key size={15} className="text-indigo-600" /> API 密钥</h4>
+                <button onClick={() => setShowNewKeyModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">
+                  <Plus size={13} /> 生成新 Key
+                </button>
+              </div>
+              {apiKeys.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Key size={28} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm font-medium">暂无 API Key</p>
+                  <p className="text-xs mt-1">点击上方按钮生成第一个密钥</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {apiKeys.map((k: any) => (
+                    <div key={k.id} className={`px-6 py-4 flex items-center gap-4 ${!k.isActive ? 'opacity-50' : ''}`}>
+                      {/* 状态指示 */}
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${k.isActive ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                      {/* 名称 + 环境 */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900 truncate">{k.name}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${k.environment === 'production' ? 'bg-amber-50 text-amber-600' : 'bg-sky-50 text-sky-600'}`}>
+                            {k.environment === 'production' ? 'PROD' : 'DEV'}
+                          </span>
+                        </div>
+                        <div className="font-mono text-xs text-slate-400 mt-0.5 truncate">{maskKey(k.key)}</div>
+                      </div>
+                      {/* 操作按钮 */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button onClick={() => { handleCopyAPIKey(k.key); }} title="复制" className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><ClipboardCheck size={14} /></button>
+                        <button onClick={() => handleRegenKey(k.id)} title="重新生成" className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"><RotateCcw size={14} /></button>
+                        <button onClick={() => handleToggleKey(k.id)} title={k.isActive ? '禁用' : '启用'} className={`p-1.5 rounded transition-colors ${k.isActive ? 'text-emerald-500 hover:text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}`}>
+                          {k.isActive ? <Eye size={14} /> : <Lock size={14} />}
+                        </button>
+                        <button onClick={() => handleDeleteKey(k.id)} title="删除" className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* === 区块 2: Webhook 端点配置 === */}
+            <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2"><Globe size={15} className="text-indigo-600" /> 事件通知 Webhooks</h4>
+                <button onClick={() => openWebhookModal()} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">
+                  <Plus size={13} /> 添加 Webhook
+                </button>
+              </div>
+              <p className="px-6 pt-3 text-xs text-slate-500">当系统内发生关键招聘节点变化时（如面试通过），主动向您的服务器 POST 数据。</p>
+              {webhooks.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Globe size={28} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-sm font-medium">暂无 Webhook</p>
+                  <p className="text-xs mt-1">添加一个端点来接收事件推送</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50 mt-3">
+                  {webhooks.map((h: any) => (
+                    <div key={h.id} className={`px-6 py-4 ${!h.is_active ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${h.is_active ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                        <span className="text-sm font-bold text-slate-900 truncate flex-1">{h.url}</span>
+                        {h.last_status_code ? (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${h.last_status_code >= 200 && h.last_status_code < 300 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                            {h.last_status_code}
+                          </span>
+                        ) : null}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleTestWebhook(h.id)} title="发送测试" className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Send size={13} /></button>
+                          <button onClick={() => openWebhookModal(h)} title="编辑" className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Edit3 size={13} /></button>
+                          <button onClick={() => handleToggleWebhook(h)} title={h.is_active ? '禁用' : '启用'} className={`p-1.5 rounded transition-colors ${h.is_active ? 'text-emerald-500 hover:text-red-500 hover:bg-red-50' : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'}`}>
+                            {h.is_active ? <Eye size={13} /> : <Lock size={13} />}
+                          </button>
+                          <button onClick={() => handleDeleteWebhook(h.id)} title="删除" className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2 ml-5">
+                        {(h.events === '*' ? ['全部事件'] : (h.events || '').split(',').filter(Boolean)).map((ev: string) => (
+                          <span key={ev} className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {WEBHOOK_EVENTS[ev] || ev}
+                          </span>
+                        ))}
+                        {h.description ? <span className="text-[10px] text-slate-400 ml-2">{h.description}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* === 新建 Key 模态框 === */}
+            {showNewKeyModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-white rounded-lg w-full max-w-md p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                  <h4 className="text-lg font-black text-slate-900 mb-4">生成新 API Key</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">名称</label>
+                      <input value={newKeyForm.name} onChange={e => setNewKeyForm({...newKeyForm, name: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="例如 Production Key" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">环境</label>
+                      <div className="flex gap-3">
+                        {(['production', 'development'] as const).map(env => (
+                          <button key={env} onClick={() => setNewKeyForm({...newKeyForm, environment: env})} className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all ${newKeyForm.environment === env ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                            {env === 'production' ? 'Production' : 'Development'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={() => setShowNewKeyModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">取消</button>
+                    <button onClick={handleCreateKey} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">生成</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === Webhook 编辑模态框 === */}
+            {showWebhookModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                <div className="bg-white rounded-lg w-full max-w-lg p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+                  <h4 className="text-lg font-black text-slate-900 mb-4">{editingWebhook ? '编辑 Webhook' : '添加 Webhook'}</h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">回调 URL</label>
+                      <input value={webhookForm.url} onChange={e => setWebhookForm({...webhookForm, url: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="https://your-server.com/webhook" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">订阅事件</label>
+                      <div className="flex flex-wrap gap-2">
+                        {allEventKeys.map(ev => (
+                          <button key={ev} onClick={() => toggleWebhookEvent(ev)} className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition-all ${isEventSelected(ev) ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                            {WEBHOOK_EVENTS[ev]}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">{webhookForm.events === '*' ? '当前订阅：全部事件' : `已选 ${webhookForm.events.split(',').length} 个事件`}</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">备注（可选）</label>
+                      <input value={webhookForm.description} onChange={e => setWebhookForm({...webhookForm, description: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="例如：接入飞书机器人" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={() => setShowWebhookModal(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700">取消</button>
+                    <button onClick={handleSaveWebhook} className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">
+                      {editingWebhook ? '保存' : '创建'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       case 'Team':
@@ -2973,7 +3258,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             {/* 邀请成员弹窗 */}
             {showInviteModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+                <div className="bg-white rounded-lg p-8 w-full max-w-md shadow-2xl">
                   <h3 className="text-xl font-black text-slate-900 mb-6">添加团队成员</h3>
                   
                   {/* 手机号输入 */}
@@ -3038,7 +3323,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
             {/* 移交管理员弹窗 */}
             {showTransferModal && (
               <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+                <div className="bg-white rounded-lg p-8 w-full max-w-md shadow-2xl">
                   <h3 className="text-xl font-black text-slate-900 mb-2">移交管理员权限</h3>
                   <p className="text-sm text-slate-500 mb-6">将主管理员权限移交给其他成员后，您将失去管理员权限。</p>
                   
@@ -3091,41 +3376,160 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           </div>
         );
       case 'Audit':
+        const auditCategoryTabs = [
+          { key: null, label: '全部日志', icon: Layers, color: 'indigo' },
+          { key: 'auth', label: '认证安全', icon: Lock, color: 'blue' },
+          { key: 'data', label: '数据变更', icon: Database, color: 'emerald' },
+          { key: 'ai', label: 'AI 智能体', icon: BrainCircuit, color: 'violet' },
+          { key: 'api', label: 'API 调用', icon: Key, color: 'amber' },
+          { key: 'system', label: '系统', icon: Settings2, color: 'slate' },
+        ] as const;
+
+        const riskDot = (level: string) => {
+          if (level === 'danger') return 'bg-red-500';
+          if (level === 'warning') return 'bg-amber-400';
+          return 'bg-emerald-400';
+        };
+
+        const handleAuditCategoryChange = async (cat: string | null) => {
+          // 点击已选中的卡片则取消选中回到全部
+          const next = auditCategory === cat ? null : cat;
+          setAuditCategory(next);
+          try {
+            // 'ai_api' 是前端组合筛选，需分别请求再合并
+            if (next === 'ai_api') {
+              const [aiData, apiData] = await Promise.all([
+                getAuditLogs(userId, 50, 'ai'),
+                getAuditLogs(userId, 50, 'api'),
+              ]);
+              const merged = [...aiData, ...apiData].sort((a: any, b: any) => (b.id || 0) - (a.id || 0)).slice(0, 50);
+              setAuditLogs(merged);
+            } else {
+              const data = await getAuditLogs(userId, 50, next || undefined);
+              setAuditLogs(data);
+            }
+          } catch {}
+        };
+
+        const handleExportCSV = async () => {
+          setAuditExporting(true);
+          try { await exportAuditLogs(userId); } catch {} finally { setAuditExporting(false); }
+        };
+
         return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">系统安全日志</h3>
-            <div className="bg-white rounded p-10 border border-slate-100 shadow-sm space-y-6">
-               <div className="flex items-center gap-6 p-6 bg-slate-50 rounded border border-slate-100">
-                  <div className="w-14 h-14 bg-white rounded flex items-center justify-center shadow-sm text-slate-400"><Laptop size={24} /></div>
-                  <div className="flex-1">
-                     <h4 className="text-base font-black text-slate-900">安全性监控</h4>
-                     <p className="text-sm text-slate-500 font-medium mt-1">您可以查看并监控平台内所有成员、智能体以及 API 的调用足迹，确保招聘过程 100% 合规与可溯源。</p>
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+              <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                <Shield size={22} className="text-indigo-600" /> 系统安全日志
+              </h3>
+              <button
+                onClick={handleExportCSV}
+                disabled={auditExporting}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Download size={15} />
+                {auditExporting ? '导出中...' : '导出 CSV'}
+              </button>
+            </div>
+
+            {/* 统计卡片 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: '全部日志', value: auditStats.total, icon: Layers, cat: null, color: 'indigo' },
+                { label: '认证安全', value: auditStats.auth, icon: Lock, cat: 'auth', color: 'blue' },
+                { label: '数据变更', value: auditStats.data, icon: Database, cat: 'data', color: 'emerald' },
+                { label: 'AI / API', value: (auditStats.ai || 0) + (auditStats.api || 0), icon: BrainCircuit, cat: 'ai_api', color: 'violet' },
+              ].map((s) => {
+                const Icon = s.icon;
+                const isActive = auditCategory === s.cat;
+                return (
+                  <button
+                    key={s.label}
+                    onClick={() => handleAuditCategoryChange(s.cat)}
+                    className={`p-4 rounded-lg border-2 text-left transition-all ${
+                      isActive
+                        ? 'border-indigo-400 bg-indigo-50 shadow-md'
+                        : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon size={16} className={isActive ? 'text-indigo-600' : 'text-slate-400'} />
+                      <span className={`text-xs font-bold ${isActive ? 'text-indigo-600' : 'text-slate-500'}`}>{s.label}</span>
+                    </div>
+                    <div className={`text-2xl font-black ${isActive ? 'text-indigo-700' : 'text-slate-900'}`}>{s.value}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 分类筛选 Tabs */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg overflow-x-auto">
+              {auditCategoryTabs.map((tab) => {
+                const isActive = auditCategory === tab.key;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.label}
+                    onClick={() => handleAuditCategoryChange(tab.key)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-all ${
+                      isActive
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 hover:bg-white/60'
+                    }`}
+                  >
+                    <Icon size={13} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 日志列表 */}
+            <div className="bg-white rounded-lg border border-slate-100 overflow-hidden">
+              {auditLogs.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <Shield size={36} className="mx-auto mb-3 opacity-40" />
+                  <p className="text-sm font-medium">暂无安全日志</p>
+                </div>
+              ) : auditLogs.map((log: any, idx: number) => {
+                const isDanger = log.risk_level === 'danger';
+                const isWarning = log.risk_level === 'warning';
+                return (
+                  <div
+                    key={log.id || idx}
+                    className={`flex items-center justify-between px-5 py-4 border-b border-slate-50 last:border-0 group transition-colors ${
+                      isDanger ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* 风险等级圆点 */}
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${riskDot(log.risk_level)}`} />
+                      {/* 操作描述 */}
+                      <span className={`text-sm font-bold truncate ${isDanger ? 'text-red-700' : 'text-slate-900'}`}>
+                        {log.action}
+                      </span>
+                      {/* 分类标签 */}
+                      <span className={`shrink-0 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        log.category === 'auth' ? 'bg-blue-50 text-blue-600'
+                          : log.category === 'data' ? 'bg-emerald-50 text-emerald-600'
+                          : log.category === 'ai' ? 'bg-violet-50 text-violet-600'
+                          : log.category === 'api' ? 'bg-amber-50 text-amber-600'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {log.category || 'system'}
+                      </span>
+                      {/* 执行者 */}
+                      <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                        BY {log.user}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-5 text-xs font-medium text-slate-400 shrink-0 ml-4">
+                      <span className="font-mono">{log.ip}</span>
+                      <span className="w-16 text-right">{log.time}</span>
+                    </div>
                   </div>
-               </div>
-               <div className="space-y-4">
-                  {auditLogs.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400">
-                      <Laptop size={32} className="mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">暂无安全日志</p>
-                    </div>
-                  ) : auditLogs.map((log: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between py-4 border-b border-slate-50 last:border-0 px-4 group hover:bg-slate-50 transition-colors rounded">
-                       <div className="flex items-center justify-between w-full">
-                          <div className="flex items-center gap-4">
-                             <div className="text-xs font-black text-slate-900">{log.action}</div>
-                             <span className="text-xs font-black text-slate-400 uppercase tracking-tighter bg-slate-100 px-2 py-0.5 rounded">BY {log.user}</span>
-                          </div>
-                          <div className="flex items-center gap-6 text-xs font-bold text-slate-400">
-                             <span>IP: {log.ip}</span>
-                             <span>{log.time}</span>
-                          </div>
-                       </div>
-                    </div>
-                  ))}
-               </div>
-               <button className="w-full mt-4 py-3 bg-indigo-600 text-white font-black text-sm rounded active:scale-95 transition-all">
-                  下载完整安全日志 (.CSV)
-               </button>
+                );
+              })}
             </div>
           </div>
         );
@@ -3435,16 +3839,24 @@ const NotificationCenterView = () => {
                 navigate(notification.link);
               }}
               className={`bg-white rounded-xl border p-5 cursor-pointer transition-all hover:shadow-lg group ${
-                notification.read === true ? 'border-slate-100' : 'border-indigo-200 bg-indigo-50/30'
+                notification.importance === 'critical' && !notification.read
+                  ? 'border-rose-200 bg-rose-50/30 ring-1 ring-rose-100'
+                  : notification.read === true ? 'border-slate-100' : 'border-indigo-200 bg-indigo-50/30'
               }`}
             >
               <div className="flex gap-4">
-                <div className={`w-12 h-12 ${notification.bgColor} rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                <div className={`w-12 h-12 ${notification.bgColor} rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform relative`}>
                   {notification.icon && <notification.icon size={24} className={notification.color} />}
+                  {notification.importance === 'critical' && !notification.read && (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-pulse" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-2">
+                      {notification.importance === 'critical' && (
+                        <span className="px-1.5 py-0.5 bg-rose-100 text-rose-600 text-[10px] font-black rounded">重要</span>
+                      )}
                       <h3 className={`font-bold ${notification.read === true ? 'text-slate-700' : 'text-slate-900'}`}>
                         {notification.title}
                       </h3>
@@ -3466,6 +3878,9 @@ const NotificationCenterView = () => {
                   <p className={`mt-1 text-sm ${notification.read === true ? 'text-slate-500' : 'text-slate-600'}`}>
                     {notification.content}
                   </p>
+                  {notification.sender && notification.sender !== '系统' && (
+                    <span className="inline-block mt-1.5 text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded font-bold">via {notification.sender}</span>
+                  )}
                 </div>
                 <ArrowRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all flex-shrink-0 mt-3" />
               </div>
@@ -3498,12 +3913,19 @@ const TokenManagementView = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userId = user?.id || 0;
-  const [rechargeAmount, setRechargeAmount] = useState<string>('');
+  const [selectedPkg, setSelectedPkg] = useState<string | null>(null);
+  const [showCustomAmount, setShowCustomAmount] = useState(false);
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [showInviteCode, setShowInviteCode] = useState(false);
+  const [historyPage, setHistoryPage] = useState(0);
   
   // 动态数据状态
   const [tokenStats, setTokenStats] = useState<any>(null);
   const [tokenHistory, setTokenHistory] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [agentStats, setAgentStats] = useState<any[]>([]);
+  const [agentTotal, setAgentTotal] = useState(0);
+  const [packagesData, setPackagesData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   // 加载数据
@@ -3512,37 +3934,93 @@ const TokenManagementView = () => {
       if (!userId) return;
       setLoading(true);
       try {
-        const { getTokenStats, getTokenHistory, getTokenPackages } = await import('./services/apiService');
+        const { getTokenStats, getTokenHistory, getTokenPackages, getTokenStatsByAgent } = await import('./services/apiService');
         
-        const [statsRes, historyRes, packagesRes] = await Promise.all([
+        const [statsRes, historyRes, packagesRes, agentRes] = await Promise.all([
           getTokenStats(userId),
-          getTokenHistory(userId, 5),
-          getTokenPackages()
+          getTokenHistory(userId, 10, 0),
+          getTokenPackages(),
+          getTokenStatsByAgent(userId).catch(() => ({ agents: [], total_tokens: 0 }))
         ]);
         
         setTokenStats(statsRes);
         setTokenHistory(historyRes.items || []);
-        setPackages(packagesRes.packages || []);
+        setHistoryTotal(historyRes.total || 0);
+        setPackagesData(packagesRes);
+        setAgentStats(agentRes.agents || []);
+        setAgentTotal(agentRes.total_tokens || 0);
       } catch (error) {
         console.error('加载 Token 数据失败:', error);
-        setTokenStats({
-          balance: 100000,
-          balance_display: '0.10M',
-          today_usage: 0,
-          today_usage_display: '0',
-          estimated_days: 999
+        setTokenStats({ balance: 50000, balance_display: '50,000', today_usage: 0, today_usage_display: '0', estimated_days: 999 });
+        setPackagesData({
+          exchange_rate: '¥1 = 10,000 Tokens',
+          packages: [
+            { id: 'starter', name: '入门版', tokens: 500000, tokens_display: '500K', price: 39.9, unit_price: '¥0.08/万', discount: '热销' },
+            { id: 'standard', name: '标准版', tokens: 2000000, tokens_display: '2M', price: 129, unit_price: '¥0.065/万', discount: '性价比最高', popular: true },
+            { id: 'pro', name: '专业版', tokens: 5000000, tokens_display: '5M', price: 299, unit_price: '¥0.06/万', discount: '省 40%' },
+            { id: 'enterprise', name: '企业版', tokens: 20000000, tokens_display: '20M', price: 899, unit_price: '¥0.045/万', discount: '省 55%' },
+          ],
+          invite_reward: { inviter: 50000, invitee: 20000 }
         });
-        setPackages([
-          { id: 'starter', name: '入门版', tokens_display: '100K', price: 99 },
-          { id: 'pro', name: '专业版', tokens_display: '1M', price: 799, popular: true },
-          { id: 'enterprise', name: '企业版', tokens_display: '10M', price: 6999 },
-        ]);
       } finally {
         setLoading(false);
       }
     };
     loadData();
   }, [userId]);
+
+  // 加载更多历史
+  const loadMoreHistory = async () => {
+    try {
+      const { getTokenHistory } = await import('./services/apiService');
+      const nextPage = historyPage + 1;
+      const res = await getTokenHistory(userId, 10, nextPage * 10);
+      setTokenHistory(prev => [...prev, ...(res.items || [])]);
+      setHistoryPage(nextPage);
+    } catch (e) { console.error(e); }
+  };
+
+  // 底层模型名 → Devnors 品牌名映射
+  const modelDisplayName = (raw: string | undefined): string => {
+    if (!raw) return '';
+    const map: Record<string, string> = {
+      'abab6.5s-chat': 'Devnors 1.0',
+      'abab6.5s': 'Devnors 1.0',
+      'gemini-2.0-flash': 'Devnors 1.0 Pro',
+      'gemini-2.0-flash-lite': 'Devnors 1.0',
+      'gemini-2.5-pro': 'Devnors 1.0 Ultra',
+      'gemini-2.5-flash': 'Devnors 1.0 Pro',
+    };
+    return map[raw] || raw;
+  };
+
+  const agentColors = ['bg-indigo-600', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-purple-500', 'bg-pink-500'];
+  const agentNameMap: Record<string, string> = {
+    'CHAT': 'AI 对话', 'RESUME_PARSE': '简历解析智能体', 'JOB_MATCH': '职位匹配智能体',
+    'INTERVIEW': '面试评估智能体', 'MARKET_ANALYSIS': '市场分析智能体', 'ROUTE_DISPATCH': '路由调度智能体',
+    'OTHER': '其他服务', 'INVITE_REWARD': '邀请奖励',
+  };
+  const actionTypeMap: Record<string, string> = {
+    'CHAT': 'AI 对话', 'RESUME_PARSE': '简历解析', 'JOB_MATCH': '职位匹配',
+    'INTERVIEW': '面试评估', 'MARKET_ANALYSIS': '市场分析', 'ROUTE_DISPATCH': '路由调度',
+    'OTHER': '其他', 'INVITE_REWARD': '邀请奖励',
+  };
+  // 各功能平均每次消耗 token 数（基于实际后端记录）
+  const TOKEN_PER_ACTION: Record<string, number> = {
+    'CHAT': 800, 'RESUME_PARSE': 4000, 'JOB_MATCH': 1500,
+    'INTERVIEW': 2000, 'MARKET_ANALYSIS': 6000, 'RECRUIT': 4000, 'ROUTE_DISPATCH': 1500, 'OTHER': 1500,
+  };
+  // 将 token 数翻译成用户能理解的功能次数
+  const tokenToUsage = (tokens: number) => {
+    const chat = Math.floor(tokens / TOKEN_PER_ACTION.CHAT);
+    const resume = Math.floor(tokens / TOKEN_PER_ACTION.RESUME_PARSE);
+    const interview = Math.floor(tokens / TOKEN_PER_ACTION.INTERVIEW);
+    const recruit = Math.floor(tokens / TOKEN_PER_ACTION.RECRUIT);
+    return { chat, resume, interview, recruit };
+  };
+
+  const packages = packagesData?.packages || [];
+  const inviteReward = packagesData?.invite_reward || { inviter: 50000, invitee: 20000 };
   
   if (loading) {
     return (
@@ -3561,86 +4039,255 @@ const TokenManagementView = () => {
       </button>
 
       {/* 页面标题 */}
-      <div className="mb-10">
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">资金账户</h1>
-        <p className="text-slate-400 text-sm">管理 Token 余额与充值</p>
+      <div className="flex items-center justify-between mb-10">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-1">资金账户</h1>
+          <p className="text-slate-400 text-sm">管理 Token 余额、充值与消耗统计</p>
+        </div>
+        <button onClick={() => navigate('/pricing')} className="text-sm text-indigo-600 font-bold hover:underline flex items-center gap-1">
+          查看定价方案 <ChevronRight size={14} />
+        </button>
       </div>
 
       {/* 余额卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-        <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-8 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 opacity-10">
-            <Gem size={160} />
-          </div>
-          <div className="relative">
-            <p className="text-indigo-200 text-xs font-medium mb-2">可用余额</p>
-            <div className="text-5xl font-bold mb-4">{tokenStats?.balance_display || '0'}</div>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1.5 text-indigo-200">
-                <Clock size={14} /> 预计可用 {tokenStats?.estimated_days || 0} 天
-              </span>
+      {(() => {
+        const balance = tokenStats?.balance || 0;
+        const usage = tokenToUsage(balance);
+        return (
+          <div className="mb-8 bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium mb-2">可用余额</p>
+                <div className="flex items-end gap-3 mb-2">
+                  <span className="text-4xl font-black text-slate-900 leading-none">{tokenStats?.balance_display || balance.toLocaleString()}</span>
+                  <span className="text-slate-400 text-sm font-medium pb-0.5">Tokens</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <Coins size={12} className="text-slate-300" /> ≈ ¥{(balance / 10000).toFixed(1)}
+                  </span>
+                  <span className="text-slate-200">|</span>
+                  <span>今日消耗 <span className="font-bold text-slate-600">{tokenStats?.today_usage_display || (tokenStats?.today_usage || 0).toLocaleString()}</span></span>
+                  {agentTotal > 0 && (
+                    <>
+                      <span className="text-slate-200">|</span>
+                      <span>累计 <span className="font-bold text-slate-600">{agentTotal.toLocaleString()}</span></span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Gem size={28} className="text-indigo-100" />
+              </div>
             </div>
+            {/* 余额能做什么 — 让用户直观理解 */}
+            {balance > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <p className="text-[11px] text-slate-400 mb-2">当前余额约可使用</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[11px] font-bold">
+                    <MessageSquare size={11} /> {usage.chat.toLocaleString()} 次 AI 对话
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[11px] font-bold">
+                    <FileText size={11} /> {usage.resume.toLocaleString()} 次简历解析
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full text-[11px] font-bold">
+                    <GraduationCap size={11} /> {usage.interview.toLocaleString()} 次模拟面试
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-600 rounded-full text-[11px] font-bold">
+                    <Rocket size={11} /> {usage.recruit.toLocaleString()} 次智能招聘
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-        
-        <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
-          <p className="text-slate-400 text-xs font-medium mb-2">今日消耗</p>
-          <div className="text-3xl font-bold text-slate-900 mb-1">{tokenStats?.today_usage_display || '0'}</div>
-          <p className="text-xs text-slate-400">Tokens</p>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* 充值 */}
-      <div className="mb-10">
-        <h2 className="text-lg font-bold text-slate-900 mb-4">账户充值</h2>
-        <div className="bg-white rounded-xl border border-slate-100 p-6">
-          {/* 金额输入 */}
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-slate-600 mb-2">充值金额</label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">¥</span>
-              <input
-                type="number"
-                value={rechargeAmount}
-                onChange={(e) => setRechargeAmount(e.target.value)}
-                placeholder="0.00"
-                className="w-full pl-12 pr-4 py-4 text-3xl font-bold text-slate-900 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-              />
-            </div>
+      <div className="mb-10 bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <CreditCard size={16} className="text-indigo-500" /> 充值 Token
+          </h2>
+          <span className="text-[11px] text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full">¥1 = 10,000 Tokens</span>
+        </div>
+
+        {/* 金额输入区 */}
+        <div className="mb-4">
+          <div className="relative">
+            <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300">¥</span>
+            <input
+              type="number"
+              value={customAmount || (selectedPkg ? String(packages.find((p: any) => p.id === selectedPkg)?.price || '') : '')}
+              onChange={(e) => { setCustomAmount(e.target.value); setSelectedPkg(null); }}
+              onFocus={() => { if (selectedPkg) { setCustomAmount(String(packages.find((p: any) => p.id === selectedPkg)?.price || '')); setSelectedPkg(null); } }}
+              placeholder="输入充值金额"
+              min="1"
+              className="w-full pl-12 pr-4 py-4 text-2xl font-black text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            {(() => {
+              const selectedPkgData = selectedPkg ? packages.find((p: any) => p.id === selectedPkg) : null;
+              const amt = Number(customAmount || (selectedPkgData ? selectedPkgData.price : 0));
+              const tokens = selectedPkgData ? (selectedPkgData.tokens || amt * 10000) : amt * 10000;
+              const u = tokenToUsage(tokens);
+              return amt > 0 ? (
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-right">
+                  <span className="text-sm font-bold text-indigo-500">{tokens.toLocaleString()} Tokens</span>
+                  <span className="block text-[10px] text-slate-400 mt-0.5">≈ {u.chat.toLocaleString()} 次对话 / {u.resume.toLocaleString()} 次简历解析</span>
+                </div>
+              ) : null;
+            })()}
           </div>
-          
-          {/* 快捷金额 */}
-          <div className="flex flex-wrap gap-2 mb-6">
-            {[100, 500, 1000, 2000, 5000].map((amount) => (
+        </div>
+
+        {/* 快捷套餐 */}
+        <div className="flex flex-wrap gap-1.5 mb-5">
+          {packages.map((pkg: any, i: number) => {
+            const isSelected = selectedPkg === pkg.id;
+            const pkgUsage = tokenToUsage(pkg.tokens || 0);
+            return (
               <button
-                key={amount}
-                onClick={() => setRechargeAmount(String(amount))}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                  rechargeAmount === String(amount)
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                key={pkg.id || i}
+                onClick={() => { setSelectedPkg(pkg.id); setCustomAmount(''); }}
+                className={`px-3.5 py-1.5 rounded-full text-xs transition-all flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-indigo-600 shadow-sm'
+                    : 'bg-slate-100 hover:bg-indigo-50'
                 }`}
               >
-                ¥{amount}
+                <span className={`font-black ${isSelected ? 'text-white' : 'text-indigo-600'}`}>¥{pkg.price}</span>
+                <span className={`${isSelected ? 'text-indigo-300' : 'text-slate-300'}`}>/</span>
+                <span className={`font-medium ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>{(pkg.tokens || 0).toLocaleString()} tokens</span>
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* 充值按钮 */}
+        {(() => {
+          const amt = Number(customAmount || (selectedPkg ? packages.find((p: any) => p.id === selectedPkg)?.price : 0));
+          const tokens = amt * 10000;
+          return (
+            <button
+              disabled={amt <= 0}
+              className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                amt > 0
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200/50'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <Wallet size={16} />
+              {amt > 0
+                ? `立即充值 ¥${amt}`
+                : '选择或输入充值金额'
+              }
+            </button>
+          );
+        })()}
+      </div>
+
+      {/* 邀请好友 */}
+      {(() => {
+        const myInviteCode = user?.invite_code || '';
+        const myInviteLink = myInviteCode ? `${window.location.origin}${window.location.pathname}#/login?ref=${myInviteCode}` : '';
+        return (
+          <div className="mb-10 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-100 overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 mb-1 flex items-center gap-2">
+                    <Gift size={18} className="text-amber-500" /> 邀请好友，双方获赠 Token
+                  </h3>
+                  <p className="text-sm text-slate-600">
+                    每邀请一位好友注册，您获得 <span className="font-bold text-amber-600">{inviteReward.inviter?.toLocaleString()} tokens</span>，好友获得 <span className="font-bold text-amber-600">{inviteReward.invitee?.toLocaleString()} tokens</span>
+                  </p>
+                </div>
+                <button 
+                  onClick={() => navigate('/invite')}
+                  className="px-4 py-2 text-amber-600 text-xs font-bold hover:underline whitespace-nowrap flex items-center gap-1"
+                >
+                  查看邀请记录 <ChevronRight size={14} />
+                </button>
+              </div>
+
+              {/* 邀请码 + 邀请链接 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 邀请码 */}
+                <div className="bg-white/80 rounded-xl border border-amber-100 p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] text-slate-400 mb-1">邀请码</p>
+                    <div className="text-xl font-black text-slate-900 tracking-[0.2em]">{myInviteCode || '------'}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">好友注册时填写此邀请码</p>
+                  </div>
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(myInviteCode); }}
+                    className="px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all flex items-center gap-1"
+                  >
+                    <Link2 size={12} /> 复制
+                  </button>
+                </div>
+                {/* 邀请链接 */}
+                <div className="bg-white/80 rounded-xl border border-amber-100 p-4 flex items-center justify-between">
+                  <div className="min-w-0 flex-1 mr-3">
+                    <p className="text-[11px] text-slate-400 mb-1">邀请链接</p>
+                    <div className="text-xs font-mono text-slate-600 truncate">{myInviteLink || '------'}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">好友点击链接直接注册</p>
+                  </div>
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(myInviteLink); }}
+                    className="px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <Share2 size={12} /> 复制
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          
-          {/* Token 换算提示 */}
-          {rechargeAmount && Number(rechargeAmount) > 0 && (
-            <div className="bg-indigo-50 rounded-lg p-4 mb-6">
-              <p className="text-sm text-indigo-700">
-                充值 <span className="font-bold">¥{rechargeAmount}</span> 可获得约 <span className="font-bold">{(Number(rechargeAmount) * 10000).toLocaleString()}</span> Tokens
-              </p>
+        );
+      })()}
+
+      {/* Token 消耗全景 */}
+      <div className="mb-8">
+        <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+          <PieChart className="text-amber-500" size={15} /> Token 消耗全景
+        </h2>
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          {agentStats.length > 0 ? (
+            <>
+              {/* 占比条 */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] text-slate-400">各智能体消耗占比</span>
+                  <span className="text-[11px] font-bold text-slate-500">总计 {agentTotal.toLocaleString()} tokens</span>
+                </div>
+                <div className="relative h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+                  {agentStats.map((a: any, i: number) => (
+                    <div key={i} className={`h-full ${agentColors[i % agentColors.length]} transition-all duration-1000`} style={{ width: `${a.percentage || 0}%` }} title={`${agentNameMap[a.action] || agentNameMap[a.action?.toUpperCase()] || a.name || a.action}: ${a.percentage}%`}></div>
+                  ))}
+                </div>
+              </div>
+              {/* 明细卡片 */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {agentStats.map((a: any, i: number) => (
+                  <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <div className={`w-2 h-2 rounded-full ${agentColors[i % agentColors.length]}`}></div>
+                      <span className="text-[11px] font-bold text-slate-500 truncate">{agentNameMap[a.action] || agentNameMap[a.action?.toUpperCase()] || a.name || a.action}</span>
+                      <span className="text-[11px] font-black text-indigo-600 ml-auto">{(a.percentage || 0).toFixed(0)}%</span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900">{(a.total_tokens || 0).toLocaleString()}</div>
+                    <div className="text-[10px] text-slate-400">{a.count || 0} 次调用</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-6 text-slate-400">
+              <PieChart size={28} className="mx-auto mb-2 opacity-20" />
+              <p className="text-xs">暂无消耗数据，使用 AI 功能后将在此展示统计</p>
             </div>
           )}
-          
-          <button 
-            disabled={!rechargeAmount || Number(rechargeAmount) <= 0}
-            className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:cursor-not-allowed text-white disabled:text-slate-400 font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-          >
-            <CreditCard size={18} /> 立即充值
-          </button>
         </div>
       </div>
 
@@ -3648,31 +4295,44 @@ const TokenManagementView = () => {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-slate-900">消费记录</h2>
-          <button className="text-sm text-indigo-600 font-medium hover:underline">查看全部</button>
+          <span className="text-xs text-slate-400">共 {historyTotal} 条</span>
         </div>
         <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
-          {(tokenHistory.length > 0 ? tokenHistory : [
-            { date: '今天 14:30', type: '简历解析', tokens: 1200, cost: '¥0.12' },
-            { date: '今天 11:20', type: '面试评估', tokens: 3500, cost: '¥0.35' },
-            { date: '昨天 16:45', type: '市场分析', tokens: 2800, cost: '¥0.28' },
-          ]).map((h: any, i: number) => (
-            <div key={i} className={`flex items-center justify-between px-5 py-4 ${i > 0 ? 'border-t border-slate-50' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center">
-                  <Zap size={16} className="text-slate-500" />
+          {tokenHistory.length > 0 ? tokenHistory.map((h: any, i: number) => {
+            const isReward = (h.tokens_used || h.tokens || 0) < 0;
+            return (
+              <div key={i} className={`flex items-center justify-between px-5 py-4 ${i > 0 ? 'border-t border-slate-50' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isReward ? 'bg-emerald-50' : 'bg-slate-100'}`}>
+                    {isReward ? <Gift size={16} className="text-emerald-500" /> : <Zap size={16} className="text-slate-500" />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{h.description || actionTypeMap[h.action] || actionTypeMap[h.action?.toUpperCase()] || h.type || h.action || '未知'}{h.action ? <span className="ml-1.5 text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">{h.action}</span> : null}</p>
+                    <p className="text-xs text-slate-400">{h.created_at ? new Date(h.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : h.date || ''}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{h.type}</p>
-                  <p className="text-xs text-slate-400">{h.date}</p>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${isReward ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    {isReward ? '+' : '-'}{Math.abs(h.tokens_used || h.tokens || 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {modelDisplayName(h.model_name)}
+                  </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-slate-900">-{h.tokens.toLocaleString()}</p>
-                <p className="text-xs text-slate-400">{h.cost}</p>
-              </div>
+            );
+          }) : (
+            <div className="text-center py-8 text-slate-400">
+              <History size={28} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">暂无消费记录</p>
             </div>
-          ))}
+          )}
         </div>
+        {tokenHistory.length > 0 && tokenHistory.length < historyTotal && (
+          <button onClick={loadMoreHistory} className="w-full mt-3 py-3 text-sm text-indigo-600 font-bold hover:bg-indigo-50 rounded-xl transition-all">
+            加载更多
+          </button>
+        )}
       </div>
     </div>
   );
@@ -3686,13 +4346,17 @@ const WorkbenchView = () => {
   // 使用当前登录用户的 ID 获取数据（纯动态数据）
   const userId = user?.id || 0;
   const { data: flowsData, loading: flowsLoading } = useFlows(20, userId || undefined);
+  const { data: flowStats } = useFlowStats(userId || undefined);
   const { data: todosData, loading: todosLoading } = useTodos(userId);
 
   const isEmployer = userRole === 'employer' || userRole === 'recruiter';
   const isCandidate = userRole === 'candidate';
 
+  // 队列筛选状态
+  const [queueFilter, setQueueFilter] = useState<string | null>(null);
+
   // 转换 flows 数据为前端需要的格式 — 后端已按角色返回对应视角
-  const matchingData = (flowsData || []).map((flow: any) => ({
+  const allMatchingData = (flowsData || []).map((flow: any) => ({
     id: flow.id,
     candidate: flow.candidateName || '未知候选人',
     candidateId: flow.candidateId,
@@ -3706,15 +4370,25 @@ const WorkbenchView = () => {
     nodes: flow.nodes || (isCandidate ? ['投递', '匹配', '筛选', '结果'] : ['邀请', '匹配', '筛选', '结果']),
     lastAction: flow.lastAction || flow.timeline?.[0]?.action || '流程进行中',
     queueType: flow.queueType || (isCandidate ? 'delivery' : 'recruit'),
+    rawStatus: flow.status,
     status: flow.status === 'completed' ? '已通过' : flow.status === 'rejected' ? '未通过' : flow.status === 'screening' ? '筛选中' : '进行中',
     statusColor: flow.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : flow.status === 'rejected' ? 'bg-red-50 text-red-500' : flow.status === 'screening' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600',
   }));
 
+  // 根据筛选条件过滤
+  const matchingData = useMemo(() => {
+    if (!queueFilter) return allMatchingData;
+    if (queueFilter === 'passed') return allMatchingData.filter((d: any) => d.rawStatus === 'completed');
+    if (queueFilter === 'pending') return allMatchingData.filter((d: any) => !['completed', 'rejected'].includes(d.rawStatus));
+    if (queueFilter === 'rejected') return allMatchingData.filter((d: any) => d.rawStatus === 'rejected');
+    return allMatchingData;
+  }, [allMatchingData, queueFilter]);
+
   const tokenStats = [
-    { agent: '简历解析智能体', tokens: '420,500', share: '35%' },
-    { agent: '面试评估智能体', tokens: '312,200', share: '26%' },
-    { agent: '市场分析智能体', tokens: '288,400', share: '24%' },
-    { agent: '路由调度智能体', tokens: '180,900', share: '15%' },
+    { agent: '简历解析智能体', tokens: '420,500', share: '35%', rawTokens: 420500, perCall: 4000 },
+    { agent: '面试评估智能体', tokens: '312,200', share: '26%', rawTokens: 312200, perCall: 2000 },
+    { agent: '市场分析智能体', tokens: '288,400', share: '24%', rawTokens: 288400, perCall: 6000 },
+    { agent: '路由调度智能体', tokens: '180,900', share: '15%', rawTokens: 180900, perCall: 1500 },
   ];
   
   // 转换 todos 数据 - 根据字符串 icon 映射到组件
@@ -3847,16 +4521,116 @@ const WorkbenchView = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-12 space-y-8">
           <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow overflow-hidden">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
                 <Activity className="text-indigo-600" size={24} /> {isCandidate ? '智能投递队列' : '智能招聘队列'}
               </h2>
-              <div className="flex gap-3">
-                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> 已通过</span>
-                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-indigo-500"></div> 进行中</span>
-                 <span className="flex items-center gap-1.5 text-xs font-black text-slate-400"><div className="w-2 h-2 rounded-full bg-red-400"></div> 未通过</span>
-              </div>
+              {queueFilter && (
+                <button
+                  onClick={() => setQueueFilter(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
+                >
+                  <X size={12} /> 清除筛选
+                </button>
+              )}
             </div>
+
+            {/* 统计指标条 + 筛选 */}
+            {isLoggedIn && !flowsLoading && (
+              <div className="flex items-center gap-2 mb-6 flex-wrap">
+                {/* 全部 pill */}
+                <button
+                  onClick={() => setQueueFilter(null)}
+                  className={`group flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all duration-200 border ${
+                    queueFilter === null
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/20'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <Activity size={13} className={queueFilter === null ? 'text-white' : 'text-slate-400 group-hover:text-slate-500'} />
+                  全部
+                  <span className={`ml-0.5 tabular-nums ${queueFilter === null ? 'text-white/80' : 'text-slate-400'}`}>{flowStats?.total || allMatchingData.length}</span>
+                </button>
+
+                {isCandidate ? (
+                  <>
+                    {/* 已扫描 — 纯展示 */}
+                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-blue-50/80 text-blue-600 border border-blue-100/80">
+                      <Eye size={12} />
+                      <span>扫描</span>
+                      <span className="font-black tabular-nums">{(flowStats?.viewed || 0).toLocaleString()}</span>
+                    </div>
+                    {/* 已投递 — 纯展示 */}
+                    <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-indigo-50/80 text-indigo-600 border border-indigo-100/80">
+                      <Send size={12} />
+                      <span>投递</span>
+                      <span className="font-black tabular-nums">{flowStats?.applied || 0}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-indigo-50/80 text-indigo-600 border border-indigo-100/80">
+                    <Users2 size={12} />
+                    <span>已邀请</span>
+                    <span className="font-black tabular-nums">{flowStats?.invited || 0}</span>
+                  </div>
+                )}
+
+                {/* 分隔线 */}
+                <div className="w-px h-5 bg-slate-200 mx-0.5" />
+
+                {/* 已通过 — 可点击筛选 */}
+                <button
+                  onClick={() => setQueueFilter(queueFilter === 'passed' ? null : 'passed')}
+                  className={`group flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 border ${
+                    queueFilter === 'passed'
+                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-md shadow-emerald-500/20'
+                      : 'bg-emerald-50/80 text-emerald-600 border-emerald-100/80 hover:bg-emerald-100/80 hover:border-emerald-200'
+                  }`}
+                >
+                  <CheckCircle2 size={12} />
+                  已通过
+                  <span className={`tabular-nums ${queueFilter === 'passed' ? 'text-white/80' : 'text-emerald-500'}`}>{flowStats?.passed || 0}</span>
+                </button>
+
+                {/* 进行中 — 可点击筛选 */}
+                <button
+                  onClick={() => setQueueFilter(queueFilter === 'pending' ? null : 'pending')}
+                  className={`group flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 border ${
+                    queueFilter === 'pending'
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20'
+                      : 'bg-amber-50/80 text-amber-600 border-amber-100/80 hover:bg-amber-100/80 hover:border-amber-200'
+                  }`}
+                >
+                  <Loader2 size={12} />
+                  {isCandidate ? '进行中' : '筛选中'}
+                  <span className={`tabular-nums ${queueFilter === 'pending' ? 'text-white/80' : 'text-amber-500'}`}>{flowStats?.pending || 0}</span>
+                </button>
+
+                {/* 未通过 — 可点击筛选 */}
+                <button
+                  onClick={() => setQueueFilter(queueFilter === 'rejected' ? null : 'rejected')}
+                  className={`group flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all duration-200 border ${
+                    queueFilter === 'rejected'
+                      ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-500/20'
+                      : 'bg-red-50/80 text-red-500 border-red-100/80 hover:bg-red-100/80 hover:border-red-200'
+                  }`}
+                >
+                  <X size={12} />
+                  未通过
+                  <span className={`tabular-nums ${queueFilter === 'rejected' ? 'text-white/80' : 'text-red-400'}`}>{flowStats?.rejected || 0}</span>
+                </button>
+
+                {/* 分隔线 */}
+                <div className="w-px h-5 bg-slate-200 mx-0.5" />
+
+                {/* 平均匹配 — 纯展示 */}
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-slate-50 text-slate-600 border border-slate-200/80">
+                  <Sparkles size={12} className="text-indigo-500" />
+                  <span>匹配度</span>
+                  <span className="font-black tabular-nums text-indigo-600">{flowStats?.avgMatch || 0}%</span>
+                </div>
+              </div>
+            )}
 
             {flowsLoading ? (
               <div className="flex justify-center py-12"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
@@ -3886,6 +4660,22 @@ const WorkbenchView = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
+                  {matchingData.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center">
+                        <div className="text-slate-400 text-sm">
+                          {queueFilter ? (
+                            <>
+                              <span className="block mb-2">当前筛选条件下暂无数据</span>
+                              <button onClick={() => setQueueFilter(null)} className="text-indigo-500 hover:text-indigo-600 font-medium text-xs">
+                                清除筛选查看全部
+                              </button>
+                            </>
+                          ) : '暂无投递数据'}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {matchingData.map((item: any) => (
                     <tr 
                       key={item.id} 
@@ -3970,28 +4760,6 @@ const WorkbenchView = () => {
         </div>
       </div>
 
-      <div className="mt-10">
-        <div className="bg-white p-10 rounded-lg border border-slate-100 card-shadow">
-          <div className="flex justify-between items-center mb-8">
-             <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><PieChart className="text-amber-500" size={20} /> 智能体资源 Token 消耗全景</h3>
-             <button onClick={() => navigate('/tokens')} className="text-xs font-black text-indigo-600 hover:underline">资金账户详情</button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {tokenStats.map((item, i) => (
-              <div key={i} className="space-y-4 p-6 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">{item.agent}</span>
-                  <span className="text-indigo-600 font-black text-sm">{item.share}</span>
-                </div>
-                <div className="text-xl font-black text-slate-900">{item.tokens}</div>
-                <div className="relative h-1.5 bg-white rounded-full overflow-hidden border border-slate-100">
-                    <div className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${i % 2 === 0 ? 'bg-indigo-600' : 'bg-emerald-500'}`} style={{ width: item.share }}></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
@@ -3999,7 +4767,7 @@ const WorkbenchView = () => {
 // --- 待办事项列表页 ---
 const TodoListView = () => {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<'all' | 'user' | 'agent'>('all');
+  const [filter, setFilter] = useState<'all' | 'user' | 'agent' | 'completed'>('all');
   
   const { user, isLoggedIn, userRole } = useAuth();
   const userId = user?.id || 0;
@@ -4028,6 +4796,7 @@ const TodoListView = () => {
   
   const filteredTodos = useMemo(() => {
     if (filter === 'all') return allTodos;
+    if (filter === 'completed') return allTodos.filter((todo: any) => (todo.progress || 0) === 100);
     return allTodos.filter((todo: any) => todo.source === filter);
   }, [filter, allTodos]);
 
@@ -4049,60 +4818,32 @@ const TodoListView = () => {
         <p className="text-slate-500 font-medium">管理您所有的任务，包括 Agent 分发和自行创建的任务</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <div className="bg-white rounded p-6 border border-slate-100 shadow-lg">
-          <div className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">全部任务</div>
-          <div className="text-3xl font-black text-slate-900">{stats.total}</div>
-          <div className="text-xs text-slate-400 mt-1">共 {stats.total} 个任务</div>
-        </div>
-        <div className="bg-white rounded p-6 border border-slate-100 shadow-lg">
-          <div className="text-xs font-black uppercase tracking-widest text-purple-400 mb-2">Agent 分发</div>
-          <div className="text-3xl font-black text-purple-600">{stats.agentAssigned}</div>
-          <div className="text-xs text-slate-400 mt-1">系统智能推荐</div>
-        </div>
-        <div className="bg-white rounded p-6 border border-slate-100 shadow-lg">
-          <div className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-2">我创建的</div>
-          <div className="text-3xl font-black text-emerald-600">{stats.userCreated}</div>
-          <div className="text-xs text-slate-400 mt-1">手动添加任务</div>
-        </div>
-        <div className="bg-white rounded p-6 border border-slate-100 shadow-lg">
-          <div className="text-xs font-black uppercase tracking-widest text-amber-400 mb-2">已完成</div>
-          <div className="text-3xl font-black text-amber-600">{stats.completed}</div>
-          <div className="text-xs text-slate-400 mt-1">完成度 100%</div>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 mb-8">
-        <button 
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-lg text-sm font-black transition-all ${
-            filter === 'all' 
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          全部
-        </button>
-        <button 
-          onClick={() => setFilter('agent')}
-          className={`px-4 py-2 rounded-lg text-sm font-black transition-all ${
-            filter === 'agent' 
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' 
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          🤖 Agent 分发
-        </button>
-        <button 
-          onClick={() => setFilter('user')}
-          className={`px-4 py-2 rounded-lg text-sm font-black transition-all ${
-            filter === 'user' 
-              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
-              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-          }`}
-        >
-          👤 我创建的
-        </button>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        {[
+          { key: 'all' as const, label: '全部任务', count: stats.total, sub: `共 ${stats.total} 个`, icon: ListTodo },
+          { key: 'agent' as const, label: 'Agent 分发', count: stats.agentAssigned, sub: '系统智能推荐', icon: Sparkles },
+          { key: 'user' as const, label: '我创建的', count: stats.userCreated, sub: '手动添加', icon: UserCircle2 },
+          { key: 'completed' as const, label: '已完成', count: stats.completed, sub: stats.total > 0 ? `完成度 ${Math.round(stats.completed / stats.total * 100)}%` : '0%', icon: CheckCircle2 },
+        ].map((item) => {
+          const isActive = filter === item.key;
+          const ItemIcon = item.icon;
+          return (
+            <button
+              key={item.key}
+              onClick={() => setFilter(item.key)}
+              className={`bg-white rounded p-5 border text-left transition-all cursor-pointer hover:shadow-md active:scale-[0.98] ${
+                isActive ? 'border-indigo-300 bg-indigo-50/50 shadow-sm' : 'border-slate-100 hover:border-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-[11px] font-black uppercase tracking-widest ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>{item.label}</span>
+                <ItemIcon size={16} className={isActive ? 'text-indigo-500' : 'text-slate-300'} />
+              </div>
+              <div className={`text-3xl font-black ${isActive ? 'text-indigo-600' : 'text-slate-900'}`}>{item.count}</div>
+              <div className={`text-[11px] mt-1 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`}>{item.sub}</div>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -4208,7 +4949,43 @@ const TodoDetailView = () => {
 const FlowDetailView = () => {
   const { flowId } = useParams();
   const navigate = useNavigate();
-  const flow = useMemo(() => MOCK_FLOW_DATA.find(f => f.id === parseInt(flowId || '0')), [flowId]);
+  const { data: flow, loading } = useFlow(flowId ? parseInt(flowId) : null);
+  const [talent, setTalent] = useState<any>(null);
+  const [talentLoading, setTalentLoading] = useState(false);
+
+  // 当 flow 加载完成后，获取关联候选人的详细画像
+  useEffect(() => {
+    if (!flow?.candidateId) return;
+    setTalentLoading(true);
+    fetch(`/api/v1/public/talents/${flow.candidateId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setTalent(d))
+      .catch(() => {})
+      .finally(() => setTalentLoading(false));
+  }, [flow?.candidateId]);
+
+  const stageNameMap: Record<string, string> = {
+    parse: '简历解析', benchmark: '智能筛选', first_interview: 'AI 初试',
+    second_interview: '复试阶段', final: '双方通过',
+  };
+  const statusNameMap: Record<string, { text: string; color: string }> = {
+    pending: { text: '等待中', color: 'bg-slate-100 text-slate-600' },
+    screening: { text: '筛选中', color: 'bg-blue-50 text-blue-600' },
+    evaluating: { text: '评估中', color: 'bg-amber-50 text-amber-600' },
+    interview: { text: '面试中', color: 'bg-indigo-50 text-indigo-600' },
+    passed: { text: '已通过', color: 'bg-emerald-50 text-emerald-600' },
+    rejected: { text: '未通过', color: 'bg-red-50 text-red-600' },
+    completed: { text: '已完成', color: 'bg-emerald-50 text-emerald-600' },
+    active: { text: '进行中', color: 'bg-blue-50 text-blue-600' },
+  };
+  const defaultNodes = ['邀请', '匹配', '筛选', '面试', '结果'];
+
+  if (loading) return (
+    <div className="pt-40 text-center">
+      <Loader2 className="mx-auto animate-spin text-indigo-600 mb-4" size={32} />
+      <p className="text-slate-500 font-medium">加载中...</p>
+    </div>
+  );
 
   if (!flow) return (
     <div className="pt-40 text-center">
@@ -4218,209 +4995,191 @@ const FlowDetailView = () => {
     </div>
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Offer': return 'bg-emerald-50 text-emerald-600';
-      case '面试中': return 'bg-blue-50 text-blue-600';
-      case '待审核': return 'bg-amber-50 text-amber-600';
-      default: return 'bg-slate-100 text-slate-600';
-    }
-  };
+  const nodes = flow.nodes?.length > 0 ? flow.nodes : defaultNodes;
+  const currentStep = flow.currentStep || 0;
+  const statusInfo = statusNameMap[flow.status] || { text: flow.status, color: 'bg-slate-100 text-slate-600' };
+  const timeline = flow.timeline || [];
+  const agents = flow.agentsUsed?.length > 0 ? flow.agentsUsed : ['AI 智能体'];
 
   return (
     <div className="pt-32 pb-20 px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <button onClick={() => navigate('/workbench')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors">
-        <ChevronLeft size={20} /> 返回工作台
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
+        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
       </button>
 
-      <div className="bg-white rounded p-6 border border-slate-100 shadow-xl mb-8">
-        <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-          <Briefcase size={16} className="text-indigo-600" /> 目标岗位信息
+      {/* 头部信息 — 候选人 + 流程状态 */}
+      <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-sm mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div
+              onClick={() => flow.candidateId && navigate(`/candidate/profile/${flow.candidateId}`)}
+              className="w-16 h-16 bg-indigo-600 text-white flex items-center justify-center text-2xl font-black rounded-lg shadow-lg ring-4 ring-indigo-50 cursor-pointer hover:ring-indigo-200 transition-all"
+            >
+              {(talent?.name || flow.candidateName || '?').charAt(0)}
+            </div>
+            <div>
+              <h1
+                onClick={() => flow.candidateId && navigate(`/candidate/profile/${flow.candidateId}`)}
+                className="text-2xl font-black text-slate-900 cursor-pointer hover:text-indigo-600 transition-colors"
+              >{talent?.name || flow.candidateName}</h1>
+              <p className="text-sm text-slate-500 font-medium">
+                {talent?.role || flow.role}{talent?.experienceYears ? ` · ${talent.experienceYears} 年经验` : ''} · {flow.company}
+              </p>
+              {talent?.skills && talent.skills.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {talent.skills.slice(0, 6).map((s: string, i: number) => (
+                    <span key={i} className="px-2 py-0.5 bg-slate-50 text-slate-500 text-[10px] font-bold rounded border border-slate-100">{s}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`px-3 py-1.5 rounded-lg text-xs font-black ${statusInfo.color}`}>{statusInfo.text}</span>
+            <span className="text-sm text-slate-500 font-medium flex items-center gap-1">
+              <Clock size={14} /> {stageNameMap[flow.stage] || flow.stage}
+            </span>
+            {flow.matchScore > 0 && (
+              <span className="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-black flex items-center gap-1">
+                <Target size={12} /> {flow.matchScore}% 匹配
+              </span>
+            )}
+            {flow.salary && (
+              <span className="text-sm text-slate-500 flex items-center gap-1"><Coins size={14} className="text-emerald-500" /> {flow.salary}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 阶段进度 */}
+      <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm mb-8">
+        <h3 className="text-sm font-black text-slate-900 mb-5 flex items-center gap-2">
+          <Clock size={16} className="text-indigo-600" /> 阶段进度
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 border border-indigo-100">
-                <UserIcon size={20} />
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {nodes.map((node: string, idx: number) => (
+            <div key={idx} className="flex items-center shrink-0">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-500 ${
+                idx < currentStep ? 'bg-indigo-600 text-white' : 
+                idx === currentStep ? 'bg-amber-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400'
+              }`}>
+                {idx < currentStep ? <CheckCircle2 size={14} /> : idx + 1}
               </div>
-              <div>
-                <h4 className="text-lg font-black text-slate-900">{flow.job}</h4>
-                <p className="text-sm text-indigo-600 font-medium">{flow.company}</p>
-              </div>
+              {idx < nodes.length - 1 && (
+                <div className={`w-10 h-1 rounded ${idx < currentStep ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>
+              )}
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed font-medium mb-4">{flow.description}</p>
-            <div className="flex flex-wrap gap-2">
-              {flow.tags.map((tag, idx) => (
-                <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <MapPin size={18} className="text-indigo-600" />
-              <div>
-                <div className="text-xs text-slate-400 font-bold uppercase">工作地点</div>
-                <div className="text-sm font-bold text-slate-700">{flow.location}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-              <Coins size={18} className="text-emerald-600" />
-              <div>
-                <div className="text-xs text-slate-400 font-bold uppercase">薪资范围</div>
-                <div className="text-sm font-bold text-slate-700">{flow.salary}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg">
-              <Target size={18} className="text-indigo-600" />
-              <div>
-                <div className="text-xs text-indigo-400 font-bold uppercase">匹配度</div>
-                <div className="text-sm font-black text-indigo-600">{flow.matchScore}%</div>
-              </div>
-            </div>
-          </div>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-3 overflow-x-auto">
+          {nodes.map((node: string, idx: number) => (
+            <span key={idx} className={`px-3 py-1 rounded text-xs font-bold shrink-0 ${
+              idx < currentStep ? 'bg-indigo-50 text-indigo-600' : 
+              idx === currentStep ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
+            }`}>
+              {node}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 border border-amber-100">
-            <Bot size={20} />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-slate-900">{flow.candidate}</h1>
-            <p className="text-xs text-slate-500 font-medium">候选人</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 mt-4">
-          <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest ${getStatusColor(flow.status)}`}>
-            {flow.status}
-          </span>
-          <span className="text-sm text-slate-500 font-medium flex items-center gap-1">
-            <Clock size={14} /> {flow.stage}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="xl:col-span-2 space-y-6">
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-              <Zap size={16} className="text-indigo-600" /> 对接详情
-            </h3>
-            <p className="text-sm text-slate-600 leading-relaxed font-medium">{flow.details}</p>
-          </div>
-
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-              <Clock size={16} className="text-indigo-600" /> 阶段进度
-            </h3>
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {flow.nodes.map((node, idx) => (
-                <div key={idx} className="flex items-center shrink-0">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-500 ${
-                    idx < flow.currentStep ? 'bg-indigo-600 text-white' : 
-                    idx === flow.currentStep ? 'bg-amber-500 text-white animate-pulse' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    {idx + 1}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 左侧主内容 */}
+        <div className="lg:col-span-8 space-y-8">
+          {/* AI 智能画像综述 */}
+          {talent?.summary && (
+            <div className="bg-indigo-50 rounded-lg p-6 border border-indigo-100 shadow-sm relative overflow-hidden">
+              <Sparkles className="absolute -right-4 -bottom-4 w-28 h-28 text-indigo-200" />
+              <h3 className="text-sm font-black text-indigo-900 mb-3 flex items-center gap-2 relative z-10">
+                <Bot size={16} className="text-indigo-600" /> AI 智能画像综述
+              </h3>
+              <p className="text-sm leading-relaxed text-indigo-800 font-medium relative z-10">"{talent.summary}"</p>
+              <div className="mt-4 pt-3 border-t border-indigo-200 flex flex-wrap gap-5 relative z-10">
+                {talent.salaryRange && (
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-400 uppercase mb-0.5">期望薪资</div>
+                    <div className="text-xs font-black text-indigo-700">{talent.salaryRange}</div>
                   </div>
-                  {idx < flow.nodes.length - 1 && (
-                    <div className={`w-8 h-1 ${idx < flow.currentStep ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>
-                  )}
-                </div>
-              ))}
+                )}
+                {talent.idealJobPersona && (
+                  <div>
+                    <div className="text-[10px] font-bold text-indigo-400 uppercase mb-0.5">理想岗位</div>
+                    <div className="text-xs font-black text-indigo-700 max-w-xs truncate">{talent.idealJobPersona}</div>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex gap-3 mt-4 overflow-x-auto">
-              {flow.nodes.map((node, idx) => (
-                <span key={idx} className={`px-3 py-1 rounded text-xs font-bold shrink-0 ${
-                  idx < flow.currentStep ? 'bg-indigo-50 text-indigo-600' : 
-                  idx === flow.currentStep ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
-                }`}>
-                  {node}
-                </span>
-              ))}
-            </div>
-          </div>
+          )}
 
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-              <GitBranch size={16} className="text-indigo-600" /> 执行时间线
-            </h3>
-            <div className="space-y-4">
-              {flow.timeline.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-4 relative">
-                  {idx < flow.timeline.length - 1 && (
-                    <div className="absolute left-[7px] top-8 w-0.5 h-full bg-slate-100"></div>
-                  )}
-                  <div className="w-4 h-4 rounded-full bg-indigo-600 shrink-0 mt-1 relative z-10"></div>
-                  <div className="flex-1 pb-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-slate-900">{item.action}</span>
-                      <span className="text-xs text-slate-400">{item.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-indigo-600 font-medium">{item.agent}</span>
-                      <span className="text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded">
-                        {item.tokens.toLocaleString()} tokens
-                      </span>
+          {/* 执行时间线 */}
+          {timeline.length > 0 && (
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                <GitBranch size={16} className="text-indigo-600" /> 执行时间线
+              </h3>
+              <div className="space-y-4">
+                {timeline.map((item: any, idx: number) => (
+                  <div key={idx} className="flex items-start gap-4 relative">
+                    {idx < timeline.length - 1 && (
+                      <div className="absolute left-[7px] top-8 w-0.5 h-full bg-slate-100"></div>
+                    )}
+                    <div className="w-4 h-4 rounded-full bg-indigo-600 shrink-0 mt-1 relative z-10"></div>
+                    <div className="flex-1 pb-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-bold text-slate-900">{item.action}</span>
+                        <span className="text-xs text-slate-400">{item.time ? new Date(item.time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.agent && <span className="text-xs text-indigo-600 font-medium">{item.agent}</span>}
+                        {item.tokens > 0 && <span className="text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded">{item.tokens.toLocaleString()} tokens</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* 无时间线时的提示 */}
+          {timeline.length === 0 && (
+            <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-sm text-center">
+              <GitBranch size={32} className="mx-auto text-slate-300 mb-3" />
+              <p className="text-sm text-slate-400 font-medium">暂无执行记录，流程推进后将在此展示</p>
+            </div>
+          )}
+
         </div>
 
-        <div className="xl:col-span-1 space-y-6">
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
+        {/* 右侧边栏 */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* 能力雷达图 */}
+          {talent?.radarData && talent.radarData.length > 0 && (
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+              <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                <BarChart3 size={16} className="text-indigo-600" /> 核心竞争力
+              </h3>
+              <RadarChart data={talent.radarData} />
+            </div>
+          )}
+
+          {/* 资源消耗 */}
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
               <Cpu size={16} className="text-indigo-600" /> 资源消耗
             </h3>
             <div className="text-center py-4">
-              <div className="text-4xl font-black text-indigo-600">{flow.tokensConsumed.toLocaleString()}</div>
+              <div className="text-4xl font-black text-indigo-600">{(flow.tokensConsumed || 0).toLocaleString()}</div>
               <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Total Tokens</div>
             </div>
-            <div className="space-y-2 mt-4 pt-4 border-t border-slate-50">
-              {flow.agents.map((agent, idx) => (
-                <div key={idx} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600 font-medium">{agent}</span>
-                  <span className="text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                    {Math.round(flow.tokensConsumed / flow.agents.length / 1000 * (Math.random() * 0.5 + 0.5))}K
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-              <ArrowRightCircle size={16} className="text-indigo-600" /> 下一步安排
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">待执行动作</div>
-                <div className="text-sm font-bold text-slate-900">{flow.nextAction}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">计划时间</div>
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
-                  <Calendar size={14} />
-                  {flow.nextSchedule}
-                </div>
-              </div>
-              <button className="w-full mt-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-colors">
-                推进到下一阶段
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded p-6 border border-slate-100 shadow-xl">
+          {/* 参与智能体 */}
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
               <Bot size={16} className="text-indigo-600" /> 参与智能体
             </h3>
             <div className="space-y-2">
-              {flow.agents.map((agent, idx) => (
+              {agents.map((agent: string, idx: number) => (
                 <div key={idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg">
                   <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center text-indigo-600">
                     <Bot size={14} />
@@ -4430,6 +5189,7 @@ const FlowDetailView = () => {
               ))}
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -4529,22 +5289,13 @@ const AboutUsView = () => (
         <Mail size={24} className="text-indigo-500" /> 联系我们
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <a href="mailto:contact@devnors.com" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-indigo-50 transition-all group">
+        <a href="mailto:admin@tvey.com" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-indigo-50 transition-all group">
           <div className="w-12 h-12 bg-indigo-100 rounded flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
             <Mail size={24} className="text-indigo-600" />
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">商务合作</h4>
-            <p className="text-xs text-slate-500">contact@devnors.com</p>
-          </div>
-        </a>
-        <a href="tel:+400-123-4567" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-emerald-50 transition-all group">
-          <div className="w-12 h-12 bg-emerald-100 rounded flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-            <Phone size={24} className="text-emerald-600" />
-          </div>
-          <div>
-            <h4 className="text-sm font-black text-slate-900">客服热线</h4>
-            <p className="text-xs text-slate-500">400-123-4567</p>
+            <p className="text-xs text-slate-500">admin@tvey.com</p>
           </div>
         </a>
         <div className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-amber-50 transition-all group">
@@ -4553,18 +5304,18 @@ const AboutUsView = () => (
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">公司地址</h4>
-            <p className="text-xs text-slate-500">北京市海淀区中关村</p>
+            <p className="text-xs text-slate-500">中国浙江杭州</p>
           </div>
         </div>
-        <a href="#" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-rose-50 transition-all group">
+        <Link to="/feedback" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-rose-50 transition-all group">
           <div className="w-12 h-12 bg-rose-100 rounded flex items-center justify-center group-hover:bg-rose-200 transition-colors">
             <MessageCircle size={24} className="text-rose-600" />
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">在线客服</h4>
-            <p className="text-xs text-slate-500">7×24 小时服务</p>
+            <p className="text-xs text-slate-500">工单在线服务</p>
           </div>
-        </a>
+        </Link>
       </div>
     </div>
   </div>
@@ -4657,7 +5408,7 @@ const ProductsPage = () => {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
             {stats.map((stat, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+              <div key={i} className="bg-white rounded-lg p-6 shadow-sm border border-slate-100">
                 <AnimatedStatItem value={stat.value} label={stat.label} color="text-indigo-600" delay={i * 100} size="large" />
               </div>
             ))}
@@ -4744,7 +5495,7 @@ const ProductsPage = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {upcomingProducts.map((product, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-dashed border-slate-300 p-6 text-center opacity-60">
+            <div key={i} className="bg-white rounded-lg border border-dashed border-slate-300 p-6 text-center opacity-60">
               <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <product.icon size={24} className="text-slate-400" />
               </div>
@@ -4915,7 +5666,7 @@ const SolutionsPage = () => {
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-4 mt-6">
                   {solution.stats.map((stat, i) => (
-                    <div key={i} className="bg-white rounded-xl p-3 text-center shadow-sm">
+                    <div key={i} className="bg-white rounded-lg p-3 text-center shadow-sm">
                       <AnimatedStatItem value={stat.value} label={stat.label} color={solution.textColor} delay={i * 100} size="normal" />
                     </div>
                   ))}
@@ -4957,7 +5708,7 @@ const SolutionsPage = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {scenarios.map((item, i) => (
-              <div key={i} className="text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-100 hover:shadow-lg transition-all group">
+              <div key={i} className="text-center p-8 bg-white rounded-lg shadow-sm border border-slate-100 hover:shadow-lg transition-all group">
                 <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <item.icon size={28} className="text-indigo-600" />
                 </div>
@@ -4978,7 +5729,7 @@ const SolutionsPage = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {industries.map((item, i) => (
-              <div key={i} className={`${item.color} rounded-xl p-6 hover:shadow-md transition-all group`}>
+              <div key={i} className={`${item.color} rounded-lg p-6 hover:shadow-md transition-all group`}>
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mb-4 shadow-sm group-hover:scale-110 transition-transform">
                   <item.icon size={24} className={item.textColor} />
                 </div>
@@ -5129,7 +5880,7 @@ const ModelsPage = () => {
       <div className="max-w-5xl mx-auto px-6 pb-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {advantages.map((item, i) => (
-            <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 text-center">
+            <div key={i} className="bg-white rounded-lg p-6 shadow-sm border border-slate-100 text-center">
               <AnimatedStatItem value={item.value} label={item.title} color="text-indigo-600" delay={i * 100} size="large" />
               <div className="text-xs text-slate-400 mt-1">{item.desc}</div>
             </div>
@@ -5145,7 +5896,7 @@ const ModelsPage = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {agents.map((agent, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-100 p-6 hover:shadow-lg transition-all group">
+            <div key={i} className="bg-white rounded-lg border border-slate-100 p-6 hover:shadow-lg transition-all group">
               <div className="flex items-center gap-4 mb-4">
                 <div className={`w-14 h-14 ${agent.color} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
                   <agent.icon size={28} className="text-white" />
@@ -5176,7 +5927,7 @@ const ModelsPage = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {techStack.map((tech, i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex gap-4">
+              <div key={i} className="bg-white rounded-lg p-6 shadow-sm border border-slate-100 flex gap-4">
                 <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center flex-shrink-0">
                   <tech.icon size={24} className="text-indigo-600" />
                 </div>
@@ -5287,12 +6038,14 @@ const PricingView = () => {
     {
       name: 'Devnors 1.0',
       tier: 'FREE',
-      price: billingCycle === 'annual' ? '¥0' : '¥0',
+      price: '¥0',
       period: '/月',
       description: '基础版 · 入门体验',
+      tokenQuota: '50,000',
+      tokenValue: '≈ 62 次对话 / 12 次简历解析',
       features: [
+        { name: '每月免费 Token', value: '50,000', included: true },
         { name: '上下文长度', value: '32K tokens', included: true },
-        { name: '日免费度 Token 额度', value: '1K', included: true },
         { name: '请求频率限制', value: '10 RPM', included: true },
         { name: '并发请求数', value: '1', included: true },
         { name: '基础模型能力', value: '✓', included: true },
@@ -5300,6 +6053,7 @@ const PricingView = () => {
         { name: '专属技术支持', value: '-', included: false },
         { name: '高阶对接算法', value: '-', included: false },
         { name: '求职云端轮巡周期', value: '1 天', included: true },
+        { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '免费使用',
       color: 'border-slate-200',
@@ -5308,13 +6062,15 @@ const PricingView = () => {
     {
       name: 'Devnors 1.0 Pro',
       tier: 'PRO',
-      price: billingCycle === 'annual' ? '¥350' : '¥450',
-      period: billingCycle === 'annual' ? '/月' : '/月',
+      price: billingCycle === 'annual' ? '¥159' : '¥199',
+      period: '/月',
       description: '专业版 · 性能平衡',
       popular: true,
+      tokenQuota: '2,000,000',
+      tokenValue: '≈ 2,500 次对话 / 500 次简历解析',
       features: [
+        { name: '每月免费 Token', value: '2,000,000', included: true },
         { name: '上下文长度', value: '128K tokens', included: true },
-        { name: '日免费度 Token 额度', value: '200K', included: true },
         { name: '请求频率限制', value: '100 RPM', included: true },
         { name: '并发请求数', value: '10', included: true },
         { name: '基础模型能力', value: '✓', included: true },
@@ -5322,6 +6078,7 @@ const PricingView = () => {
         { name: '专属技术支持', value: '工单', included: true },
         { name: '高阶对接算法', value: '-', included: false },
         { name: '求职云端轮巡周期', value: '7 天', included: true },
+        { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '立即升级',
       color: 'border-indigo-200 shadow-xl',
@@ -5330,20 +6087,23 @@ const PricingView = () => {
     {
       name: 'Devnors 1.0 Ultra',
       tier: 'ULTRA',
-      price: billingCycle === 'annual' ? '¥2,000' : '¥2,500',
-      period: billingCycle === 'annual' ? '/月' : '/月',
+      price: billingCycle === 'annual' ? '¥1,437' : '¥1,797',
+      period: '/月',
       description: '旗舰版 · 无限可能',
+      tokenQuota: '30,000,000',
+      tokenValue: '≈ 37,500 次对话 / 7,500 次简历解析',
       features: [
+        { name: '每月免费 Token', value: '30,000,000', included: true },
         { name: '上下文长度', value: '1M+ tokens', included: true },
-        { name: '日免费度 Token 额度', value: '5M', included: true },
         { name: '请求频率限制', value: '800 RPM', included: true },
         { name: '并发请求数', value: '100', included: true },
         { name: '基础模型能力', value: '✓', included: true },
         { name: '高级推理能力', value: '✓', included: true },
-        { name: '专属技术支持', value: '工单', included: true },
+        { name: '专属技术支持', value: '1v1 专属', included: true },
         { name: '高阶对接算法', value: '✓', included: true },
         { name: '定制化微调', value: '✓', included: true },
         { name: '求职云端轮巡周期', value: '30 天', included: true },
+        { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '立即升级',
       color: 'border-rose-200 shadow-xl',
@@ -5405,9 +6165,12 @@ const PricingView = () => {
           <Sparkle size={16} /> 模型定价
         </div>
         <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-6 tracking-tight">选择您的算力方案</h1>
-        <p className="text-lg text-slate-600 font-medium max-w-2xl mx-auto">
+        <p className="text-lg text-slate-600 font-medium max-w-2xl mx-auto mb-3">
           从入门到企业级，满足不同规模的 AI 推理需求
         </p>
+        <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 px-4 py-2 rounded-full text-sm font-bold border border-amber-100">
+          <Coins size={16} /> 兑换比例：¥1 = 10,000 Tokens
+        </div>
       </div>
 
       <div className="flex justify-center mb-12">
@@ -5439,7 +6202,7 @@ const PricingView = () => {
         {plans.map((plan, idx) => (
           <div 
             key={idx}
-            className={`relative bg-white rounded-2xl p-8 border-2 ${isCurrentPlan(plan) ? 'ring-2 ring-indigo-400 ' : ''}${plan.color} flex flex-col`}
+            className={`relative bg-white rounded-lg p-8 border-2 ${isCurrentPlan(plan) ? 'ring-2 ring-indigo-400 ' : ''}${plan.color} flex flex-col`}
           >
             {plan.popular && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest">
@@ -5461,6 +6224,10 @@ const PricingView = () => {
               <div className="flex items-baseline justify-center gap-1">
                 <span className="text-4xl font-black text-slate-900">{plan.price}</span>
                 <span className="text-slate-500 font-medium">{plan.period}</span>
+              </div>
+              <div className="mt-3 py-2 px-3 bg-slate-50 rounded-lg inline-block">
+                <span className="text-sm font-bold text-slate-700">{plan.tokenQuota} Tokens/月</span>
+                <span className="block text-[11px] text-slate-400 mt-0.5">{plan.tokenValue}</span>
               </div>
             </div>
 
@@ -5504,16 +6271,38 @@ const PricingView = () => {
         ))}
       </div>
 
-      <div className="mt-16 bg-slate-50 rounded-2xl p-8 border border-slate-100">
+      {/* 邀请奖励 */}
+      <div className="mt-8 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-8 border border-amber-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
+              <Gift size={20} className="text-amber-500" /> 邀请好友，双方获赠 Token
+            </h3>
+            <p className="text-sm text-slate-600">
+              每成功邀请一位好友注册，您获得 <span className="font-bold text-amber-600">50,000 tokens</span>，好友获得 <span className="font-bold text-amber-600">20,000 tokens</span>
+            </p>
+          </div>
+          <button 
+            onClick={() => navigate('/tokens')}
+            className="px-6 py-3 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all whitespace-nowrap"
+          >
+            查看邀请码
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8 bg-slate-50 rounded-lg p-8 border border-slate-100">
         <h3 className="text-xl font-black text-slate-900 mb-6 text-center">常见问题</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[
-            { q: '如何计算 Token 用量？', a: 'Token 按照输入和输出的总字符数计算，约 4 个字符等于 1 个 Token。中文消耗更多 Token。' },
-            { q: '超出限额怎么办？', a: '超出限额后可以单独购买 token 使用' },
-            { q: '支持私有化部署吗？', a: '不支持私有部署，Ultra 版本支持模型定制化微调' },
-            { q: '是否有免费试用？', a: 'Devnors 1.0 方案每月提供 100K 免费 Token。' },
+            { q: '如何计算 Token 用量？', a: 'Token 按照输入和输出的总字符数计算，约 4 个字符等于 1 个 Token。每次 AI 对话约消耗 500-2,000 tokens，简历解析约 3,000-5,000 tokens。' },
+            { q: '超出免费额度怎么办？', a: '超出免费额度后可以购买充值套餐继续使用，也可以邀请好友获得免费 Token 奖励。' },
+            { q: '充值的 Token 会过期吗？', a: '充值购买的 Token 永不过期。每月免费额度在月底重置，不累积到下月。' },
+            { q: '¥1 能做什么？', a: '¥1 = 10,000 tokens，约可进行 12 次 AI 对话，或 2 次简历解析，或 5 次职位匹配，或 1 次完整的市场薪资分析。' },
+            { q: '邀请奖励有上限吗？', a: '没有上限！每邀请一位好友成功注册，您获得 50,000 tokens（≈62次对话），好友获得 20,000 tokens（≈25次对话），邀请越多奖励越多。' },
+            { q: '支持私有化部署吗？', a: '暂不支持私有部署，Ultra 版本支持模型定制化微调，满足企业个性化需求。' },
           ].map((faq, i) => (
-            <div key={i} className="bg-white rounded-xl p-6 border border-slate-100">
+            <div key={i} className="bg-white rounded-lg p-6 border border-slate-100">
               <h4 className="font-bold text-slate-900 mb-2">{faq.q}</h4>
               <p className="text-sm text-slate-600 font-medium">{faq.a}</p>
             </div>
@@ -5533,6 +6322,8 @@ const CandidateView = () => {
   // 使用 API 获取数据
   const { data: recommendedJobs, loading: jobsLoading } = useRecommendedJobs(5);
   const { data: memories, loading: memoriesLoading } = useMemories(userId, 'candidate');
+  const { data: candidateFlows } = useFlows(100, userId || undefined);
+  const { data: candidateTokenStats } = useTokenStats(userId);
 
 
   return (
@@ -5628,9 +6419,6 @@ const CandidateView = () => {
                           </div>
                         </div>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); navigate('/candidate/delivery'); }} className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded font-black text-sm flex items-center gap-2 transition-all shadow-lg shadow-emerald-100">
-                        <Rocket size={16} /> AI 对接投递
-                      </button>
                     </div>
                     <div className="mt-4 pt-4 border-t border-slate-100">
                       <p className="text-sm text-slate-500 font-medium flex items-center gap-2">
@@ -5657,9 +6445,9 @@ const CandidateView = () => {
             <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
               <div className="grid grid-cols-1 divide-y divide-slate-100">
                 {[
-                  { label: 'AI投递', value: '534次', icon: Send, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                  { label: 'AI沟通', value: '33小时', icon: MessageCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                  { label: '总 Token 消耗', value: '1.8M', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
+                  { label: 'AI投递', value: `${(candidateFlows || []).length} 次`, icon: Send, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                  { label: '推荐岗位', value: `${recommendedJobs.length} 个`, icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                  { label: 'Token 余额', value: candidateTokenStats?.balance_display || '0', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
                 ].map((card, i) => (
                   <div key={i} className="p-6">
                     <AnimatedStatItem 
@@ -6084,7 +6872,7 @@ const EnterpriseMemoryView = () => {
       {/* 添加/编辑记忆弹窗 */}
       {memoryModal.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
                 {memoryModal.mode === 'add' ? <Plus className="text-indigo-600" size={20} /> : <Edit3 className="text-indigo-600" size={20} />}
@@ -6148,7 +6936,7 @@ const EnterpriseMemoryView = () => {
       {/* 删除确认弹窗 */}
       {deleteConfirm.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center">
                 <AlertTriangle className="text-rose-600" size={20} />
@@ -6183,7 +6971,7 @@ const EnterpriseMemoryView = () => {
       {/* 记忆优化结果弹窗 */}
       {optimizeResult?.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
                 <Wand2 className="text-amber-600" size={20} />
@@ -6537,7 +7325,7 @@ const CandidateMemoryView = () => {
       {/* 添加/编辑记忆弹窗 */}
       {memoryModal.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-5">
               <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
                 {memoryModal.mode === 'add' ? <Plus className="text-emerald-600" size={20} /> : <Edit3 className="text-emerald-600" size={20} />}
@@ -6599,7 +7387,7 @@ const CandidateMemoryView = () => {
       {/* 删除确认弹窗 */}
       {deleteConfirm.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center">
                 <AlertTriangle className="text-rose-600" size={20} />
@@ -6634,7 +7422,7 @@ const CandidateMemoryView = () => {
       {/* 记忆优化结果弹窗 */}
       {optimizeResult?.show && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
                 <Wand2 className="text-amber-600" size={20} />
@@ -6703,15 +7491,64 @@ const CandidateMemoryView = () => {
 const JobDetailView = () => {
   const { jobId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
+  const loc = useLocation();
+  const { user } = useAuth();
+  const userId = user?.id || 0;
   
-  const passedJob = location.state?.job as Job | undefined;
+  const passedJob = loc.state?.job as Job | undefined;
   
   const recommendedJob = RECOMMENDED_JOBS.find(j => j.id === Number(jobId));
   const mockJob = MOCK_JOBS.find(j => j.id === jobId);
   
   const isMockJob = !!passedJob || (!recommendedJob && !!mockJob);
   const displayJob = passedJob || mockJob || recommendedJob || RECOMMENDED_JOBS[0];
+
+  // AI 投递状态
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [applyDetail, setApplyDetail] = useState<any>(null);
+  const [applyResult, setApplyResult] = useState<any>(null);
+
+  useEffect(() => {
+    if (!userId || !jobId) return;
+    fetch(`/api/v1/public/my-applies?user_id=${userId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.success && data.applies) {
+          const detail = data.applies[String(jobId)];
+          if (detail) {
+            setApplied(true);
+            setApplyDetail(detail);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [userId, jobId]);
+
+  const handleApply = async () => {
+    if (applied || applying) return;
+    setApplying(true);
+    setApplyResult(null);
+    try {
+      const res = await fetch('/api/v1/public/quick-apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: Number(jobId), user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setApplied(true);
+        setApplyDetail({ job_id: Number(jobId), flow_id: data.flow_id, job_title: data.job_title, match_score: data.match_score, details: data.ai_reason || '' });
+        setApplyResult({ success: true, ...data });
+      } else {
+        setApplyResult({ success: false, message: data.error || '投递失败' });
+      }
+    } catch {
+      setApplyResult({ success: false, message: '网络异常，请重试' });
+    }
+    setApplying(false);
+    setTimeout(() => setApplyResult(null), 5000);
+  };
   
   return (
     <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
@@ -6743,9 +7580,36 @@ const JobDetailView = () => {
                 </span>
               </div>
             </div>
-            <button className={`${isMockJob ? 'bg-white text-indigo-600' : 'bg-white text-emerald-600'} px-8 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:scale-105 transition-all`}>
-              <Rocket size={20} /> AI 一键投递
-            </button>
+            {applied ? (
+              <div className="relative group/apply">
+                <span className="bg-white/20 backdrop-blur-sm text-white px-8 py-4 rounded font-black flex items-center gap-2 shadow-xl cursor-default">
+                  <CheckCircle2 size={20} /> 已投递
+                </span>
+                {applyDetail && (
+                  <div
+                    onClick={() => navigate(`/workbench/flow/${applyDetail.flow_id}`)}
+                    className="absolute right-0 top-full mt-2 w-64 bg-slate-900 text-white rounded-xl shadow-2xl p-4 z-50 opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 text-xs cursor-pointer hover:bg-slate-800"
+                  >
+                    <div className="flex items-center gap-1.5 font-bold mb-2 text-emerald-300">
+                      <CheckCircle2 size={12} /> AI 投递详情
+                    </div>
+                    <p className="text-slate-300 mb-1">岗位：<span className="text-indigo-300 font-bold">{applyDetail.job_title}</span></p>
+                    <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">匹配度 {applyDetail.match_score}%</span>
+                    {applyDetail.details && <p className="text-slate-400 mt-1.5">{applyDetail.details}</p>}
+                    <p className="text-indigo-400 mt-2 font-bold flex items-center gap-1">查看投递详情 <ChevronRight size={11} /></p>
+                    <div className="absolute -top-1.5 right-6 w-3 h-3 bg-slate-900 rotate-45"></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={handleApply}
+                disabled={applying}
+                className={`${isMockJob ? 'bg-white text-indigo-600' : 'bg-white text-emerald-600'} px-8 py-4 rounded font-black flex items-center gap-2 shadow-xl hover:scale-105 transition-all disabled:opacity-60`}
+              >
+                {applying ? <Loader2 size={20} className="animate-spin" /> : <Rocket size={20} />} {applying ? 'AI 分析中...' : 'AI 投递'}
+              </button>
+            )}
           </div>
         </div>
         
@@ -6799,6 +7663,35 @@ const JobDetailView = () => {
           </div>
         </div>
       </div>
+
+      {/* AI 投递结果 Toast */}
+      {applyResult && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {applyResult.success ? (
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm max-w-md">
+              <div className="flex items-center gap-2 font-bold mb-2">
+                <Rocket size={15} className="text-emerald-400" />
+                <span>AI 智能投递完成</span>
+              </div>
+              <div className="space-y-1 text-slate-300 text-xs">
+                <p>已投递「<span className="text-indigo-300 font-bold">{applyResult.job_title}</span>」{applyResult.company && <span className="text-slate-400"> · {applyResult.company}</span>}</p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
+                  <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">加入{applyResult.ai_queue || 'AI筛选队列'}</span>
+                </div>
+                {applyResult.ai_reason && <p className="text-slate-400 mt-1">💡 {applyResult.ai_reason}</p>}
+                {applyResult.ai_suggestion && <p className="text-amber-400 mt-0.5">📝 {applyResult.ai_suggestion}</p>}
+                {applyResult.tokens_used > 0 && <p className="text-slate-500 mt-1 text-[10px]">消耗 {applyResult.tokens_used} tokens · {applyResult.model_name || 'AI'}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl text-sm font-bold flex items-center gap-2">
+              <XCircle size={16} className="text-red-400" />
+              {applyResult.message}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -6966,7 +7859,7 @@ const CandidateProfileView = () => {
       </div>
 
       {/* 个人信息头部 */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-2xl p-8 mb-8 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-lg p-8 mb-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="flex items-center gap-6 relative z-10">
           <div className="w-24 h-24 bg-white/20 backdrop-blur text-white flex items-center justify-center text-4xl font-black rounded-xl">
@@ -6996,7 +7889,7 @@ const CandidateProfileView = () => {
         <div className="space-y-6">
           {/* 关于我 */}
           {displayProfile.summary && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">关于我</h3>
               <p className="text-slate-700 text-sm leading-relaxed">{displayProfile.summary}</p>
             </div>
@@ -7004,7 +7897,7 @@ const CandidateProfileView = () => {
 
           {/* 技能认证 */}
           {skillCertifications.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">技能认证</h3>
               <div className="space-y-3">
                 {skillCertifications.map((cert, i) => (
@@ -7033,7 +7926,7 @@ const CandidateProfileView = () => {
         {/* 右侧主要内容 */}
         <div className="lg:col-span-2 space-y-6">
           {/* 教育背景 */}
-          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                 <GraduationCap size={18} className="text-emerald-600" /> 教育背景
@@ -7095,7 +7988,7 @@ const CandidateProfileView = () => {
           </div>
 
           {/* 工作经历 */}
-          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                 <Briefcase size={18} className="text-indigo-600" /> 工作经历
@@ -7156,7 +8049,7 @@ const CandidateProfileView = () => {
 
           {/* 项目经验 */}
           {(displayProfile.projects?.length > 0) && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                   <Rocket size={18} className="text-amber-500" /> 项目经验
@@ -7261,7 +8154,7 @@ const PublicCandidateProfileView = () => {
       </div>
 
       {/* 个人信息头部 */}
-      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-2xl p-8 mb-8 text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 rounded-lg p-8 mb-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="flex items-center gap-6 relative z-10">
           <div className="w-24 h-24 bg-white/20 backdrop-blur text-white flex items-center justify-center text-4xl font-black rounded-xl">
@@ -7288,14 +8181,14 @@ const PublicCandidateProfileView = () => {
         <div className="space-y-6">
           {/* 关于我 */}
           {dp.summary && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">关于我</h3>
               <p className="text-slate-700 text-sm leading-relaxed">{dp.summary}</p>
             </div>
           )}
 
           {/* 联系方式 */}
-          <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-100 shadow-sm">
+          <div className="bg-emerald-50 rounded-lg p-6 border border-emerald-100 shadow-sm">
             <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider mb-4 flex items-center gap-2">
               <Phone size={14} /> 联系方式
             </h3>
@@ -7332,7 +8225,7 @@ const PublicCandidateProfileView = () => {
 
           {/* 能力雷达图 */}
           {dp.radarData.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <BarChart3 size={14} /> 核心竞争力
               </h3>
@@ -7342,7 +8235,7 @@ const PublicCandidateProfileView = () => {
 
           {/* 认证 */}
           {dp.certifications?.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Award size={14} /> 专业认证
               </h3>
@@ -7364,7 +8257,7 @@ const PublicCandidateProfileView = () => {
 
           {/* 获奖 */}
           {dp.awards?.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Trophy size={14} /> 获奖经历
               </h3>
@@ -7389,7 +8282,7 @@ const PublicCandidateProfileView = () => {
         {/* 右侧主要内容 */}
         <div className="lg:col-span-2 space-y-6">
           {/* 教育背景 */}
-          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
               <GraduationCap size={18} className="text-emerald-600" /> 教育背景
             </h3>
@@ -7421,7 +8314,7 @@ const PublicCandidateProfileView = () => {
           </div>
 
           {/* 工作经历 */}
-          <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
             <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
               <Briefcase size={18} className="text-indigo-600" /> 工作经历
             </h3>
@@ -7455,7 +8348,7 @@ const PublicCandidateProfileView = () => {
 
           {/* 项目经验 */}
           {dp.projects.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
                 <Rocket size={18} className="text-amber-500" /> 项目经验
               </h3>
@@ -7484,7 +8377,7 @@ const PublicCandidateProfileView = () => {
 
           {/* AI 面试问题 */}
           {dp.interviewQuestions?.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
                 <Bot size={18} className="text-indigo-600" /> AI 推荐面试题
               </h3>
@@ -7501,7 +8394,7 @@ const PublicCandidateProfileView = () => {
 
           {/* AI 优化建议 */}
           {dp.optimizationSuggestions?.length > 0 && (
-            <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2 mb-5">
                 <Sparkles size={18} className="text-violet-600" /> AI 优化建议
               </h3>
@@ -7643,6 +8536,12 @@ const EmployerDashboard = () => {
 
   const [myJobs, setMyJobs] = useState<any[]>([]);
   const [myJobsLoading, setMyJobsLoading] = useState(true);
+  
+  // 真实数据: 推荐人才、招聘流程、Token统计
+  const { data: realTalents, loading: talentsLoading } = useTalents(5);
+  const { data: realFlows, loading: flowsLoading } = useFlows(10, userId || undefined);
+  const { data: tokenStatsData } = useTokenStats(userId);
+
   useEffect(() => {
     if (userId) {
       setMyJobsLoading(true);
@@ -7869,45 +8768,49 @@ const EmployerDashboard = () => {
              )}
           </div>
 
-          {/* 推荐人才列表 */}
+          {/* 推荐人才列表 - 真实 API 数据 */}
           <div className="bg-white rounded-lg p-10 border border-slate-100 card-shadow overflow-hidden">
              <h2 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
                <Users2 className="text-indigo-600" /> 推荐人才
              </h2>
              <div className="space-y-4">
-                {MOCK_TALENTS.map((talent, idx) => (
-                  <div key={idx} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all">
+                {talentsLoading ? (
+                  <div className="text-center py-8"><Loader2 className="mx-auto animate-spin text-indigo-400" size={24} /></div>
+                ) : realTalents.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users2 className="mx-auto text-slate-300 mb-3" size={36} />
+                    <p className="text-sm text-slate-400">暂无推荐人才，发布岗位后 AI 将自动匹配</p>
+                  </div>
+                ) : realTalents.map((talent: any) => (
+                  <div key={talent.id} onClick={() => navigate(`/candidate/profile/${talent.id}`)} className="flex flex-col md:flex-row items-center justify-between p-6 bg-slate-50 rounded border border-slate-100 group hover:border-indigo-300 transition-all cursor-pointer">
                     <div className="flex items-center gap-5 w-full md:w-auto">
                        <div className="w-14 h-14 bg-indigo-600 text-white flex items-center justify-center text-xl font-black rounded shadow-lg ring-4 ring-indigo-50 group-hover:scale-105 transition-transform">
-                          {talent.name.charAt(0)}
+                          {(talent.name || '?').charAt(0)}
                        </div>
                        <div>
                           <div className="text-base font-black text-slate-900 tracking-tight">{talent.name}</div>
-                          <div className="text-xs font-bold text-slate-500 mt-0.5">{MOCK_JOBS.find(j => j.id === talent.targetJobId)?.title}</div>
+                          <div className="text-xs font-bold text-slate-500 mt-0.5">{talent.role} · {talent.experienceYears || 0}年经验</div>
                           <div className="flex items-center gap-2 mt-2">
                              <span className="text-xs font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                               <Zap size={10} /> {talent.matchScore}% 匹配
+                               <Zap size={10} /> {talent.matchScore || 0}% 匹配
                              </span>
-                             <span className="text-xs font-black uppercase text-slate-400 flex items-center gap-1">
-                               <Database size={10} /> {talent.tokensConsumed || 0} Tokens
-                             </span>
+                             {talent.skills?.slice(0, 3).map((s: string, si: number) => (
+                               <span key={si} className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{s}</span>
+                             ))}
                           </div>
                        </div>
                     </div>
                     <div className="flex items-center gap-6 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
                        <div className="text-right">
                           <div className="flex items-center gap-2 justify-end">
-                             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                             <span className="text-xs font-black text-slate-700">{talent.status}</span>
+                             <div className={`w-2 h-2 rounded-full ${talent.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                             <span className="text-xs font-black text-slate-700">{talent.status === 'active' ? '活跃候选人' : '待激活'}</span>
                           </div>
-                          <div className="text-xs text-slate-400 font-bold mt-1 uppercase tracking-widest">评估实时进行中</div>
+                          <div className="text-xs text-slate-400 font-medium mt-1">{talent.salary_range || '薪资面议'}</div>
                        </div>
-                       <button 
-                         onClick={() => navigate(`/employer/talent/${talent.id}`)}
-                         className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95"
-                       >
+                       <div className="p-3 text-indigo-600 group-hover:translate-x-1 transition-transform">
                          <ChevronRight size={18} />
-                       </button>
+                       </div>
                     </div>
                   </div>
                 ))}
@@ -7922,34 +8825,16 @@ const EmployerDashboard = () => {
              </div>
           </div>
 
-          <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow">
-             <h3 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2"><Activity size={18} className="text-indigo-600" /> 实时招聘情报</h3>
-             <div className="space-y-6">
-                <div className="flex gap-4 p-4 bg-slate-50 rounded group cursor-pointer hover:bg-slate-100 transition-all">
-                   <div className="w-10 h-10 bg-indigo-100 rounded flex items-center justify-center text-indigo-600 flex-shrink-0 group-hover:scale-110 transition-transform"><Sparkles size={18} /></div>
-                   <div>
-                      <p className="text-xs text-slate-600 leading-relaxed">Agent-Beta 在 Github 发现一名高匹配潜力的开源项目贡献者。</p>
-                      <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">5分钟前</span>
-                   </div>
-                </div>
-                <div className="flex gap-4 p-4 bg-slate-50 rounded group cursor-pointer hover:bg-slate-100 transition-all">
-                   <div className="w-10 h-10 bg-emerald-100 rounded flex items-center justify-center text-emerald-600 flex-shrink-0 group-hover:scale-110 transition-transform"><CheckCircle2 size={18} /></div>
-                   <div>
-                      <p className="text-xs text-slate-600 leading-relaxed">职位 "高级 AI 工程师" 已成功对接 3 名 A+ 级候选人。</p>
-                      <span className="text-xs text-slate-400 font-bold uppercase mt-1 block">12分钟前</span>
-                   </div>
-                </div>
-             </div>
-          </div>
         </div>
 
         <div className="lg:col-span-4 space-y-10">
            <div className="bg-white rounded-lg border border-slate-100 card-shadow overflow-hidden">
              <div className="grid grid-cols-1 divide-y divide-slate-100">
                {[
-                 { label: '平均招聘周期', value: '42.5小时', icon: Clock, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                 { label: '匹配成功率', value: '91.2%', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                 { label: '总 Token 消耗', value: '1.2M', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
+                 { label: '活跃岗位数', value: `${myJobs.filter(j => j.status === 'active').length} 个`, icon: Briefcase, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                 { label: '候选人总数', value: `${realTalents.length} 人`, icon: Users2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                 { label: '招聘流程', value: `${(realFlows || []).length} 个`, icon: TrendingUp, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+                 { label: 'Token 余额', value: tokenStatsData?.balance_display || '0', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' },
                ].map((card, i) => (
                  <div key={i} className="p-6">
                    <AnimatedStatItem 
@@ -8061,7 +8946,7 @@ const EnterpriseHomeView = () => {
         <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-8">
           <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回管理后台
         </button>
-        <div className="bg-white rounded-2xl p-12 border border-slate-100 shadow-xl text-center">
+        <div className="bg-white rounded-lg p-12 border border-slate-100 shadow-xl text-center">
           <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
             <Building2 size={48} className="text-indigo-600" />
           </div>
@@ -8089,7 +8974,7 @@ const EnterpriseHomeView = () => {
       </button>
 
       {/* 顶部 Banner */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 relative mb-8">
+      <div className="bg-white rounded-lg shadow-xl overflow-hidden border border-slate-100 relative mb-8">
         <div className="h-[240px] relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-800">
             <div className="absolute inset-0 opacity-10">
@@ -8099,7 +8984,7 @@ const EnterpriseHomeView = () => {
           </div>
           <div className="absolute bottom-0 left-0 w-full p-8 md:p-10 text-white flex flex-col md:flex-row items-end justify-between gap-6">
             <div className="flex items-center gap-6">
-              <div className="w-24 h-24 bg-white rounded-2xl p-5 shadow-2xl flex-shrink-0 border-2 border-white/50">
+              <div className="w-24 h-24 bg-white rounded-lg p-5 shadow-2xl flex-shrink-0 border-2 border-white/50">
                 <Building2 className="text-indigo-600 w-full h-full" />
               </div>
               <div>
@@ -8133,7 +9018,7 @@ const EnterpriseHomeView = () => {
         <div className="lg:col-span-8 space-y-8">
           
           {/* 企业简介 */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
             <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><FileText size={20} className="text-indigo-600" /></div>
               企业简介
@@ -8152,7 +9037,7 @@ const EnterpriseHomeView = () => {
           {(dc.industry || dc.size || dc.fundingStage) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {dc.industry && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
                   <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     <Briefcase size={20} className="text-amber-600" />
                   </div>
@@ -8161,7 +9046,7 @@ const EnterpriseHomeView = () => {
                 </div>
               )}
               {dc.size && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
                   <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     <Users size={20} className="text-indigo-600" />
                   </div>
@@ -8170,7 +9055,7 @@ const EnterpriseHomeView = () => {
                 </div>
               )}
               {dc.fundingStage && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
+                <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6 hover:shadow-md transition-all hover:border-indigo-200 group">
                   <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                     <TrendingUp size={20} className="text-emerald-600" />
                   </div>
@@ -8183,7 +9068,7 @@ const EnterpriseHomeView = () => {
 
           {/* 企业福利 */}
           {dc.benefits.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+            <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
               <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center"><Gift size={20} className="text-amber-600" /></div>
                 企业福利
@@ -8199,7 +9084,7 @@ const EnterpriseHomeView = () => {
           )}
 
           {/* 招聘中的岗位 */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-8 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
                 <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center"><Briefcase size={20} className="text-indigo-600" /></div>
@@ -8265,7 +9150,7 @@ const EnterpriseHomeView = () => {
 
           {/* 认证信息 */}
           {dc.isCertified && dc.certInfo && (
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-8">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-100 p-8">
               <h2 className="text-xl font-black text-slate-900 mb-5 flex items-center gap-3">
                 <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center"><Shield size={20} className="text-emerald-600" /></div>
                 企业认证
@@ -8273,25 +9158,25 @@ const EnterpriseHomeView = () => {
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {dc.certInfo.company_name && (
-                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-4 border border-emerald-100/50">
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">注册企业名称</p>
                     <p className="text-sm font-bold text-slate-800">{dc.certInfo.company_name}</p>
                   </div>
                 )}
                 {dc.certInfo.credit_code && (
-                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-4 border border-emerald-100/50">
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">统一社会信用代码</p>
                     <p className="text-sm font-bold text-slate-800">{dc.certInfo.credit_code}</p>
                   </div>
                 )}
                 {dc.certInfo.legal_person && (
-                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-4 border border-emerald-100/50">
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">法定代表人</p>
                     <p className="text-sm font-bold text-slate-800">{dc.certInfo.legal_person}</p>
                   </div>
                 )}
                 {dc.certInfo.registered_capital && (
-                  <div className="bg-white/80 backdrop-blur rounded-xl p-4 border border-emerald-100/50">
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-4 border border-emerald-100/50">
                     <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">注册资本</p>
                     <p className="text-sm font-bold text-slate-800">{dc.certInfo.registered_capital}</p>
                   </div>
@@ -8305,7 +9190,7 @@ const EnterpriseHomeView = () => {
         <div className="lg:col-span-4 space-y-6">
           
           {/* 资料完善度 */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6">
             <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2">
               <Activity size={18} className="text-indigo-600" /> 资料完善度
             </h3>
@@ -8326,7 +9211,7 @@ const EnterpriseHomeView = () => {
           </div>
           
           {/* 联系信息 */}
-          <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+          <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-lg p-6 text-white shadow-xl relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/5 rounded-full blur-xl"></div>
             <h3 className="text-base font-black mb-5 flex items-center gap-2 relative z-10">
               <Phone size={18} /> 联系信息
@@ -8375,7 +9260,7 @@ const EnterpriseHomeView = () => {
           </div>
 
           {/* 公司地址 */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6">
             <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2">
               <MapPin size={18} className="text-indigo-600" /> 公司地址
             </h3>
@@ -8387,7 +9272,7 @@ const EnterpriseHomeView = () => {
           </div>
 
           {/* 快捷操作 */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+          <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6">
             <h3 className="text-base font-black text-slate-900 mb-4">快捷操作</h3>
             <div className="space-y-2.5">
               <button onClick={() => navigate('/settings?tab=General')} className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-700 font-bold text-sm transition-all flex items-center gap-2.5">
@@ -8408,217 +9293,44 @@ const EnterpriseHomeView = () => {
 };
 
 
+// TalentDetailView — 自动查找候选人最新 flow 并跳转至流程详情页
 const TalentDetailView = () => {
   const { talentId } = useParams();
   const navigate = useNavigate();
-  const [talent, setTalent] = useState<any>(null);
-  const [talentLoading, setTalentLoading] = useState(true);
-  
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
     if (!talentId) return;
-    // 先尝试从 MOCK_TALENTS 查找
-    const mock = MOCK_TALENTS.find(t => t.id === talentId);
-    if (mock) {
-      setTalent(mock);
-      setTalentLoading(false);
-      return;
-    }
-    // 从后端加载真实候选人数据
     (async () => {
       try {
-        const res = await fetch(`/api/v1/public/talents/${talentId}`);
+        const res = await fetch(`/api/v1/public/flows?candidate_id=${talentId}&limit=1`);
         if (res.ok) {
           const data = await res.json();
-          setTalent(data);
+          const flows = Array.isArray(data) ? data : data.items || [];
+          if (flows.length > 0 && flows[0].id) {
+            navigate(`/workbench/flow/${flows[0].id}`, { replace: true });
+            return;
+          }
         }
-      } catch (e) {
-        console.error('加载候选人详情失败:', e);
-      } finally {
-        setTalentLoading(false);
-      }
+      } catch {}
+      setChecking(false);
     })();
-  }, [talentId]);
+  }, [talentId, navigate]);
 
-  if (talentLoading) {
+  if (checking) {
     return (
       <div className="pt-40 text-center animate-pulse">
         <Loader2 className="animate-spin mx-auto text-indigo-600 mb-4" size={48} />
-        <p className="text-slate-500 font-bold">正在调取多智能体评估档案...</p>
-      </div>
-    );
-  }
-
-  if (!talent) {
-    return (
-      <div className="pt-40 text-center">
-        <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
-        <p className="text-slate-500 font-bold">候选人档案未找到</p>
-        <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">返回</button>
+        <p className="text-slate-500 font-bold">正在调取候选人档案...</p>
       </div>
     );
   }
 
   return (
-    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-10 font-black transition-colors group">
-        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回工作台
-      </button>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8 space-y-12">
-           {/* 顶部档案卡片 */}
-           <div className="bg-white rounded p-12 border border-slate-100 card-shadow flex flex-col md:flex-row gap-10 items-center">
-              <div className="w-40 h-40 bg-indigo-600 text-white flex items-center justify-center text-5xl font-black rounded-lg shadow-2xl ring-8 ring-indigo-50">
-                 {talent.name.charAt(0)}
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                 <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                    <h1 className="text-5xl font-black text-slate-900 tracking-tight">{talent.name}</h1>
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-black uppercase tracking-widest border border-indigo-100">
-                       <Zap size={14} /> 匹配分 {talent.matchScore}%
-                    </span>
-                 </div>
-                 <p className="text-xl text-indigo-600 font-black mb-6">{talent.role} · {talent.experienceYears} 年实战经验</p>
-                 <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-                    {talent.skills.map((s, i) => (
-                       <span key={i} className="px-4 py-2 bg-slate-50 text-slate-500 text-xs font-bold rounded border border-slate-100">{s}</span>
-                    ))}
-                 </div>
-              </div>
-           </div>
-
-           {/* AI 智能画像综述 */}
-           <div className="bg-indigo-50 rounded-xl p-8 border border-indigo-100 shadow-sm relative overflow-hidden">
-              <Sparkles className="absolute -right-4 -bottom-4 w-32 h-32 text-indigo-200" />
-              <h3 className="text-xl font-black text-indigo-900 mb-6 flex items-center gap-3 relative z-10">
-                 <Bot size={24} className="text-indigo-600" /> AI 智能画像综述
-              </h3>
-              <p className="text-base leading-relaxed text-indigo-800 font-medium relative z-10">
-                 “{talent.summary}”
-              </p>
-              <div className="mt-6 pt-4 border-t border-indigo-200 flex flex-wrap gap-6 relative z-10">
-                 <div>
-                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">活跃状态</div>
-                    <div className="text-sm font-black text-indigo-700">{talent.status}</div>
-                 </div>
-                 <div>
-                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Token 消耗</div>
-                    <div className="text-sm font-black text-indigo-700">{talent.tokensConsumed}</div>
-                 </div>
-              </div>
-           </div>
-
-           {/* 人企交互记录 */}
-           <div className="bg-white rounded-xl p-8 border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                 <Building2 size={22} className="text-indigo-600" /> 我司交互记录
-              </h3>
-              <div className="space-y-4">
-                 {[
-                    { type: '投递', time: '2024-01-02', detail: '主动投递 高级AI工程师', status: '已完成', icon: 'Send', color: 'bg-emerald-100 text-emerald-600' },
-                    { type: '查看', time: '2024-01-03', detail: 'HR 查看简历', status: '已完成', icon: 'Eye', color: 'bg-blue-100 text-blue-600' },
-                    { type: '面试', time: '2024-01-05', detail: 'AI 模拟面试', status: '已完成', icon: 'Users', color: 'bg-purple-100 text-purple-600' },
-                    { type: '背调', time: '2024-01-08', detail: '背景调查', status: '已完成', icon: 'ShieldCheck', color: 'bg-amber-100 text-amber-600' },
-                    { type: '入职', time: '2024-01-15', detail: '发放 Offer', status: '待确认', icon: 'FileCheck', color: 'bg-rose-100 text-rose-600' },
-                 ].map((record, i) => (
-                    <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
-                       <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${record.color.split(' ')[0]}`}>
-                          {record.type === '投递' && <Send size={18} className={record.color.split(' ')[1]} />}
-                          {record.type === '查看' && <Eye size={18} className={record.color.split(' ')[1]} />}
-                          {record.type === '面试' && <Users size={18} className={record.color.split(' ')[1]} />}
-                          {record.type === '背调' && <ShieldCheck size={18} className={record.color.split(' ')[1]} />}
-                          {record.type === '入职' && <FileCheck size={18} className={record.color.split(' ')[1]} />}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                             <span className="font-bold text-slate-900 text-sm">{record.type}</span>
-                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                record.status === '已完成' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                             }`}>
-                                {record.status}
-                             </span>
-                          </div>
-                          <div className="text-xs text-slate-500">{record.detail}</div>
-                       </div>
-                       <div className="text-xs text-slate-400 font-medium">{record.time}</div>
-                    </div>
-                 ))}
-              </div>
-           </div>
-
-           {/* 面试历史回顾 */}
-           <div className="bg-white rounded p-12 border border-slate-100 card-shadow">
-              <h3 className="text-2xl font-black text-slate-900 mb-10 flex items-center gap-3">
-                 <History className="text-indigo-600" /> 面试流程实录 (Interview Logs)
-              </h3>
-              <div className="space-y-8">
-                 <div className="p-8 bg-slate-50 rounded border border-slate-100">
-                    <div className="flex justify-between items-center mb-6">
-                       <div className="font-black text-slate-900">AI 压力面试初试</div>
-                       <div className="text-xs font-bold text-emerald-600 px-3 py-1 bg-emerald-50 rounded-full">通过 (Pass)</div>
-                    </div>
-                    <div className="space-y-4">
-                       {talent.interviewQuestions?.map((q, i) => (
-                          <div key={i} className="flex gap-4">
-                             <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 font-black text-xs">Q{i+1}</div>
-                             <p className="text-sm text-slate-600 font-medium">{q}</p>
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
-
-        <div className="lg:col-span-4 space-y-12">
-           {/* 能力雷达图 */}
-           <div className="bg-white rounded p-10 border border-slate-100 card-shadow">
-              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
-                 <BarChart3 className="text-indigo-600" /> 核心竞争力雷达图
-              </h3>
-              <RadarChart data={talent.radarData} />
-           </div>
-
-           {/* 侧边信息条 - 候选人联系方式 */}
-           <div className="bg-emerald-50 rounded-xl p-8 border border-emerald-100 shadow-sm">
-              <h3 className="text-xl font-black text-emerald-900 mb-6 flex items-center gap-2">
-                 <Phone className="text-emerald-600" /> 候选人联系方式
-              </h3>
-              <div className="space-y-4">
-                 <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-emerald-100">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                       <Mail size={18} className="text-emerald-600" />
-                    </div>
-                    <div>
-                       <div className="text-xs text-emerald-600 font-bold uppercase">邮箱</div>
-                       <div className="text-sm font-bold text-slate-900">{talent.email || 'chen.wei@email.com'}</div>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-emerald-100">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                       <Smartphone size={18} className="text-emerald-600" />
-                    </div>
-                    <div>
-                       <div className="text-xs text-emerald-600 font-bold uppercase">手机</div>
-                       <div className="text-sm font-bold text-slate-900">{talent.phone || '+86 138-xxxx-xxxx'}</div>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-3 p-4 bg-white rounded-lg border border-emerald-100">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                       <MessageCircle size={18} className="text-emerald-600" />
-                    </div>
-                    <div>
-                       <div className="text-xs text-emerald-600 font-bold uppercase">在线联系方式</div>
-                       <div className="text-sm font-bold text-slate-900">WeChat: talent_{talent.name.charAt(0).toLowerCase()}{talent.id}</div>
-                    </div>
-                 </div>
-              </div>
-              <button className="w-full mt-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2">
-                 <Send size={16} /> 立即联系
-              </button>
-           </div>
-        </div>
-      </div>
+    <div className="pt-40 text-center">
+      <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
+      <p className="text-slate-500 font-bold">该候选人暂无招聘流程记录</p>
+      <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">返回</button>
     </div>
   );
 };
@@ -8947,7 +9659,11 @@ const JobPostDetailView = () => {
                         {app.last_action && <div className="text-xs text-slate-400 font-bold mt-1 max-w-[180px] truncate">{app.last_action}</div>}
                       </div>
                       {/* 反馈评价按钮已移至联系方式区域 */}
-                      {app.candidate_id ? (
+                      {app.flow_id ? (
+                        <button onClick={() => navigate(`/workbench/flow/${app.flow_id}`)} className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
+                          <ChevronRight size={18} />
+                        </button>
+                      ) : app.candidate_id ? (
                         <button onClick={() => navigate(`/employer/talent/${app.candidate_id}`)} className="p-3 bg-white text-indigo-600 rounded border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95">
                           <ChevronRight size={18} />
                         </button>
@@ -9182,7 +9898,7 @@ const JobPostDetailView = () => {
       {/* ===== 反馈评价模态框 ===== */}
       {feedbackModal.open && feedbackModal.candidate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in duration-200" onClick={() => setFeedbackModal({ open: false, candidate: null })}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md mx-4 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-slate-100">
               <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                 <MessageSquare size={20} className="text-amber-500" />
@@ -9512,12 +10228,12 @@ const LoginView = () => {
   const from = (location.state as any)?.from || null;
   
   // 从 URL 获取邀请码 ref 参数（hash 模式：#/login?ref=XXXX 或 #/register?ref=XXXX）
-  const refCode = useMemo(() => {
+  const refCodeFromUrl = useMemo(() => {
     const hash = window.location.hash || '';
     const qIdx = hash.indexOf('?');
     if (qIdx >= 0) {
       const params = new URLSearchParams(hash.slice(qIdx));
-      return params.get('ref') || '';
+      return (params.get('ref') || '').toUpperCase();
     }
     return '';
   }, []);
@@ -9526,6 +10242,7 @@ const LoginView = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(refCodeFromUrl);
   
   // 已登录则跳转（除非需要设置密码）
   useEffect(() => {
@@ -9671,7 +10388,7 @@ const LoginView = () => {
         const result = await login(emailFormat, 'code_' + verifyCode);
         if (!result.success) {
           // 尝试注册（新用户）
-          const regResult = await register({ email: emailFormat, password: 'code_' + verifyCode, name: phone, role: 'VIEWER', ref_code: refCode || undefined });
+          const regResult = await register({ email: emailFormat, password: 'code_' + verifyCode, name: phone, role: 'VIEWER', ref_code: inviteCode || undefined });
           if (!regResult.success) {
             setError('验证码错误或已过期');
           } else {
@@ -9723,7 +10440,7 @@ const LoginView = () => {
   if (showSetPassword) {
     return (
       <div className="pt-32 pb-20 px-6 min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <div className="bg-white rounded-2xl p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
+        <div className="bg-white rounded-lg p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500"></div>
           
           <div className="text-center mb-8">
@@ -9792,7 +10509,7 @@ const LoginView = () => {
 
   return (
     <div className="pt-32 pb-20 px-6 min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <div className="bg-white rounded-2xl p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
+      <div className="bg-white rounded-lg p-10 shadow-2xl border border-slate-100 max-w-md mx-auto relative overflow-hidden">
         {/* 品牌装饰 */}
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-rose-600"></div>
         
@@ -9907,6 +10624,30 @@ const LoginView = () => {
             </div>
           )}
           
+          {/* 邀请码（可选） */}
+          <div>
+            <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">
+              邀请码 <span className="text-slate-300 font-medium normal-case tracking-normal">（选填，双方获赠 Token）</span>
+            </label>
+            <div className="relative">
+              <Gift size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
+              <input 
+                type="text" 
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+                className="w-full bg-slate-50 border border-slate-100 rounded-lg py-3.5 pl-11 pr-4 font-bold tracking-widest text-slate-700 focus:ring-4 focus:ring-indigo-500/10 focus:bg-white focus:border-indigo-300 focus:outline-none transition-all placeholder:font-medium placeholder:tracking-normal" 
+                placeholder="输入好友邀请码"
+                maxLength={10}
+              />
+              {inviteCode && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-emerald-500">
+                  <CheckCircle size={14} />
+                  <span className="text-[10px] font-bold">双方获赠</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <button 
             type="submit"
             disabled={isLoading}
@@ -9976,7 +10717,7 @@ const RoleSelectionView = () => {
       if (from) {
         navigate(from);
       } else {
-        navigate('/workbench');
+        navigate('/ai-assistant');
       }
     }
   }, [isLoggedIn, needsRoleSelection, navigate, from]);
@@ -9986,11 +10727,11 @@ const RoleSelectionView = () => {
     setIsLoading(true);
     await setUserRole(role);
     setIsLoading(false);
-    // 如果有来源页面，跳转到来源页面，否则跳转到默认控制台
+    // 如果有来源页面，跳转到来源页面，否则跳转到 AI 助手
     if (from) {
       navigate(from);
     } else {
-      navigate(role === 'candidate' ? '/candidate' : '/employer');
+      navigate('/ai-assistant');
     }
   };
 
@@ -10013,7 +10754,7 @@ const RoleSelectionView = () => {
           <button
             onClick={() => handleSelectRole('candidate')}
             disabled={isLoading}
-            className={`group p-8 bg-white rounded-2xl border-2 transition-all hover:shadow-xl hover:border-emerald-300 active:scale-[0.98] disabled:opacity-50 ${
+            className={`group p-8 bg-white rounded-lg border-2 transition-all hover:shadow-xl hover:border-emerald-300 active:scale-[0.98] disabled:opacity-50 ${
               selectedRole === 'candidate' ? 'border-emerald-500 shadow-xl' : 'border-slate-100'
             }`}
           >
@@ -10044,7 +10785,7 @@ const RoleSelectionView = () => {
           <button
             onClick={() => handleSelectRole('employer')}
             disabled={isLoading}
-            className={`group p-8 bg-white rounded-2xl border-2 transition-all hover:shadow-xl hover:border-indigo-300 active:scale-[0.98] disabled:opacity-50 ${
+            className={`group p-8 bg-white rounded-lg border-2 transition-all hover:shadow-xl hover:border-indigo-300 active:scale-[0.98] disabled:opacity-50 ${
               selectedRole === 'employer' ? 'border-indigo-500 shadow-xl' : 'border-slate-100'
             }`}
           >
@@ -10206,6 +10947,9 @@ const AIAssistantView = () => {
   const profileType = userRole === 'employer' ? 'employer' : 'candidate';
   const { data: userProfileData, loading: profileLoading } = useProfile(userId, profileType);
   
+  // 投递统计数据（云端求职轮巡用）
+  const { data: aiFlowStats } = useFlowStats(userId);
+
   // 文件上传状态
   const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadingCertImage, setUploadingCertImage] = useState(false);
@@ -12194,7 +12938,7 @@ ${memCtx}
   // 处理邀请好友模式 URL 参数
   useEffect(() => {
     if (taskTypeFromUrl === 'invite') {
-      const userInviteLink = `https://devnors.ai/register?ref=${user?.email?.split('@')[0] || 'user'}${userId}`;
+      const userInviteLink = `${window.location.origin}${window.location.pathname}#/login?ref=${user?.invite_code || 'DEVNORS'}`;
       setInviteMode({
         active: true,
         step: 'intro',
@@ -12203,7 +12947,7 @@ ${memCtx}
       });
       
       // 添加邀请好友引导消息
-      const inviteMessage = `🎁 **邀请好友赚 Token**\n\n欢迎使用 Devnors 邀请奖励计划！\n\n**奖励规则：**\n• 每成功邀请 1 位好友注册，获得 **500 Token**\n• 好友完成首次使用，额外奖励 **200 Token**\n• 无上限，邀请越多，奖励越多！\n\n**您的专属邀请链接：**\n\`${userInviteLink}\`\n\n请输入以下操作：\n1️⃣ 复制邀请链接\n2️⃣ 查看邀请记录\n3️⃣ 了解更多奖励规则`;
+      const inviteMessage = `🎁 **邀请好友赚 Token**\n\n欢迎使用 Devnors 邀请奖励计划！\n\n**奖励规则：**\n• 每成功邀请 1 位好友注册，您获得 **50,000 Token**\n• 好友也获得 **20,000 Token** 额外奖励\n• 无上限，邀请越多，奖励越多！\n\n**您的专属邀请码：** \`${user?.invite_code || 'DEVNORS'}\`\n**邀请链接：** \`${userInviteLink}\`\n\n好友可以通过链接注册，或在注册时手动输入您的邀请码。\n\n请输入以下操作：\n1️⃣ 复制邀请链接\n2️⃣ 查看邀请记录\n3️⃣ 了解更多奖励规则`;
       setGeneralMessages([{role: 'assistant', content: inviteMessage}]);
       
       // 清除 URL 参数
@@ -12297,11 +13041,11 @@ ${memCtx}
       setTimeout(() => {
         let response = '';
         if (userInput.includes('1') || userInput.includes('复制') || userInput.includes('链接')) {
-          response = `📋 **邀请链接已准备好！**\n\n您的专属邀请链接：\n\`${inviteMode.inviteLink}\`\n\n**分享方式：**\n• 直接发送链接给好友\n• 分享到社交媒体\n• 发送邮件邀请\n\n💡 小贴士：告诉好友 Devnors 可以帮助他们：\n• 智能匹配理想职位\n• AI 优化简历\n• 模拟面试准备\n\n好友通过链接注册后，您将立即获得 500 Token 奖励！`;
+          response = `📋 **邀请链接已准备好！**\n\n**邀请链接：**\n\`${inviteMode.inviteLink}\`\n\n**邀请码：** \`${user?.invite_code || ''}\`\n\n**两种邀请方式：**\n• 方式一：直接分享链接，好友点击即可注册\n• 方式二：告诉好友您的邀请码，注册时手动输入\n\n好友注册后，您获得 **50,000 Token**，好友获得 **20,000 Token**！`;
         } else if (userInput.includes('2') || userInput.includes('记录') || userInput.includes('查看')) {
-          response = `📊 **邀请记录**\n\n**本月邀请统计：**\n• 已邀请：${inviteMode.inviteCount} 人\n• 已获得 Token：${inviteMode.inviteCount * 500}\n• 待发放奖励：0 Token\n\n**邀请明细：**\n${inviteMode.inviteCount === 0 ? '暂无邀请记录，快去分享您的邀请链接吧！' : '• 用户 A*** - 已注册 - +500 Token'}\n\n继续邀请好友，赚取更多 Token！`;
+          response = `📊 **邀请记录**\n\n**本月邀请统计：**\n• 已邀请：${inviteMode.inviteCount} 人\n• 已获得 Token：${(inviteMode.inviteCount * 50000).toLocaleString()}\n• 待发放奖励：0 Token\n\n**邀请明细：**\n${inviteMode.inviteCount === 0 ? '暂无邀请记录，快去分享您的邀请链接吧！' : '• 用户 A*** - 已注册 - +50,000 Token'}\n\n继续邀请好友，赚取更多 Token！`;
         } else if (userInput.includes('3') || userInput.includes('规则') || userInput.includes('了解')) {
-          response = `📜 **奖励规则详情**\n\n**基础奖励：**\n• 好友注册成功：+500 Token\n• 好友首次使用 AI 功能：+200 Token\n\n**额外奖励：**\n• 邀请满 5 人：额外 +1000 Token\n• 邀请满 10 人：额外 +3000 Token\n• 邀请满 20 人：额外 +8000 Token\n\n**注意事项：**\n• 奖励将在好友完成注册后 24 小时内发放\n• 同一设备/IP 仅计算一次有效邀请\n• 奖励 Token 可用于平台所有 AI 功能\n\n有其他问题吗？`;
+          response = `📜 **奖励规则详情**\n\n**基础奖励：**\n• 好友注册成功：您获得 **+50,000 Token**\n• 好友获得 **+20,000 Token** 额外奖励\n\n**邀请方式：**\n• 分享邀请链接（好友点击直接注册）\n• 分享邀请码（好友注册时手动输入）\n\n**注意事项：**\n• 奖励将在好友完成注册后即时发放\n• 同一设备/IP 仅计算一次有效邀请\n• 奖励 Token 可用于平台所有 AI 功能\n• 无邀请上限，邀请越多奖励越多\n\n有其他问题吗？`;
         } else {
           response = `我理解您说的是："${userInput}"\n\n关于邀请好友，我可以帮您：\n1️⃣ 复制邀请链接\n2️⃣ 查看邀请记录\n3️⃣ 了解更多奖励规则\n\n请输入对应数字或描述您的需求。`;
         }
@@ -13483,12 +14227,24 @@ ${memCtx}
           let welcomeMsg = '';
           
           if (isRunning) {
-            // 任务已在运行
+            // 任务已在运行 — 显示真实统计数据
             welcomeMsg = `🚀 **云端求职轮巡任务运行中！**\n\n`;
             welcomeMsg += `📋 **任务名称**：${taskTitle}\n`;
             welcomeMsg += `⏱️ **轮巡周期**：${days} 天\n`;
             welcomeMsg += `📊 **任务状态**：🟢 运行中\n\n`;
-            welcomeMsg += `---\n\n## 🤖 AI 正在云端为您工作\n\n`;
+            // 插入真实统计
+            if (aiFlowStats && aiFlowStats.applied > 0) {
+              welcomeMsg += `---\n\n### 📊 当前投递进度\n\n`;
+              welcomeMsg += `| 指标 | 数据 |\n`;
+              welcomeMsg += `|------|------|\n`;
+              welcomeMsg += `| 已扫描岗位 | **${aiFlowStats.viewed || 0}** 个 |\n`;
+              welcomeMsg += `| 已投递 | **${aiFlowStats.applied || 0}** 个 |\n`;
+              welcomeMsg += `| 已通过 | **${aiFlowStats.passed || 0}** 个 |\n`;
+              welcomeMsg += `| 进行中 | **${aiFlowStats.pending || 0}** 个 |\n`;
+              welcomeMsg += `| 未通过 | **${aiFlowStats.rejected || 0}** 个 |\n`;
+              welcomeMsg += `| 平均匹配度 | **${aiFlowStats.avgMatch || 0}%** |\n`;
+            }
+            welcomeMsg += `\n---\n\n## 🤖 AI 正在云端为您工作\n\n`;
             welcomeMsg += `• ⏰ 每小时扫描全网新增岗位\n`;
             welcomeMsg += `• 🎯 自动筛选匹配度 ≥ 85% 的岗位\n`;
             welcomeMsg += `• 📤 自动投递符合条件的岗位\n`;
@@ -15016,16 +15772,33 @@ ${recentContext}
           
           await new Promise(resolve => setTimeout(resolve, 2000));
           
-          let newSearchMsg = `📋 **新岗位搜索完成！**\n\n---\n\n找到 **8** 个新增匹配岗位：\n\n`;
-          newSearchMsg += `### ✅ 已自动投递（匹配度 ≥ 85%）\n\n`;
-          newSearchMsg += `1. **产品经理** - 快手\n`;
-          newSearchMsg += `   📊 匹配度: 89% | ✅ 已投递\n\n`;
-          newSearchMsg += `2. **高级产品经理** - B站\n`;
-          newSearchMsg += `   📊 匹配度: 86% | ✅ 已投递\n\n`;
-          newSearchMsg += `### ❌ 已跳过（匹配度 < 85%）\n\n`;
-          newSearchMsg += `3. **产品助理** - 拼多多 | 匹配度: 68% | 原因: 职级不匹配\n`;
-          newSearchMsg += `4. **运营经理** - 滴滴 | 匹配度: 72% | 原因: 岗位方向不符\n\n`;
-          newSearchMsg += `---\n\n💰 本次消耗: ${tokenCost} Token | 剩余: ${tokenBalance - tokenCost} Token`;
+          let newSearchMsg = '';
+          try {
+            const { getPublicFlows, getFlowStats } = await import('./services/apiService');
+            const realFlows = await getPublicFlows(50, userId);
+            const realStats = await getFlowStats(userId);
+            const passedFlows = realFlows.filter((f: any) => f.status === 'completed' || f.matchScore >= 85);
+            const skippedFlows = realFlows.filter((f: any) => f.status === 'rejected' && f.matchScore < 85);
+            
+            newSearchMsg = `📋 **岗位搜索完成！**\n\n---\n\n找到 **${realStats?.applied || 0}** 个匹配岗位：\n\n`;
+            if (passedFlows.length > 0) {
+              newSearchMsg += `### ✅ 已投递（匹配度 ≥ 85%）\n\n`;
+              passedFlows.slice(0, 5).forEach((f: any, i: number) => {
+                newSearchMsg += `${i + 1}. **${f.role}** - ${f.company}\n`;
+                newSearchMsg += `   📊 匹配度: ${f.matchScore}% | ${f.salary || '面议'} | ${f.status === 'completed' ? '✅ 已通过' : '📤 已投递'}\n\n`;
+              });
+            }
+            if (skippedFlows.length > 0) {
+              newSearchMsg += `### ❌ 未通过筛选\n\n`;
+              skippedFlows.slice(0, 3).forEach((f: any, i: number) => {
+                newSearchMsg += `${passedFlows.length + i + 1}. **${f.role}** - ${f.company} | 匹配度: ${f.matchScore}%\n`;
+              });
+              newSearchMsg += `\n`;
+            }
+            newSearchMsg += `---\n\n💰 本次消耗: ${tokenCost} Token | 剩余: ${tokenBalance - tokenCost} Token`;
+          } catch (err) {
+            newSearchMsg = `📋 **岗位搜索完成！**\n\n正在获取最新数据...\n\n💰 本次消耗: ${tokenCost} Token`;
+          }
           
           addJobMsg(newSearchMsg, 'assistant');
           setJobSearchMode(prev => ({ ...prev, isSearching: false, tokenUsed: prev.tokenUsed + tokenCost }));
@@ -15034,27 +15807,52 @@ ${recentContext}
         return;
       }
       
-      // 处理查看投递记录
+      // 处理查看投递记录 - 从后端获取真实数据
       if (jobSearchMode.completed && !jobSearchMode.isSearching && (userMessage.includes('查看投递') || userMessage.includes('投递记录'))) {
-        setTimeout(() => {
-          let recordMsg = `📋 **您的投递记录**\n\n---\n\n### 📬 已投递岗位\n\n`;
-          recordMsg += `| 岗位 | 公司 | 投递时间 | 状态 |\n`;
-          recordMsg += `|------|------|----------|------|\n`;
-          recordMsg += `| 高级产品经理 | 字节跳动 | 今天 | 🟡 待查看 |\n`;
-          recordMsg += `| 产品负责人 | 阿里巴巴 | 今天 | 🟢 已查看 |\n`;
-          recordMsg += `| 产品经理 | 美团 | 今天 | 🟡 待查看 |\n`;
-          recordMsg += `| 高级产品经理 | 腾讯 | 今天 | 🟡 待查看 |\n`;
-          recordMsg += `| 产品经理 | 快手 | 今天 | 🟡 待查看 |\n`;
-          recordMsg += `| 高级产品经理 | B站 | 今天 | 🟡 待查看 |\n\n`;
-          recordMsg += `---\n\n**状态说明**：\n`;
-          recordMsg += `• 🟡 待查看 - HR 尚未查看您的简历\n`;
-          recordMsg += `• 🟢 已查看 - HR 已查看，等待进一步反馈\n`;
-          recordMsg += `• 🔵 邀请面试 - 已收到面试邀请\n`;
-          recordMsg += `• 🔴 未通过 - 本次投递未通过筛选\n\n`;
-          recordMsg += `---\n\n📊 **查看更详细的投递进度和 AI 对接队列**\n\n`;
-          recordMsg += `[[LINK:前往工作台查看详情:/workbench:📊]]`;
-          
-          addJobMsg(recordMsg, 'assistant');
+        setTimeout(async () => {
+          try {
+            const { getPublicFlows, getFlowStats } = await import('./services/apiService');
+            const realFlows = await getPublicFlows(50, userId);
+            const realStats = await getFlowStats(userId);
+            
+            let recordMsg = `📋 **您的投递记录**\n\n---\n\n### 📬 已投递岗位 (${realStats?.applied || 0} 个)\n\n`;
+            
+            if (realFlows && realFlows.length > 0) {
+              recordMsg += `| 岗位 | 公司 | 匹配度 | 薪资 | 状态 |\n`;
+              recordMsg += `|------|------|--------|------|------|\n`;
+              realFlows.forEach((flow: any) => {
+                const statusIcon = flow.status === 'completed' ? '✅ 已通过' 
+                  : flow.status === 'rejected' ? '❌ 未通过' 
+                  : flow.status === 'screening' ? '🔍 筛选中' 
+                  : '📤 已投递';
+                recordMsg += `| ${flow.role || '未知职位'} | ${flow.company || '未知'} | ${flow.matchScore || 0}% | ${flow.salary || '面议'} | ${statusIcon} |\n`;
+              });
+              recordMsg += `\n---\n\n### 📊 汇总统计\n\n`;
+              recordMsg += `| 指标 | 数据 |\n`;
+              recordMsg += `|------|------|\n`;
+              recordMsg += `| 已扫描岗位 | **${realStats?.viewed || 0}** 个 |\n`;
+              recordMsg += `| 已投递 | **${realStats?.applied || 0}** 个 |\n`;
+              recordMsg += `| 已通过 | **${realStats?.passed || 0}** 个 |\n`;
+              recordMsg += `| 进行中 | **${realStats?.pending || 0}** 个 |\n`;
+              recordMsg += `| 未通过 | **${realStats?.rejected || 0}** 个 |\n`;
+              recordMsg += `| 平均匹配度 | **${realStats?.avgMatch || 0}%** |\n`;
+            } else {
+              recordMsg += `暂无投递记录。\n`;
+            }
+            
+            recordMsg += `\n---\n\n**状态说明**：\n`;
+            recordMsg += `• ✅ 已通过 - 筛选通过，已互换联系方式\n`;
+            recordMsg += `• 📤 已投递 - AI 已投递，等待企业回复\n`;
+            recordMsg += `• 🔍 筛选中 - 企业正在筛选评估\n`;
+            recordMsg += `• ❌ 未通过 - 本次投递未通过筛选\n\n`;
+            recordMsg += `---\n\n📊 **查看更详细的投递进度和 AI 对接队列**\n\n`;
+            recordMsg += `[[LINK:前往工作台查看详情:/workbench:📊]]`;
+            
+            addJobMsg(recordMsg, 'assistant');
+          } catch (err) {
+            console.error('[JobSearch] 获取投递记录失败:', err);
+            addJobMsg('⚠️ 获取投递记录失败，请稍后重试。\n\n[[LINK:前往工作台查看详情:/workbench:📊]]', 'assistant');
+          }
           setIsTyping(false);
         }, 500);
         return;
@@ -15240,20 +16038,44 @@ ${recentContext}
                 
                 addJobMsg(taskStartedMsg, 'assistant');
                 
-                // 模拟首次投递结果
+                // 从后端获取真实投递数据
                 await new Promise(resolve => setTimeout(resolve, 3000));
                 
                 let firstBatchMsg = `📬 **首轮投递完成！**\n\n`;
                 firstBatchMsg += `---\n\n### ✅ 本轮投递 (${new Date().toLocaleTimeString('zh-CN')})\n\n`;
-                firstBatchMsg += `| 岗位 | 公司 | 匹配度 | 状态 |\n`;
-                firstBatchMsg += `|------|------|--------|------|\n`;
-                firstBatchMsg += `| 高级产品经理 | 字节跳动 | 94% | ✅ 已投递 |\n`;
-                firstBatchMsg += `| 产品负责人 | 阿里巴巴 | 91% | ✅ 已投递 |\n`;
-                firstBatchMsg += `| 产品经理 | 美团 | 88% | ✅ 已投递 |\n`;
-                firstBatchMsg += `| 产品经理 | 腾讯 | 85% | ✅ 已投递 |\n\n`;
-                firstBatchMsg += `---\n\n⏰ **下次轮巡**: 1小时后\n\n`;
-                firstBatchMsg += `💰 **本次消耗**: 200 Token\n\n`;
-                firstBatchMsg += `---\n\n🔔 AI 将持续在云端为您工作，有新的投递或面试邀请会立即通知您！`;
+                try {
+                  const { getPublicFlows, getFlowStats } = await import('./services/apiService');
+                  const realFlows = await getPublicFlows(50, userId);
+                  const realStats = await getFlowStats(userId);
+                  
+                  if (realFlows && realFlows.length > 0) {
+                    firstBatchMsg += `| 岗位 | 公司 | 匹配度 | 薪资 | 状态 |\n`;
+                    firstBatchMsg += `|------|------|--------|------|------|\n`;
+                    realFlows.forEach((flow: any) => {
+                      const statusIcon = flow.status === 'completed' ? '✅ 已通过' 
+                        : flow.status === 'rejected' ? '❌ 未通过' 
+                        : flow.status === 'screening' ? '🔍 筛选中' 
+                        : '📤 已投递';
+                      firstBatchMsg += `| ${flow.role || '未知职位'} | ${flow.company || '未知'} | ${flow.matchScore || 0}% | ${flow.salary || '面议'} | ${statusIcon} |\n`;
+                    });
+                    firstBatchMsg += `\n---\n\n### 📊 投递统计\n\n`;
+                    firstBatchMsg += `| 指标 | 数据 |\n`;
+                    firstBatchMsg += `|------|------|\n`;
+                    firstBatchMsg += `| 已扫描岗位 | **${realStats?.viewed || 0}** 个 |\n`;
+                    firstBatchMsg += `| 已投递 | **${realStats?.applied || 0}** 个 |\n`;
+                    firstBatchMsg += `| 已通过 | **${realStats?.passed || 0}** 个 |\n`;
+                    firstBatchMsg += `| 进行中 | **${realStats?.pending || 0}** 个 |\n`;
+                    firstBatchMsg += `| 未通过 | **${realStats?.rejected || 0}** 个 |\n`;
+                    firstBatchMsg += `| 平均匹配度 | **${realStats?.avgMatch || 0}%** |\n`;
+                  } else {
+                    firstBatchMsg += `暂无投递记录，AI 正在搜索匹配岗位中...\n`;
+                  }
+                } catch (err) {
+                  console.error('[JobSearch] 获取真实投递数据失败:', err);
+                  firstBatchMsg += `正在获取投递数据...\n`;
+                }
+                firstBatchMsg += `\n---\n\n⏰ **下次轮巡**: 1小时后\n\n`;
+                firstBatchMsg += `🔔 AI 将持续在云端为您工作，有新的投递或面试邀请会立即通知您！`;
                 
                 addJobMsg(firstBatchMsg, 'assistant');
                 
@@ -15638,7 +16460,20 @@ ${recentContext}
         history: currentMessages.map(m => ({role: m.role, content: m.content})),
         model: selectedModel,
         context: contextStr || undefined,
+        user_id: userId,
       });
+      
+      // 检查余额不足
+      if (result.error === 'insufficient_tokens') {
+        (window as any).__showTokenInsufficient?.(result.balance || 0);
+        const insufficientMsg = {role: 'assistant' as const, content: `⚠️ Token 余额不足，当前余额 ${(result.balance || 0).toLocaleString()} tokens，本次操作预估需要 ${(result.required || 0).toLocaleString()} tokens。请充值后继续使用。`};
+        if (selectedTask) {
+          setTaskMessages(prev => ({...prev, [selectedTask.id]: [...(prev[selectedTask.id] || []), insufficientMsg]}));
+        } else {
+          setGeneralMessages(prev => [...prev, insufficientMsg]);
+        }
+        return;
+      }
       
       const aiResponse = {role: 'assistant' as const, content: result.response};
       
@@ -17240,27 +18075,26 @@ ${recentContext}
                         <span className="text-slate-300">|</span>
                         <span className="flex items-center gap-1">
                           <Eye size={12} className="text-blue-500" />
-                          查看岗位 <strong className="text-blue-600">{(() => {
-                            const createdStr = selectedTask.created_at || selectedTask.createdAt || selectedTask.updated_at || selectedTask.updatedAt;
-                            if (!createdStr) return 15;
-                            const created = new Date(createdStr.replace(' ', 'T'));
-                            if (isNaN(created.getTime())) return 15;
-                            const diffHours = Math.max(0.1, (new Date().getTime() - created.getTime()) / (1000 * 60 * 60));
-                            return Math.floor(diffHours * 50) + 15;
-                          })()}</strong> 个
+                          查看岗位 <strong className="text-blue-600">{aiFlowStats?.viewed || 0}</strong> 个
                         </span>
                         <span className="text-slate-300">|</span>
                         <span className="flex items-center gap-1">
                           <Send size={12} className="text-emerald-500" />
-                          投递岗位 <strong className="text-emerald-600">{(() => {
-                            const createdStr = selectedTask.created_at || selectedTask.createdAt || selectedTask.updated_at || selectedTask.updatedAt;
-                            if (!createdStr) return 4;
-                            const created = new Date(createdStr.replace(' ', 'T'));
-                            if (isNaN(created.getTime())) return 4;
-                            const diffHours = Math.max(0.1, (new Date().getTime() - created.getTime()) / (1000 * 60 * 60));
-                            return Math.floor(diffHours * 5) + 4;
-                          })()}</strong> 个
+                          投递岗位 <strong className="text-emerald-600">{aiFlowStats?.applied || 0}</strong> 个
                         </span>
+                        <span className="text-slate-300">|</span>
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-emerald-500" />
+                          通过 <strong className="text-emerald-600">{aiFlowStats?.passed || 0}</strong>
+                        </span>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate('/workbench'); }}
+                          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all whitespace-nowrap shadow-sm active:scale-95"
+                        >
+                          <Activity size={10} /> 查看详情
+                          <ChevronRight size={10} />
+                        </button>
                       </>
                     ) : (
                       <>
@@ -17463,14 +18297,16 @@ ${recentContext}
                                   // 先获取最新的任务列表
                                   const latestTasks = await getTasks(userId);
                                   
-                                  // 找到对应任务
+                                  // 找到对应任务（支持精确匹配、包含匹配、类型匹配）
                                   let targetTask = latestTasks.find((t: any) => 
                                     t.title === part.title || 
                                     t.title?.includes(part.title) || 
+                                    part.title?.includes(t.title) ||
                                     (part.taskType === 'enterprise_verification' && t.title === '完成企业认证') ||
                                     (part.taskType === 'enterprise_profile' && t.title === '完善企业资料') ||
                                     (part.taskType === 'profile_complete' && t.title === '完善简历资料') ||
-                                    (part.taskType === 'personal_verification' && t.title === '完善个人认证信息')
+                                    (part.taskType === 'personal_verification' && t.title === '完善个人认证信息') ||
+                                    (part.taskType === 'cloud_job' && t.title?.includes('云端求职轮巡'))
                                   );
                                   
                                   console.log('[TaskCard] 查找任务:', part.title, part.taskType, '找到:', targetTask?.title);
@@ -17520,6 +18356,18 @@ ${recentContext}
                                         icon: 'FileText',
                                         user_id: userId,
                                       };
+                                    } else if (part.taskType === 'cloud_job') {
+                                      // 云端求职轮巡任务 — 自动创建
+                                      const shortId = String(Date.now()).slice(-6);
+                                      taskData = {
+                                        title: part.title || `云端求职轮巡 #${shortId}`,
+                                        description: 'Devnors 1.0 Ultra - 30天在线轮巡投递',
+                                        priority: 'HIGH',
+                                        source: 'AGENT',
+                                        todo_type: 'CANDIDATE',
+                                        icon: 'Rocket',
+                                        user_id: userId,
+                                      };
                                     }
                                     
                                     if (taskData) {
@@ -17535,7 +18383,7 @@ ${recentContext}
                                       // 重新获取任务列表以找到新创建的任务
                                       const updatedTasks = await getTasks(userId);
                                       targetTask = updatedTasks.find((t: any) => 
-                                        t.title === taskData.title
+                                        t.title === taskData.title || t.title?.includes('云端求职轮巡')
                                       );
                                     }
                                   }
@@ -17543,6 +18391,11 @@ ${recentContext}
                                   if (targetTask) {
                                     console.log('[TaskCard] 选中任务:', targetTask.title);
                                     setSelectedTask(targetTask);
+                                  } else {
+                                    console.warn('[TaskCard] 未找到任务，尝试刷新列表');
+                                    if (typeof refetchTasks === 'function') {
+                                      await refetchTasks();
+                                    }
                                   }
                                 } catch (error) {
                                   console.error('[TaskCard] 处理任务点击失败:', error);
@@ -17652,7 +18505,7 @@ ${recentContext}
           
           {/* 输入区域 */}
           <div className="p-4 bg-white border-t border-slate-100">
-            <div className="flex gap-2 bg-slate-50 rounded-xl p-2 border border-slate-200">
+            <div className="flex gap-2 bg-slate-50 rounded-lg p-2 border border-slate-200">
               {/* 隐藏的文件上传 input */}
               <input
                 ref={fileInputRef}
@@ -18403,7 +19256,7 @@ const JobManagementView = () => {
       {/* 删除确认弹窗 */}
       {deleteConfirm !== null && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-black text-slate-900 mb-2">确认删除</h3>
             <p className="text-sm text-slate-500 mb-6">删除后岗位信息将无法恢复，确认要删除这个岗位吗？</p>
             <div className="flex gap-3">
@@ -18481,6 +19334,67 @@ const JobManagementView = () => {
 const JobRecommendListView = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const userId = user?.id || 0;
+
+  // AI 投递状态
+  const [applyingId, setApplyingId] = useState<number | null>(null);
+  const [appliedIds, setAppliedIds] = useState<Set<number>>(new Set());
+  const [applyDetails, setApplyDetails] = useState<Record<number, any>>({});
+  const [applyResult, setApplyResult] = useState<any>(null);
+
+  // 页面加载时获取已投递的岗位
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/v1/public/my-applies?user_id=${userId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.success && data.applies) {
+          const ids = new Set<number>();
+          const details: Record<number, any> = {};
+          Object.values(data.applies).forEach((a: any) => {
+            ids.add(a.job_id);
+            details[a.job_id] = a;
+          });
+          setAppliedIds(ids);
+          setApplyDetails(details);
+        }
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  const handleQuickApply = async (e: React.MouseEvent, jobId: number) => {
+    e.stopPropagation();
+    if (appliedIds.has(jobId) || applyingId === jobId) return;
+    setApplyingId(jobId);
+    setApplyResult(null);
+    try {
+      const res = await fetch('/api/v1/public/quick-apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId, user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppliedIds(prev => new Set(prev).add(jobId));
+        setApplyDetails(prev => ({ ...prev, [jobId]: {
+          job_id: jobId,
+          flow_id: data.flow_id,
+          job_title: data.job_title,
+          company: data.company || '',
+          match_score: data.match_score,
+          details: data.ai_reason || '',
+          last_action: data.ai_queue || 'AI筛选队列',
+        }}));
+        setApplyResult({ success: true, ...data });
+      } else {
+        setApplyResult({ success: false, message: data.error || '投递失败' });
+      }
+    } catch {
+      setApplyResult({ success: false, message: '网络异常，请重试' });
+    }
+    setApplyingId(null);
+    setTimeout(() => setApplyResult(null), 5000);
+  };
 
   // 筛选状态
   const [searchText, setSearchText] = useState('');
@@ -18599,12 +19513,6 @@ const JobRecommendListView = () => {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">企业岗位推荐</h1>
           <p className="text-sm text-slate-500">AI 智能体为您匹配的优质岗位，共 <span className="font-black text-indigo-600">{total}</span> 个岗位</p>
         </div>
-        <button
-          onClick={() => navigate('/candidate/delivery')}
-          className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-95"
-        >
-          <Rocket size={16} /> AI 对接投递
-        </button>
       </div>
 
       {/* 搜索 + 筛选合并 */}
@@ -18781,12 +19689,38 @@ const JobRecommendListView = () => {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate('/candidate/delivery'); }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
-                    >
-                      <Rocket size={13} /> AI 投递
-                    </button>
+                    {appliedIds.has(job.id) ? (
+                      <div className="relative group/apply">
+                        <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-default">
+                          <CheckCircle2 size={13} /> 已投递
+                        </span>
+                        {applyDetails[job.id] && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); navigate(`/workbench/flow/${applyDetails[job.id].flow_id}`); }}
+                            className="absolute right-0 top-full mt-2 w-64 bg-slate-900 text-white rounded-xl shadow-2xl p-4 z-50 opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 text-xs cursor-pointer hover:bg-slate-800"
+                          >
+                            <div className="flex items-center gap-1.5 font-bold mb-2 text-emerald-300">
+                              <CheckCircle2 size={12} /> AI 投递详情
+                            </div>
+                            <p className="text-slate-300 mb-1">岗位：<span className="text-indigo-300 font-bold">{applyDetails[job.id].job_title}</span></p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">匹配度 {applyDetails[job.id].match_score}%</span>
+                            </div>
+                            {applyDetails[job.id].details && <p className="text-slate-400 mt-1">{applyDetails[job.id].details}</p>}
+                            <p className="text-indigo-400 mt-2 font-bold flex items-center gap-1">查看投递详情 <ChevronRight size={11} /></p>
+                            <div className="absolute -top-1.5 right-6 w-3 h-3 bg-slate-900 rotate-45"></div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => handleQuickApply(e, job.id)}
+                        disabled={applyingId === job.id}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                      >
+                        {applyingId === job.id ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />} {applyingId === job.id ? 'AI 分析中...' : 'AI 投递'}
+                      </button>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/candidate/job/${job.id}`); }}
                       className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"
@@ -18855,6 +19789,35 @@ const JobRecommendListView = () => {
           <span className="text-xs text-slate-400 font-bold ml-3">共 {total} 条</span>
         </div>
       )}
+
+      {/* AI 投递结果 Toast */}
+      {applyResult && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {applyResult.success ? (
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm max-w-md">
+              <div className="flex items-center gap-2 font-bold mb-2">
+                <Rocket size={15} className="text-emerald-400" />
+                <span>AI 智能投递完成</span>
+              </div>
+              <div className="space-y-1 text-slate-300 text-xs">
+                <p>已投递「<span className="text-indigo-300 font-bold">{applyResult.job_title}</span>」{applyResult.company && <span className="text-slate-400"> · {applyResult.company}</span>}</p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
+                  <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">加入{applyResult.ai_queue || 'AI筛选队列'}</span>
+                </div>
+                {applyResult.ai_reason && <p className="text-slate-400 mt-1">💡 {applyResult.ai_reason}</p>}
+                {applyResult.ai_suggestion && <p className="text-amber-400 mt-0.5">📝 {applyResult.ai_suggestion}</p>}
+                {applyResult.tokens_used > 0 && <p className="text-slate-500 mt-1 text-[10px]">消耗 {applyResult.tokens_used} tokens · {applyResult.model_name || 'AI'}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl text-sm font-bold flex items-center gap-2">
+              <XCircle size={16} className="text-red-400" />
+              {applyResult.message}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -18907,12 +19870,13 @@ const InviteFriendView = () => {
   }
 
   const inviteCode = stats?.invite_code || '------';
-  const inviteLink = stats?.invite_link || `https://devnors.ai/register?ref=${inviteCode}`;
+  const baseUrl = window.location.origin + window.location.pathname;
+  const inviteLink = `${baseUrl}#/login?ref=${inviteCode}`;
   const inviteCount = stats?.invite_count || 0;
   const totalReward = stats?.total_reward_tokens || 0;
   const tokenBalance = stats?.token_balance || 0;
   const records = stats?.records || [];
-  const rules = stats?.rules || { per_invite_reward: 500, new_user_bonus: 200, milestone_5: 1000, milestone_10: 3000, milestone_20: 8000 };
+  const rules = stats?.rules || { per_invite_reward: 50000, new_user_bonus: 20000, milestone_5: 100000, milestone_10: 300000, milestone_20: 800000 };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(inviteLink).then(() => {
@@ -18942,7 +19906,7 @@ const InviteFriendView = () => {
       </div>
 
       {/* 邀请链接卡片 */}
-      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-2xl p-6 md:p-8 text-white mb-6 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-lg p-6 md:p-8 text-white mb-6 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
         <div className="relative z-10">
@@ -18965,10 +19929,19 @@ const InviteFriendView = () => {
               {copied ? <><Check size={16} /> 已复制</> : <><Link2 size={16} /> 复制链接</>}
             </button>
           </div>
-          <div className="mt-4 flex items-center gap-2 text-indigo-200 text-xs">
-            <Shield size={12} />
-            <span>邀请码：<span className="font-mono font-bold text-white">{inviteCode}</span></span>
+          <div className="mt-4 flex items-center gap-4 text-indigo-200 text-xs">
+            <div className="flex items-center gap-2">
+              <Shield size={12} />
+              <span>邀请码：<span className="font-mono font-bold text-white text-base tracking-[0.15em]">{inviteCode}</span></span>
+            </div>
+            <button 
+              onClick={() => { navigator.clipboard.writeText(inviteCode); }}
+              className="px-3 py-1 bg-white/15 hover:bg-white/25 rounded-lg text-white text-xs font-bold transition-all"
+            >
+              复制邀请码
+            </button>
           </div>
+          <p className="mt-2 text-indigo-300/70 text-[11px]">好友可通过链接注册，或在注册页手动输入邀请码</p>
         </div>
       </div>
 
@@ -19008,7 +19981,7 @@ const InviteFriendView = () => {
             const reached = inviteCount >= m.count;
             return (
               <div key={i} className="flex-1">
-                <div className={`relative rounded-xl p-4 text-center border-2 transition-all ${
+                <div className={`relative rounded-lg p-4 text-center border-2 transition-all ${
                   reached 
                     ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-100' 
                     : 'bg-slate-50 border-slate-200'
@@ -19094,7 +20067,7 @@ const InviteFriendView = () => {
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">3</div>
-            <div><span className="font-bold text-slate-700">分享方式</span>：复制邀请链接发送给好友，好友通过链接注册后即自动发放奖励</div>
+            <div><span className="font-bold text-slate-700">分享方式</span>：复制邀请链接发送给好友，或分享邀请码让好友注册时手动填写，注册后即自动发放奖励</div>
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">4</div>
@@ -19378,6 +20351,67 @@ const AIDeliveryView = () => {
 // --- 推荐人才列表页 (TalentPoolView) ---
 const TalentPoolView = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userId = user?.id || 0;
+
+  // 邀请状态
+  const [invitingId, setInvitingId] = useState<number | null>(null);
+  const [invitedIds, setInvitedIds] = useState<Set<number>>(new Set());
+  const [inviteDetails, setInviteDetails] = useState<Record<number, any>>({});
+  const [inviteResult, setInviteResult] = useState<any>(null);
+
+  // 页面加载时获取已邀请的候选人
+  useEffect(() => {
+    if (!userId) return;
+    fetch(`/api/v1/public/my-invites?user_id=${userId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.success && data.invites) {
+          const ids = new Set<number>();
+          const details: Record<number, any> = {};
+          Object.values(data.invites).forEach((inv: any) => {
+            ids.add(inv.candidate_id);
+            details[inv.candidate_id] = inv;
+          });
+          setInvitedIds(ids);
+          setInviteDetails(details);
+        }
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  const handleQuickInvite = async (e: React.MouseEvent, candidateId: number) => {
+    e.stopPropagation();
+    if (invitedIds.has(candidateId) || invitingId === candidateId) return;
+    setInvitingId(candidateId);
+    setInviteResult(null);
+    try {
+      const res = await fetch('/api/v1/public/quick-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_id: candidateId, user_id: userId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setInvitedIds(prev => new Set(prev).add(candidateId));
+        setInviteDetails(prev => ({ ...prev, [candidateId]: {
+          candidate_id: candidateId,
+          flow_id: data.flow_id,
+          job_title: data.job_title,
+          match_score: data.match_score,
+          details: data.ai_reason || '',
+          last_action: data.ai_queue || '智能筛选队列',
+        }}));
+        setInviteResult({ success: true, ...data });
+      } else {
+        setInviteResult({ success: false, message: data.error || '邀请失败' });
+      }
+    } catch {
+      setInviteResult({ success: false, message: '网络异常，请重试' });
+    }
+    setInvitingId(null);
+    setTimeout(() => setInviteResult(null), 5000);
+  };
 
   // 筛选状态
   const [searchText, setSearchText] = useState('');
@@ -19481,12 +20515,6 @@ const TalentPoolView = () => {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">推荐人才</h1>
           <p className="text-sm text-slate-500">AI 智能匹配推荐给企业的优质候选人，共 <span className="font-black text-indigo-600">{total}</span> 位人才</p>
         </div>
-        <button
-          onClick={() => navigate('/workbench')}
-          className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
-        >
-          <Sparkles size={16} /> AI 智能邀请
-        </button>
       </div>
 
       {/* 搜索 + 筛选合并 */}
@@ -19634,12 +20662,38 @@ const TalentPoolView = () => {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); navigate('/workbench'); }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
-                    >
-                      <Sparkles size={13} /> AI 邀请
-                    </button>
+                    {invitedIds.has(t.id) ? (
+                      <div className="relative group/invite">
+                        <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-default">
+                          <CheckCircle2 size={13} /> 已邀请
+                        </span>
+                        {inviteDetails[t.id] && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); navigate(`/workbench/flow/${inviteDetails[t.id].flow_id}`); }}
+                            className="absolute right-0 top-full mt-2 w-64 bg-slate-900 text-white rounded-xl shadow-2xl p-4 z-50 opacity-0 invisible group-hover/invite:opacity-100 group-hover/invite:visible transition-all duration-200 text-xs cursor-pointer hover:bg-slate-800"
+                          >
+                            <div className="flex items-center gap-1.5 font-bold mb-2 text-emerald-300">
+                              <CheckCircle2 size={12} /> AI 邀请详情
+                            </div>
+                            <p className="text-slate-300 mb-1">岗位：<span className="text-indigo-300 font-bold">{inviteDetails[t.id].job_title}</span></p>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">匹配度 {inviteDetails[t.id].match_score}%</span>
+                            </div>
+                            {inviteDetails[t.id].details && <p className="text-slate-400 mt-1">{inviteDetails[t.id].details}</p>}
+                            <p className="text-indigo-400 mt-2 font-bold flex items-center gap-1">查看招聘队列 <ChevronRight size={11} /></p>
+                            <div className="absolute -top-1.5 right-6 w-3 h-3 bg-slate-900 rotate-45"></div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => handleQuickInvite(e, t.id)}
+                        disabled={invitingId === t.id}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                      >
+                        {invitingId === t.id ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} {invitingId === t.id ? 'AI 分析中...' : 'AI 邀请'}
+                      </button>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); navigate(`/candidate/profile/${t.id}`); }}
                       className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all"
@@ -19708,16 +20762,1901 @@ const TalentPoolView = () => {
           <span className="text-xs text-slate-400 font-bold ml-3">共 {total} 位</span>
         </div>
       )}
+
+      {/* AI 邀请结果 Toast */}
+      {inviteResult && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          {inviteResult.success ? (
+            <div className="bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm max-w-md">
+              <div className="flex items-center gap-2 font-bold mb-2">
+                <Sparkles size={15} className="text-amber-400" />
+                <span>AI 智能邀请完成</span>
+              </div>
+              <div className="space-y-1 text-slate-300 text-xs">
+                <p>候选人 <span className="text-white font-bold">{inviteResult.candidate_name}</span> → 岗位「<span className="text-indigo-300 font-bold">{inviteResult.job_title}</span>」</p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {inviteResult.match_score}%</span>
+                  <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">加入{inviteResult.ai_queue || '智能筛选队列'}</span>
+                </div>
+                {inviteResult.ai_reason && <p className="text-slate-400 mt-1">💡 {inviteResult.ai_reason}</p>}
+                {inviteResult.tokens_used > 0 && <p className="text-slate-500 mt-1 text-[10px]">消耗 {inviteResult.tokens_used} tokens · {inviteResult.model_name || 'AI'}</p>}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl text-sm font-bold flex items-center gap-2">
+              <XCircle size={16} className="text-red-400" />
+              {inviteResult.message}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
+// --- 隐私政策页面 ---
+const PrivacyPolicyView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">隐私政策</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          杭州势行网络科技有限公司（以下简称"我们"）非常重视用户的隐私保护。本隐私政策适用于 Devnors 得若平台（包括网页端、移动端及相关服务，以下简称"本平台"）提供的所有产品和服务。请您在使用我们的服务前，仔细阅读并充分理解本政策全部内容。<strong>如您不同意本政策中的任何条款，请停止使用本平台服务。</strong>
+        </p>
+
+        <h2>一、适用范围</h2>
+        <p>本隐私政策适用于 Devnors 得若平台及其关联产品提供的所有服务，包括但不限于：</p>
+        <ul>
+          <li>Devnors 得若网页端（devnors.com 及相关子域名）</li>
+          <li>Devnors 得若移动端（如有）</li>
+          <li>通过 API 接口向第三方提供的服务</li>
+        </ul>
+        <p>本政策不适用于通过我们的服务链接到的第三方产品或服务。第三方如何收集、使用您的信息，请参阅其各自的隐私政策。</p>
+
+        <h2>二、信息收集</h2>
+        <h3>2.1 您主动提供的信息</h3>
+        <p>在您注册、使用本平台各项功能时，我们可能收集以下信息：</p>
+        <ul>
+          <li><strong>账号注册信息</strong>：手机号码（用于注册验证和登录）、登录密码（哈希加密存储，不可逆）、用户昵称</li>
+          <li><strong>身份认证信息</strong>：真实姓名、身份证号码（仅用于实名认证场景，AES 加密存储，仅在认证审核时解密使用）</li>
+          <li><strong>求职者信息</strong>：简历内容（教育经历、工作经历、项目经验）、技能标签、求职意向、期望薪资、个人简介、头像</li>
+          <li><strong>企业方信息</strong>：企业名称、统一社会信用代码、营业执照影像、法定代表人信息、企业规模、行业类别、办公地址、联系方式、企业简介</li>
+          <li><strong>职位信息</strong>：职位名称、岗位描述、任职要求、薪资范围、工作地点</li>
+          <li><strong>记忆数据</strong>：您主动录入的求职偏好、招聘偏好、技能特长、职业目标等个性化信息</li>
+          <li><strong>对话内容</strong>：您与 AI 助手的对话记录（用于提供连续的对话服务）</li>
+          <li><strong>反馈信息</strong>：您通过工单系统提交的反馈标题、描述内容、联系方式</li>
+        </ul>
+
+        <h3>2.2 自动收集的信息</h3>
+        <p>在您使用本平台时，我们可能自动收集以下信息以保障服务安全和优化体验：</p>
+        <ul>
+          <li><strong>设备信息</strong>：设备型号、操作系统类型和版本、浏览器类型和版本、屏幕分辨率、设备语言设置</li>
+          <li><strong>网络信息</strong>：IP 地址（用于安全审计和异常检测）、网络运营商类型</li>
+          <li><strong>日志信息</strong>：访问时间、页面停留时长、点击操作记录、功能使用记录（用于安全审计日志）</li>
+          <li><strong>服务使用信息</strong>：AI 服务调用次数和类型、Token 消耗明细、功能使用频率统计</li>
+        </ul>
+
+        <h3>2.3 Cookie 和类似技术</h3>
+        <p>本平台使用 Cookie 和本地存储（LocalStorage）技术来维持您的登录状态和偏好设置。具体包括：</p>
+        <ul>
+          <li><strong>必要 Cookie</strong>：维持登录会话、记录认证状态（无法关闭）</li>
+          <li><strong>功能 Cookie</strong>：记录您的偏好设置（如主题模式、语言选择）</li>
+          <li><strong>分析 Cookie</strong>：统计页面访问量和功能使用率，用于服务改进</li>
+        </ul>
+        <p>您可以通过浏览器设置清除或禁用 Cookie，但这可能导致部分功能无法正常使用。</p>
+
+        <h2>三、信息使用</h2>
+        <p>我们严格遵循合法、正当、必要的原则使用您的个人信息，具体用途包括：</p>
+        <ul>
+          <li><strong>提供核心服务</strong>：账号注册与登录验证、身份认证、岗位发布与展示、简历投递与接收</li>
+          <li><strong>AI 智能服务</strong>：基于您的简历/岗位/记忆信息进行智能匹配推荐、AI 对话服务、简历解析、面试辅导</li>
+          <li><strong>服务计费</strong>：Token 余额管理、消耗记录、充值与扣费处理</li>
+          <li><strong>消息通知</strong>：发送匹配通知、流程状态变更、系统公告、安全提醒等重要通知</li>
+          <li><strong>安全保障</strong>：身份验证、异常行为检测、反欺诈、安全审计</li>
+          <li><strong>服务优化</strong>：分析汇总后的使用统计数据（不含个人身份信息），用于改进产品功能和用户体验</li>
+          <li><strong>法律合规</strong>：遵守法律法规要求，配合司法或行政机关的依法查询</li>
+        </ul>
+        <p><strong>我们不会将您的个人信息用于与上述目的无关的其他用途。</strong>如需变更用途，将再次征得您的同意。</p>
+
+        <h2>四、信息共享与披露</h2>
+        <p><strong>我们承诺不会将您的个人信息出售给任何第三方。</strong>在以下情形下，我们可能共享或披露您的信息：</p>
+        <h3>4.1 基于您的授权同意</h3>
+        <ul>
+          <li><strong>招聘匹配展示</strong>：经您投递或被邀请后，向匹配的企业方或求职者展示您的公开信息。展示内容不含手机号、身份证号等敏感信息</li>
+          <li><strong>联系方式交换</strong>：仅在双方均确认意向、通过平台"联系方式交换"流程后，方可互相查看联系方式。此过程需双方明确操作确认</li>
+        </ul>
+        <h3>4.2 与第三方服务商共享</h3>
+        <ul>
+          <li><strong>AI 模型服务商</strong>：您的简历文本、对话内容可能发送至 AI 模型服务商（如 MiniMax）用于实时分析处理。我们已与服务商签订数据保护协议，确保其不会存储或二次使用您的数据</li>
+          <li><strong>支付服务商</strong>：在您充值 Token 时，支付信息由持牌支付机构处理，我们不直接存储您的银行卡等支付账户信息</li>
+        </ul>
+        <h3>4.3 基于法律要求</h3>
+        <ul>
+          <li>根据法律法规的强制性规定</li>
+          <li>根据司法机关或行政机关的有效法律文书</li>
+          <li>为保护本公司、用户或公众的合法权益所必需</li>
+        </ul>
+
+        <h2>五、AI 服务与数据处理专项说明</h2>
+        <p>鉴于本平台深度使用人工智能技术，我们作如下专项说明：</p>
+        <h3>5.1 AI 数据处理范围</h3>
+        <ul>
+          <li><strong>简历解析</strong>：您上传的简历文件将发送至 AI 模型进行文本提取和结构化处理</li>
+          <li><strong>智能匹配</strong>：候选人简历摘要和岗位描述将发送至 AI 模型进行匹配度分析</li>
+          <li><strong>AI 对话</strong>：您的当前对话消息及最近数轮历史消息将发送至 AI 模型生成回复</li>
+          <li><strong>帮助问答</strong>：您在帮助中心的提问将发送至 AI 模型，结合平台文档生成回答</li>
+        </ul>
+        <h3>5.2 AI 数据保护措施</h3>
+        <ul>
+          <li>发送至 AI 服务商的数据仅用于实时请求处理，处理完成后即释放，不会被长期存储</li>
+          <li>AI 服务商不会将您的数据用于模型训练或其他目的</li>
+          <li>传输过程全程使用 HTTPS 加密</li>
+          <li>每次 AI 调用均有完整的审计日志记录（调用时间、Token 消耗、模型名称）</li>
+        </ul>
+        <h3>5.3 AI 结果声明</h3>
+        <ul>
+          <li>AI 生成的匹配分数、分析报告和建议<strong>仅供参考</strong>，不构成任何承诺或保证</li>
+          <li>录用、面试等最终决策权完全归用户所有</li>
+          <li>AI 生成内容中标注"AI 分析结果"字样以示区分</li>
+        </ul>
+
+        <h2>六、信息安全</h2>
+        <p>我们采取业界通行的多层次安全措施保护您的信息：</p>
+        <h3>6.1 技术措施</h3>
+        <ul>
+          <li>用户密码使用 bcrypt 哈希算法加密存储，不可逆解密</li>
+          <li>身份证号、营业执照号等敏感信息使用 AES-256 加密存储</li>
+          <li>数据传输全程使用 HTTPS/TLS 加密</li>
+          <li>数据库访问采用参数化查询，防止 SQL 注入攻击</li>
+        </ul>
+        <h3>6.2 管理措施</h3>
+        <ul>
+          <li>完整的安全审计日志系统，记录所有敏感操作</li>
+          <li>基于角色的访问控制机制（RBAC），最小权限原则</li>
+          <li>员工访问用户数据需经审批并留存记录</li>
+          <li>定期进行安全风险评估和漏洞扫描</li>
+        </ul>
+        <h3>6.3 安全事件响应</h3>
+        <p>如发生个人信息安全事件，我们将按照法律规定及时向有关部门报告，并通过站内通知或消息中心告知受影响用户，内容包括：事件原因、已采取的补救措施、用户可采取的防护建议。</p>
+
+        <h2>七、信息存储</h2>
+        <ul>
+          <li><strong>存储地点</strong>：您的个人信息存储在中华人民共和国境内的云服务器。如涉及跨境传输（如调用境外 AI 模型服务），我们将按照《个人信息保护法》相关规定处理</li>
+          <li><strong>存储期限</strong>：在您使用本平台期间持续保存。账户注销后，我们将在 30 日内删除或匿名化处理您的个人信息，法律法规另有规定的除外</li>
+          <li><strong>账户注销</strong>：您可通过「反馈建议」功能申请注销账户。注销后，账户数据不可恢复，未使用的付费 Token 将不予退还</li>
+        </ul>
+
+        <h2>八、您的权利</h2>
+        <p>根据《中华人民共和国个人信息保护法》，您享有以下权利：</p>
+        <ul>
+          <li><strong>知情权与决定权</strong>：了解我们收集、使用个人信息的规则，并有权决定是否同意</li>
+          <li><strong>查阅复制权</strong>：您可在「系统设置 → 账号信息」中查阅已提交的个人信息</li>
+          <li><strong>更正补充权</strong>：发现个人信息不准确或不完整时，有权要求更正或补充</li>
+          <li><strong>删除权</strong>：在以下情形中有权要求删除——处理目的已实现、您撤回同意、我们违反法律或协议约定</li>
+          <li><strong>可携带权</strong>：有权请求将个人信息转移至您指定的其他个人信息处理者（符合国家网信部门规定条件时）</li>
+          <li><strong>撤回同意权</strong>：您可随时撤回此前给予的同意，撤回不影响撤回前已进行的合法处理</li>
+          <li><strong>自动化决策拒绝权</strong>：对于 AI 算法推荐结果，您有权要求说明决策逻辑，并有权拒绝仅基于自动化决策做出的对您权益有重大影响的决定</li>
+          <li><strong>逝者近亲属权利</strong>：自然人死亡后，其近亲属可依法对其个人信息行使查阅、复制、更正、删除等权利</li>
+        </ul>
+        <p>如您行使上述权利，请通过「反馈建议」功能提交申请，我们将在 15 个工作日内处理并回复。</p>
+
+        <h2>九、未成年人信息保护</h2>
+        <p>本平台面向年满 18 周岁的成年人提供服务。我们不会故意收集未满 14 周岁儿童的个人信息。如我们发现在未获得监护人同意的情况下收集了儿童个人信息，将尽快删除。详见《未成年人保护声明》。</p>
+
+        <h2>十、政策更新</h2>
+        <p>我们可能会适时修订本隐私政策。对于重大变更（包括但不限于收集信息范围变化、使用目的变更、第三方共享规则调整），我们将通过以下方式通知您：</p>
+        <ul>
+          <li>在平台显著位置发布公告</li>
+          <li>通过消息中心发送通知</li>
+          <li>在您下次登录时弹窗提示</li>
+        </ul>
+        <p>如您在政策更新生效后继续使用本平台，即视为同意更新后的政策。如您不同意，应停止使用并申请注销账户。</p>
+
+        <h2>十一、联系我们</h2>
+        <p>如您对本隐私政策有任何疑问、建议或投诉，或需要行使个人信息权利，请通过以下方式联系我们：</p>
+        <ul>
+          <li><strong>公司全称</strong>：杭州势行网络科技有限公司</li>
+          <li><strong>平台反馈</strong>：通过本平台「反馈建议」功能提交工单</li>
+          <li><strong>处理时限</strong>：我们将在 15 个工作日内受理并回复您的请求</li>
+        </ul>
+        <p>如您对我们的回复不满意，可向杭州市互联网信息办公室或相关监管部门投诉举报。</p>
+      </div>
+    </div>
+  );
+};
+
+// --- 服务条款页面 ---
+const TermsOfServiceView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">服务条款</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          欢迎使用 Devnors 得若平台（包括网页端、移动端及相关服务，以下简称"本平台"）。本用户服务协议（以下简称"本协议"）是您与杭州势行网络科技有限公司（以下简称"我们"或"平台方"）之间就注册、登录和使用本平台服务所订立的协议，具有合同效力。<strong>请您在注册或使用本平台前，仔细阅读并充分理解本协议全部条款。点击"注册"或以其他方式使用本平台，即视为您已阅读、理解并同意接受本协议约束。</strong>
+        </p>
+
+        <h2>一、定义</h2>
+        <ul>
+          <li><strong>"本平台"</strong>：指 Devnors 得若智能招聘平台，包括 devnors.com 网页端及相关子域名、移动端应用（如有）、API 接口服务</li>
+          <li><strong>"用户"</strong>：指注册并使用本平台服务的自然人或法人，包括求职者用户和企业方用户</li>
+          <li><strong>"求职者"</strong>：指使用本平台求职相关功能的个人用户</li>
+          <li><strong>"企业方"</strong>：指使用本平台发布职位、招聘人才的企业或组织用户</li>
+          <li><strong>"Token"</strong>：指本平台的 AI 服务消耗计量单位</li>
+          <li><strong>"AI 服务"</strong>：指本平台提供的基于人工智能技术的功能，包括智能匹配、简历解析、AI 对话、帮助问答等</li>
+        </ul>
+
+        <h2>二、服务内容</h2>
+        <p>本平台提供以下服务：</p>
+        <h3>2.1 基础服务</h3>
+        <ul>
+          <li>用户注册与账户管理、身份切换（求职者/企业方）</li>
+          <li>职位发布与管理、简历创建与投递</li>
+          <li>招聘队列管理（Flow 工作流）</li>
+          <li>消息通知与反馈工单系统</li>
+        </ul>
+        <h3>2.2 AI 增值服务（消耗 Token）</h3>
+        <ul>
+          <li>AI 智能匹配与推荐（岗位推荐、人才推荐）</li>
+          <li>AI 智能投递与邀请（自动匹配分析）</li>
+          <li>AI 助手对话（招聘咨询、简历优化、面试辅导、职业规划）</li>
+          <li>AI 简历解析（PDF/Word 文件自动提取结构化数据）</li>
+          <li>AI 帮助中心问答</li>
+        </ul>
+        <h3>2.3 记忆系统</h3>
+        <ul>
+          <li>个性化偏好存储，用于提升 AI 推荐精准度</li>
+        </ul>
+
+        <h2>三、账户注册与管理</h2>
+        <h3>3.1 注册资格</h3>
+        <ul>
+          <li>您须年满 18 周岁且具有完全民事行为能力。年满 16 周岁不满 18 周岁、以自己的劳动收入为主要生活来源的，可在监护人同意下注册</li>
+          <li>注册时应提供真实、准确、完整、有效的身份信息</li>
+          <li>每个手机号仅可注册一个账户，不得使用他人手机号注册</li>
+          <li>企业方注册后应尽快完成企业资质认证</li>
+        </ul>
+        <h3>3.2 账户使用规则</h3>
+        <ul>
+          <li>账户仅限您本人使用，<strong>禁止赠与、借用、出租、转让或售卖账户</strong></li>
+          <li>您应妥善保管登录密码，因保管不善导致的账户被盗或密码泄露，由您自行承担损失</li>
+          <li>如发现账户被他人非法使用或存在安全风险，应立即通过「反馈建议」通知我们</li>
+          <li>我们有权在发现以下行为时限制、冻结或终止账户：异常登录、批量操作、违规内容、欺诈行为</li>
+        </ul>
+        <h3>3.3 实名认证</h3>
+        <ul>
+          <li>部分功能（如联系方式交换、企业认证）需要完成实名认证</li>
+          <li>认证信息必须真实有效，提供虚假认证信息将导致认证撤销和账户处置</li>
+          <li>认证信息加密存储，仅在认证审核流程中使用</li>
+        </ul>
+        <h3>3.4 账户注销</h3>
+        <ul>
+          <li>您可随时通过「反馈建议」功能申请注销账户</li>
+          <li>注销前请确认：已处理完所有进行中的招聘队列、已知晓未使用的付费 Token 不予退还、账户数据删除后不可恢复</li>
+          <li>我们将在收到注销申请后 15 个工作日内完成处理</li>
+        </ul>
+
+        <h2>四、Token 服务条款</h2>
+        <h3>4.1 Token 性质</h3>
+        <p>Token 是本平台 AI 服务的消耗计量单位。<strong>Token 不具有货币属性，不可转让、不可赠送、不可提现、不可兑换为法定货币或其他虚拟货币。</strong></p>
+        <h3>4.2 获取方式</h3>
+        <ul>
+          <li><strong>注册赠送</strong>：新用户注册时自动赠送一定数量的免费 Token</li>
+          <li><strong>邀请奖励</strong>：成功邀请好友注册，邀请人和被邀请人各获得 Token 奖励</li>
+          <li><strong>付费购买</strong>：通过平台「Token 管理」页面选择套餐付费购买</li>
+        </ul>
+        <h3>4.3 消耗规则</h3>
+        <ul>
+          <li>使用 AI 服务将根据实际调用量扣减 Token，具体消耗量取决于 AI 模型类型和数据处理量</li>
+          <li>各功能的 Token 消耗参考值在「帮助中心」和「Token 管理」页面公示</li>
+          <li>Token 余额不足时将无法使用 AI 服务，系统会提前发送余额不足提醒</li>
+          <li>Token 扣减后不可撤回，即使 AI 结果不符合预期</li>
+        </ul>
+        <h3>4.4 有效期与退款</h3>
+        <ul>
+          <li>注册赠送和邀请奖励的 Token 按套餐规则设定有效期</li>
+          <li>付费购买的 Token 在有效期内不会过期</li>
+          <li><strong>已购买的 Token 套餐原则上不予退款。</strong>如因平台技术故障导致 Token 异常扣减，经核实后将补偿等额 Token</li>
+          <li>账户注销时，未使用的 Token（含付费购买）均不予退还</li>
+        </ul>
+
+        <h2>五、用户行为规范</h2>
+        <h3>5.1 信息发布规范</h3>
+        <p>您在本平台发布的所有信息（包括简历、职位描述、企业资料、对话内容等）须遵守以下规范：</p>
+        <ul>
+          <li>信息真实、准确、完整，不得含有虚假、误导性内容</li>
+          <li>不得发布含有就业歧视内容的职位（包括但不限于性别、年龄、民族、宗教、婚育状况歧视）</li>
+          <li>不得发布违反《劳动法》《劳动合同法》等法律法规的岗位信息</li>
+          <li>不得以招聘为名收取任何费用（如报名费、培训费、押金等）</li>
+          <li>不得发布含有违法、淫秽、色情、暴力、恐怖、赌博等内容的信息</li>
+          <li>不得侵犯他人名誉权、隐私权、肖像权、知识产权等合法权益</li>
+        </ul>
+        <h3>5.2 禁止行为</h3>
+        <ul>
+          <li>冒充他人身份或冒用他人/他公司信息注册或发布内容</li>
+          <li>使用自动化工具、脚本、爬虫或机器人批量操作平台功能或采集平台数据</li>
+          <li>对平台进行反向工程、反编译、反汇编、破解或恶意攻击</li>
+          <li>利用系统漏洞获取不正当利益（包括但不限于刷取 Token、伪造邀请等）</li>
+          <li>干扰或破坏平台服务器、网络的正常运行</li>
+          <li>批量注册「水军」账户或从事刷量行为</li>
+          <li>利用平台进行传销、诈骗或其他非法活动</li>
+        </ul>
+        <h3>5.3 违规处理</h3>
+        <p>对于违反上述规范的行为，我们有权视情节严重程度采取以下措施：</p>
+        <ul>
+          <li>发送警告通知</li>
+          <li>删除违规内容</li>
+          <li>限制部分或全部功能使用</li>
+          <li>暂停或永久封禁账户</li>
+          <li>扣除违规获取的 Token 或奖励</li>
+          <li>涉嫌违法犯罪的，移交司法机关处理</li>
+        </ul>
+
+        <h2>六、知识产权</h2>
+        <h3>6.1 平台知识产权</h3>
+        <ul>
+          <li>本平台的全部内容和技术（包括但不限于软件代码、算法模型、界面设计、图标、文案、商标 Logo、技术文档）的知识产权归杭州势行网络科技有限公司所有</li>
+          <li>"Devnors"、"得若"及相关标识为杭州势行网络科技有限公司的商标，未经书面授权不得使用</li>
+        </ul>
+        <h3>6.2 用户内容授权</h3>
+        <ul>
+          <li>您上传的内容（简历、职位描述、企业资料等）的知识产权仍归您所有</li>
+          <li>您在上传时即授予我们一项非排他性、全球性、免费的许可，允许我们在提供招聘服务的范围内存储、展示、处理和分析该内容</li>
+          <li>该授权许可在您删除相关内容或注销账户后终止（法律法规要求保留的除外）</li>
+        </ul>
+        <h3>6.3 AI 生成内容</h3>
+        <ul>
+          <li>AI 生成的分析结果、推荐报告仅供参考，不构成任何专业意见或承诺</li>
+          <li>用户可自由使用 AI 生成的面向自身的分析结果</li>
+        </ul>
+
+        <h2>七、免责声明与责任限制</h2>
+        <h3>7.1 AI 服务免责</h3>
+        <ul>
+          <li>AI 生成的匹配分数、分析报告、推荐结果<strong>仅供参考</strong>，我们不对其准确性、完整性、时效性作出任何明示或暗示的保证</li>
+          <li>基于 AI 分析结果做出的录用、投递、面试等决策，由用户自行承担责任</li>
+        </ul>
+        <h3>7.2 用户间纠纷</h3>
+        <ul>
+          <li>本平台仅提供招聘信息对接服务，不介入、不参与用户之间的面试、录用、劳动合同等实际雇佣关系</li>
+          <li>因用户间交易、面试安排、劳动关系产生的纠纷，由当事人自行协商或通过法律途径解决</li>
+        </ul>
+        <h3>7.3 信息真实性</h3>
+        <ul>
+          <li>我们尽合理努力审核用户发布的信息，但无法完全保证平台上所有信息的真实性和准确性</li>
+          <li>用户应自行判断信息的可靠性，因信赖未经核实的信息而遭受的损失，由用户自行承担</li>
+        </ul>
+        <h3>7.4 不可抗力与服务中断</h3>
+        <ul>
+          <li>因自然灾害、战争、疫情、政策变更、网络攻击、电信故障等不可抗力导致的服务中断，我们不承担责任</li>
+          <li>因系统维护、升级需要暂停服务时，我们将提前通知</li>
+          <li>我们不保证服务绝对不间断、无错误或完全安全，但将尽最大商业努力维护服务稳定</li>
+        </ul>
+
+        <h2>八、服务变更与终止</h2>
+        <ul>
+          <li>我们有权根据业务发展需要修改、暂停或终止部分或全部服务功能</li>
+          <li>重大服务变更将提前 7 个工作日通过平台公告和消息通知方式告知用户</li>
+          <li>对于免费功能，我们可随时调整服务内容和规则</li>
+          <li>如平台整体终止服务，将提前 30 日公告，并对未消耗的付费 Token 按购买价格比例退还</li>
+        </ul>
+
+        <h2>九、适用法律与争议解决</h2>
+        <ul>
+          <li>本协议的订立、效力、解释、履行、修改和终止，均适用中华人民共和国大陆地区法律法规</li>
+          <li>因本协议引起的或与本协议有关的任何争议，双方应首先友好协商解决</li>
+          <li>协商不成的，任何一方有权将争议提交至<strong>杭州市西湖区人民法院</strong>管辖</li>
+          <li>本协议的任何条款被认定为无效或不可执行，不影响其余条款的效力</li>
+        </ul>
+
+        <h2>十、其他条款</h2>
+        <ul>
+          <li>本协议自您注册账户时生效，至账户注销时终止（法律法规另有规定的除外）</li>
+          <li>我们保留在法律允许的范围内修改本协议的权利。修改后的协议将在平台公示，自公示之日起 7 日后生效</li>
+          <li>如您不同意修改后的协议条款，应停止使用本平台服务并申请注销账户</li>
+          <li>本协议的标题仅为方便阅读而设，不影响条款的含义和解释</li>
+        </ul>
+
+        <h2>十一、联系方式</h2>
+        <p>如您对本协议有任何疑问、建议或投诉，请通过以下方式联系我们：</p>
+        <ul>
+          <li><strong>公司全称</strong>：杭州势行网络科技有限公司</li>
+          <li><strong>平台反馈</strong>：通过本平台「反馈建议」功能提交工单</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+// --- 版权声明页面 ---
+const CopyrightView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">版权声明</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+
+        <h2>一、版权归属</h2>
+        <p>Devnors 得若平台（包括但不限于网站、移动应用、API 接口及相关服务）的全部内容和技术，其知识产权归杭州势行网络科技有限公司所有，受中华人民共和国著作权法及相关法律法规保护。</p>
+
+        <h2>二、受保护内容</h2>
+        <p>以下内容均受版权保护：</p>
+        <ul>
+          <li><strong>软件与代码</strong>：平台的源代码、目标代码、算法、数据结构、AI 模型及其衍生作品</li>
+          <li><strong>界面设计</strong>：用户界面设计、视觉元素、图标、动画效果和交互方案</li>
+          <li><strong>品牌标识</strong>："Devnors"、"得若"名称、Logo 及相关商标</li>
+          <li><strong>文档内容</strong>：帮助文档、API 文档、使用指南、营销文案</li>
+          <li><strong>数据与数据库</strong>：平台编辑整理的数据集合及其编排方式</li>
+        </ul>
+
+        <h2>三、用户内容</h2>
+        <h3>3.1 用户保留的权利</h3>
+        <p>用户上传至平台的内容（包括简历、职位描述、企业资料等）的知识产权仍归用户所有。</p>
+        <h3>3.2 授权许可</h3>
+        <p>用户在上传内容时，即授予杭州势行网络科技有限公司一项非排他性的、全球范围内的、免费的许可，允许我们在提供招聘服务的范围内存储、展示、处理和分析该内容。此许可在用户删除相关内容或注销账户后终止。</p>
+        <h3>3.3 AI 处理内容</h3>
+        <p>用户内容经 AI 处理后生成的分析结果（如匹配报告、技能评估等）由平台和用户共同享有使用权。用户可自由使用该结果，平台可将匿名化后的结果用于服务改进。</p>
+
+        <h2>四、禁止行为</h2>
+        <p>未经杭州势行网络科技有限公司事先书面许可，任何组织或个人不得：</p>
+        <ul>
+          <li>复制、修改、分发、展示或以其他方式使用本平台的受保护内容</li>
+          <li>对本平台进行反向工程、反编译或反汇编</li>
+          <li>使用自动化工具（爬虫、脚本等）批量采集平台内容或数据</li>
+          <li>将本平台内容用于训练其他 AI 模型或机器学习系统</li>
+          <li>移除、隐藏或篡改本平台上的版权声明或其他权利标识</li>
+          <li>以任何方式暗示与杭州势行网络科技有限公司存在关联、合作或背书关系</li>
+        </ul>
+
+        <h2>五、品牌标识使用规范</h2>
+        <p>以下品牌标识为杭州势行网络科技有限公司的专有标识：</p>
+        <ul>
+          <li>"Devnors"文字标识及其所有变体</li>
+          <li>"得若"文字标识</li>
+          <li>Devnors 得若平台 Logo 及图形标识</li>
+          <li>平台特有的 UI 设计元素和视觉风格</li>
+        </ul>
+        <p>未经书面授权，任何第三方不得在以下场景中使用上述品牌标识：</p>
+        <ul>
+          <li>商业推广、广告宣传或营销材料</li>
+          <li>产品名称、域名或社交媒体账号</li>
+          <li>以任何方式暗示与杭州势行网络科技有限公司存在合作、背书或关联关系</li>
+        </ul>
+
+        <h2>六、开源组件声明</h2>
+        <p>本平台在开发过程中使用了部分开源软件组件，这些组件遵循其各自的开源许可协议。我们对这些组件的使用严格遵守对应的开源协议条款。主要开源组件包括：</p>
+        <ul>
+          <li><strong>React</strong>（MIT License）— 用户界面框架</li>
+          <li><strong>FastAPI</strong>（MIT License）— 后端 API 框架</li>
+          <li><strong>SQLAlchemy</strong>（MIT License）— 数据库 ORM</li>
+          <li><strong>Tailwind CSS</strong>（MIT License）— CSS 工具框架</li>
+          <li><strong>Lucide Icons</strong>（ISC License）— 图标库</li>
+        </ul>
+        <p>上述开源组件的版权归其原作者和维护者所有。完整的开源组件清单和许可证文本可在项目依赖文件中查阅。</p>
+
+        <h2>七、第三方服务</h2>
+        <p>本平台使用的第三方服务及其知识产权归属如下：</p>
+        <ul>
+          <li><strong>MiniMax AI 模型服务</strong>：MiniMax 公司所有，通过合法 API 接口调用</li>
+          <li><strong>Google Gemini AI 模型服务</strong>：Google LLC 所有，通过合法 API 接口调用</li>
+        </ul>
+        <p>我们不对第三方技术拥有任何知识产权，且不声称与上述服务商存在除正常商业合作外的任何关系。</p>
+
+        <h2>八、侵权通知与处理（通知-删除机制）</h2>
+        <p>如果您认为本平台上的任何内容侵犯了您的知识产权，请通过「反馈建议」功能提交侵权投诉工单，并提供以下材料：</p>
+        <h3>8.1 投诉材料要求</h3>
+        <ul>
+          <li><strong>权利人身份证明</strong>：个人身份证或企业营业执照副本扫描件</li>
+          <li><strong>权利证明文件</strong>：著作权登记证书、商标注册证书、专利证书或其他权属证明</li>
+          <li><strong>侵权内容定位</strong>：涉嫌侵权内容的具体 URL 或页面位置截图</li>
+          <li><strong>侵权说明</strong>：详细说明构成侵权的理由，以及原创内容的来源证据</li>
+          <li><strong>联系方式</strong>：用于接收处理结果反馈</li>
+          <li><strong>真实性声明</strong>：保证以上材料真实有效的书面声明</li>
+        </ul>
+        <h3>8.2 处理流程</h3>
+        <ul>
+          <li><strong>受理</strong>：收到完整投诉材料后 3 个工作日内确认受理</li>
+          <li><strong>调查</strong>：5 个工作日内完成初步调查</li>
+          <li><strong>处置</strong>：经核实确认侵权的，立即采取删除、屏蔽、断开链接等必要措施</li>
+          <li><strong>通知</strong>：将处理结果通知投诉人和被投诉人</li>
+          <li><strong>反通知</strong>：被投诉人如认为不构成侵权，可在 15 日内提交反通知和不侵权的初步证据</li>
+        </ul>
+        <p><strong>恶意投诉责任</strong>：如查实投诉为恶意行为（明知不侵权仍投诉），投诉人应承担因此给被投诉人造成的损失。</p>
+
+        <h2>九、法律责任</h2>
+        <p>任何未经授权使用本平台受保护内容的行为，均构成对杭州势行网络科技有限公司知识产权的侵犯。我们保留通过法律手段追究侵权者责任的权利，包括但不限于：</p>
+        <ul>
+          <li>要求立即停止侵权行为</li>
+          <li>要求赔偿经济损失和维权合理费用</li>
+          <li>要求消除影响、赔礼道歉</li>
+          <li>向司法机关提起诉讼</li>
+        </ul>
+
+        <h2>十、联系方式</h2>
+        <ul>
+          <li><strong>版权所有者</strong>：杭州势行网络科技有限公司</li>
+          <li><strong>知识产权投诉</strong>：通过本平台「反馈建议」功能，选择"投诉"类型提交</li>
+          <li><strong>处理时限</strong>：收到完整材料后 15 个工作日内回复</li>
+        </ul>
+
+        <p className="text-xs text-slate-400 mt-8 pt-6 border-t border-slate-100">© {new Date().getFullYear()} 杭州势行网络科技有限公司. All Rights Reserved. Devnors 得若 及相关标识为杭州势行网络科技有限公司的注册商标。</p>
+      </div>
+    </div>
+  );
+};
+
+// --- 算法说明与 AI 使用规则页面 ---
+const AlgorithmDisclosureView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">算法说明与 AI 使用规则</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          根据《互联网信息服务算法推荐管理规定》《生成式人工智能服务管理暂行办法》《互联网信息服务深度合成管理规定》及相关法律法规，杭州势行网络科技有限公司（以下简称"我们"）就 Devnors 得若平台（以下简称"本平台"）使用的算法推荐和人工智能技术向用户做如下披露说明。
+        </p>
+
+        <h2>一、算法服务基本情况</h2>
+        <h3>1.1 服务提供者信息</h3>
+        <ul>
+          <li><strong>公司名称</strong>：杭州势行网络科技有限公司</li>
+          <li><strong>统一社会信用代码</strong>：以工商登记信息为准</li>
+          <li><strong>产品名称</strong>：Devnors 得若智能招聘平台</li>
+          <li><strong>服务领域</strong>：人力资源与招聘科技（HRTech）</li>
+          <li><strong>合规方向</strong>：遵循《互联网信息服务算法推荐管理规定》相关要求，持续完善算法治理体系</li>
+        </ul>
+
+        <h3>1.2 算法服务类型及应用场景</h3>
+        <p>本平台使用的算法推荐服务包括以下类型：</p>
+        <ul>
+          <li><strong>岗位推荐算法</strong>：根据求职者简历、技能标签、求职意向、记忆信息和历史行为数据，推荐匹配度高的职位。适用于求职者浏览推荐岗位列表场景</li>
+          <li><strong>人才推荐算法</strong>：根据企业发布的岗位需求、企业记忆信息，推荐匹配度高的候选人。适用于企业方浏览人才库场景</li>
+          <li><strong>智能匹配算法</strong>：基于 AI 大语言模型，对岗位与候选人进行深度语义匹配分析，输出匹配分数和分析报告。适用于 AI 智能邀请、AI 智能投递功能</li>
+          <li><strong>AI 对话算法</strong>：基于大语言模型的自然语言理解和生成能力，提供招聘咨询、简历优化、面试辅导、帮助问答等对话服务</li>
+          <li><strong>简历解析算法</strong>：基于自然语言处理技术，从简历文件中提取结构化信息（姓名、学历、工作经历、技能等）</li>
+        </ul>
+
+        <h2>二、算法运行机制</h2>
+        <h3>2.1 数据输入</h3>
+        <p>算法推荐依据以下数据进行处理：</p>
+        <ul>
+          <li><strong>用户主动输入</strong>：简历内容、岗位需求描述、偏好设置、记忆信息、对话内容</li>
+          <li><strong>平台行为数据</strong>：浏览记录、投递记录、邀请记录、收藏记录等操作日志（不含精确地理位置）</li>
+          <li><strong>公开属性信息</strong>：职位和候选人的公开属性（技能标签、工作年限、薪资范围、学历、行业等）</li>
+        </ul>
+        <p><strong>本平台不收集以下信息用于算法推荐</strong>：通讯录、短信、通话记录、精确地理位置、生物特征信息（如面部识别数据）。</p>
+
+        <h3>2.2 推荐逻辑与排序规则</h3>
+        <ul>
+          <li>推荐结果基于多维度特征向量的余弦相似度计算和 AI 语义深度分析</li>
+          <li>推荐排序主要依据：<strong>匹配度得分</strong>（权重最高）、信息新鲜度、内容多样性</li>
+          <li><strong>明确承诺：不以用户消费能力、Token 余额、会员等级作为排序依据</strong></li>
+          <li><strong>明确承诺：不进行大数据「杀熟」或差异化定价</strong></li>
+          <li>不基于用户的性别、年龄、民族、宗教信仰、残疾状况等受保护特征进行歧视性排序</li>
+          <li>不向用户过度推送可能引起不适或焦虑的信息</li>
+        </ul>
+
+        <h3>2.3 AI 模型技术说明</h3>
+        <ul>
+          <li><strong>模型来源</strong>：本平台通过 API 接口调用第三方大语言模型（如 MiniMax abab6.5s-chat、Google Gemini 2.0 Flash 等），不自行训练基础大模型</li>
+          <li><strong>模型用途</strong>：文本理解、语义分析、匹配度评估、内容生成，<strong>不直接做出录用、淘汰或歧视性决策</strong></li>
+          <li><strong>输出标注</strong>：所有 AI 生成结果均标注"AI 分析结果，仅供参考"或类似提示，明确告知用户为算法生成内容</li>
+          <li><strong>数据处理</strong>：发送至 AI 模型的数据仅用于实时请求处理，不会被 AI 服务商存储或用于模型训练</li>
+        </ul>
+
+        <h3>2.4 生成式 AI 专项说明</h3>
+        <p>根据《生成式人工智能服务管理暂行办法》：</p>
+        <ul>
+          <li>本平台使用的生成式 AI 服务为对话交互形式，生成内容包括文字回复、分析报告、匹配建议等</li>
+          <li>AI 生成内容可能存在不准确、不完整或产生"幻觉"的风险，用户应自行判断和验证</li>
+          <li>我们已建立内容安全过滤机制，防止生成违法有害信息</li>
+          <li>用户不得利用本平台 AI 服务生成违法违规内容</li>
+        </ul>
+
+        <h2>三、用户权利保障</h2>
+        <p>根据《互联网信息服务算法推荐管理规定》第十六条至第二十条，您享有以下权利：</p>
+        <ul>
+          <li><strong>知情权</strong>：您有权了解本平台使用算法推荐服务的基本原理、目的意图和主要运行机制</li>
+          <li><strong>算法推荐关闭权</strong>：您可以在系统设置中选择关闭个性化推荐功能。关闭后，平台将不再基于您的行为数据和偏好进行个性化推荐，但仍会展示通用内容</li>
+          <li><strong>用户标签管理权</strong>：您可以查看和删除平台为您设定的用户标签（即记忆数据），相关标签删除后不再用于推荐计算</li>
+          <li><strong>删除权</strong>：您可以删除记忆数据和历史行为数据，算法将不再基于已删除数据进行推荐</li>
+          <li><strong>申诉权</strong>：如您认为算法推荐结果存在偏见、歧视或其他不合理情况，可通过「反馈建议」提交算法申诉工单。我们将在 15 个工作日内核查并回复</li>
+          <li><strong>人工干预请求权</strong>：对于 AI 自动做出的匹配建议或推荐结果，您有权要求人工审核和干预</li>
+        </ul>
+
+        <h2>四、算法安全与公平保障</h2>
+        <h3>4.1 反歧视措施</h3>
+        <ul>
+          <li>在算法设计中明确排除就业歧视因素（性别、年龄、民族、宗教、婚育状况、残疾状况等）</li>
+          <li>定期进行算法公平性评估，检测推荐结果中是否存在统计性歧视</li>
+          <li>对企业发布的含歧视性内容的岗位描述进行检测和标记</li>
+        </ul>
+        <h3>4.2 内容安全保障</h3>
+        <ul>
+          <li>AI 生成内容经过多层安全过滤，防止输出违法、有害、不良信息</li>
+          <li>建立人工审核机制，对被举报的 AI 生成内容进行人工复查</li>
+          <li>建立生成内容纠错和投诉渠道</li>
+        </ul>
+        <h3>4.3 安全评估与审计</h3>
+        <ul>
+          <li>定期对算法模型进行安全风险评估</li>
+          <li>建立算法安全审计日志，记录算法运行关键指标</li>
+          <li>保存算法运行日志不少于六个月</li>
+          <li>配合国家互联网信息办公室的算法安全评估和监管检查</li>
+        </ul>
+
+        <h2>五、未成年人算法保护</h2>
+        <p>本平台的服务对象为年满 18 周岁的成年人。如发现未成年人使用本平台：</p>
+        <ul>
+          <li>不会基于未成年人用户画像向其推荐可能影响身心健康的内容</li>
+          <li>不会向未成年人推送诱导消费的信息</li>
+          <li>详见《未成年人保护声明》</li>
+        </ul>
+
+        <h2>六、劳动者权益保护</h2>
+        <p>根据相关劳动法规和政策要求：</p>
+        <ul>
+          <li>算法推荐不会对劳动者的就业机会产生不合理限制</li>
+          <li>不会利用算法对求职者进行不合理的差别待遇</li>
+          <li>推荐结果仅作为参考，最终面试和录用决策由企业方和求职者双方自主做出</li>
+          <li>保障求职者平等获取就业信息的权利</li>
+        </ul>
+
+        <h2>七、联系方式与监督</h2>
+        <p>如您对本平台的算法推荐服务有疑问、建议或投诉：</p>
+        <ul>
+          <li><strong>平台反馈</strong>：通过「反馈建议」功能提交工单，选择"算法相关"类型</li>
+          <li><strong>监管投诉</strong>：您也可向国家互联网信息办公室或浙江省网信办进行投诉举报</li>
+          <li><strong>处理时限</strong>：我们将在 15 个工作日内受理并回复</li>
+        </ul>
+        <p>我们欢迎社会各界对本平台的算法服务进行监督，共同维护公平、透明、可信赖的算法服务环境。</p>
+      </div>
+    </div>
+  );
+};
+
+// --- 个人信息保护指引页面 ---
+const PersonalInfoProtectionView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">个人信息保护指引</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          本指引依据《中华人民共和国个人信息保护法》《中华人民共和国数据安全法》《中华人民共和国网络安全法》及相关法规制定，旨在帮助您详细了解 Devnors 得若平台（以下简称"本平台"）如何收集、使用、存储和保护您的个人信息，以及您依法享有的各项权利。本指引是《隐私政策》的补充细则。
+        </p>
+
+        <h2>一、个人信息收集清单</h2>
+        <p>下列为本平台收集的个人信息类别、具体字段、处理目的及处理方式：</p>
+
+        <h3>1.1 必要信息（拒绝提供将影响核心功能使用）</h3>
+        <ul>
+          <li><strong>手机号码</strong> — 目的：注册登录、身份验证、找回密码、接收验证码。存储：加密存储。保留期限：账户存续期间及注销后 30 日</li>
+          <li><strong>登录密码</strong> — 目的：账户安全验证。存储：bcrypt 哈希加密，不可逆。保留期限：账户存续期间</li>
+          <li><strong>用户名称/昵称</strong> — 目的：平台内展示、身份识别。存储：明文存储。保留期限：账户存续期间</li>
+        </ul>
+        <h3>1.2 功能信息（增值服务，用户自愿提供）</h3>
+        <ul>
+          <li><strong>简历信息</strong>（姓名、教育经历、工作经历、项目经验、技能标签、求职意向、期望薪资、头像、个人简介）— 目的：AI 智能匹配、岗位推荐、简历展示。存储：明文存储。保留期限：账户存续期间，可随时删除</li>
+          <li><strong>岗位信息</strong>（职位名称、描述、要求、薪资范围、工作地点）— 目的：人才推荐、岗位展示。保留期限：岗位存续期间，可随时关闭或删除</li>
+          <li><strong>企业信息</strong>（企业名称、行业、规模、简介、联系方式）— 目的：企业认证、企业主页展示。保留期限：账户存续期间</li>
+          <li><strong>记忆数据</strong>（求职偏好、招聘偏好、技能特长、职业目标等自由文本）— 目的：AI 个性化推荐优化。保留期限：用户可随时查看、修改或删除</li>
+          <li><strong>对话记录</strong>（与 AI 助手的对话内容）— 目的：提供连续对话服务。保留期限：账户存续期间，可通过清空对话记录删除</li>
+        </ul>
+        <h3>1.3 敏感个人信息（需单独同意）</h3>
+        <ul>
+          <li><strong>身份证号码</strong> — 目的：仅用于实名认证。存储：AES-256 加密存储。访问限制：仅认证审核流程中解密使用，不对外展示。保留期限：认证有效期内</li>
+          <li><strong>营业执照信息</strong>（统一社会信用代码、法定代表人等）— 目的：仅用于企业资质认证审核。存储：加密存储。保留期限：认证有效期内</li>
+          <li><strong>联系方式</strong>（邮箱、手机号用于联系交换）— 目的：仅在双方通过平台确认意向后，经明确操作同意才可互相查看。保留期限：账户存续期间</li>
+        </ul>
+        <h3>1.4 自动收集信息</h3>
+        <ul>
+          <li><strong>设备信息</strong>（设备型号、操作系统、浏览器类型）— 目的：兼容性适配、安全防护</li>
+          <li><strong>网络信息</strong>（IP 地址）— 目的：安全审计、异常登录检测。保留期限：日志保留不少于 6 个月</li>
+          <li><strong>操作日志</strong>（访问时间、功能使用记录）— 目的：安全审计、服务改进。保留期限：日志保留不少于 6 个月</li>
+          <li><strong>Token 消耗记录</strong>（AI 调用次数、消耗量、模型类型）— 目的：计费管理、使用统计</li>
+        </ul>
+
+        <h2>二、个人信息处理规则</h2>
+        <h3>2.1 合法性基础</h3>
+        <p>我们基于以下合法性基础处理您的个人信息：</p>
+        <ul>
+          <li><strong>知情同意</strong>：在收集个人信息前，通过隐私政策弹窗或功能页面说明等方式取得您的明确同意</li>
+          <li><strong>合同履行</strong>：为履行招聘服务合同所必需的信息处理</li>
+          <li><strong>法定义务</strong>：基于网络安全法、反电信网络诈骗法等法律法规的强制性要求</li>
+          <li><strong>合理需要</strong>：为维护平台安全、防范欺诈所必需的信息处理</li>
+        </ul>
+        <h3>2.2 处理原则</h3>
+        <ul>
+          <li><strong>合法正当必要原则</strong>：有明确、合理的处理目的，不超出实现目的所必需的范围</li>
+          <li><strong>最小必要原则</strong>：仅收集实现服务功能所必需的最少信息，不强制要求非必要信息</li>
+          <li><strong>公开透明原则</strong>：个人信息处理规则公开透明，明示处理目的、方式和范围</li>
+          <li><strong>准确性原则</strong>：保证个人信息准确，及时更新和纠正</li>
+          <li><strong>存储期限最短原则</strong>：仅在实现处理目的所必要的最短时间内保存个人信息</li>
+        </ul>
+        <h3>2.3 同意与拒绝</h3>
+        <ul>
+          <li>必要信息拒绝提供将影响核心功能使用（如无法注册登录）</li>
+          <li>功能信息拒绝提供仅影响对应增值功能，不影响基础服务</li>
+          <li>敏感信息需单独取得您的明确同意，拒绝不影响非敏感功能使用</li>
+        </ul>
+
+        <h2>三、个人信息主体权利</h2>
+        <p>根据《个人信息保护法》第四章，您依法享有以下权利：</p>
+        <ul>
+          <li><strong>知情权与决定权</strong>（第44条）：了解个人信息处理情况，有权限制或拒绝他人处理您的个人信息</li>
+          <li><strong>查阅复制权</strong>（第45条）：您可在「系统设置 → 账号信息」中查看已提交的个人信息。如需获取个人信息副本，请通过反馈工单提出申请，我们将在 15 个工作日内以电子文件形式提供</li>
+          <li><strong>更正补充权</strong>（第46条）：您可随时在相应页面修改您的个人信息。如因技术原因无法自行修改，可提交工单由我们协助处理</li>
+          <li><strong>删除权</strong>（第47条）：在以下情形中您有权要求删除个人信息——(1) 处理目的已实现、已不存在；(2) 我们停止提供相关产品或服务；(3) 超出约定保存期限；(4) 您撤回同意；(5) 我们违反法律或协议约定处理您的个人信息</li>
+          <li><strong>可携带权</strong>（第45条第3款）：符合国家网信部门规定条件时，您有权请求将个人信息转移至您指定的其他个人信息处理者。请通过反馈工单提出申请</li>
+          <li><strong>撤回同意权</strong>（第15条）：您可随时撤回此前给予的处理同意。撤回同意的方式包括：删除记忆数据、关闭个性化推荐、提交注销申请等。撤回不影响撤回前已进行的合法处理</li>
+          <li><strong>自动化决策拒绝权</strong>（第24条）：对于 AI 算法推荐结果，您有权要求说明决策逻辑和推荐依据。如推荐结果对您的权益产生重大影响，您有权拒绝仅基于自动化决策做出的决定</li>
+          <li><strong>账户注销权</strong>：您有权随时注销账户，我们将在收到注销申请后 15 个工作日内完成账户删除及个人信息清除（法律法规要求保留的除外）</li>
+          <li><strong>逝者近亲属权利</strong>（第49条）：自然人死亡后，其近亲属为了自身合法、正当利益，可依法对死者的个人信息行使查阅、复制、更正、删除等权利</li>
+        </ul>
+        <p><strong>权利行使方式</strong>：通过「反馈建议」功能提交"个人信息权利"类型工单，或在「系统设置」中自行操作。我们将在 15 个工作日内受理并回复。</p>
+
+        <h2>四、个人信息共享与委托处理</h2>
+        <h3>4.1 第三方共享清单</h3>
+        <ul>
+          <li><strong>MiniMax（稀宇科技）</strong>：共享简历文本、对话内容用于 AI 模型实时处理。数据不被存储或用于训练</li>
+          <li><strong>Google（谷歌）</strong>：共享对话内容用于 Gemini AI 模型备选处理。数据不被存储或用于训练</li>
+          <li><strong>支付服务商</strong>：Token 充值时共享订单金额信息，不共享个人身份信息</li>
+        </ul>
+        <h3>4.2 共享原则</h3>
+        <ul>
+          <li>仅在为您提供服务所必需的范围内共享</li>
+          <li>已与第三方签订数据处理协议，约束其数据使用行为</li>
+          <li>第三方不得将共享数据用于协议约定以外的用途</li>
+        </ul>
+
+        <h2>五、个人信息跨境传输</h2>
+        <p>本平台优先使用境内 AI 模型服务（如 MiniMax）。当使用境外 AI 模型（如 Google Gemini）时，可能发生个人信息跨境传输。我们已采取以下措施：</p>
+        <ul>
+          <li>仅传输实现服务功能所必需的最少数据（简历文本或对话内容的片段）</li>
+          <li>传输全程使用 HTTPS/TLS 加密</li>
+          <li>境外接收方不会长期存储或二次使用您的数据</li>
+          <li>按照《个人信息保护法》第三章相关规定，对跨境传输进行个人信息保护影响评估</li>
+          <li>您可在「系统设置 → AI 引擎配置」中选择仅使用境内模型，避免跨境传输</li>
+        </ul>
+
+        <h2>六、个人信息存储与删除</h2>
+        <h3>6.1 存储地点</h3>
+        <p>您的个人信息存储在中华人民共和国境内的服务器。</p>
+        <h3>6.2 存储期限</h3>
+        <ul>
+          <li>账号基本信息：账户存续期间及注销后 30 日</li>
+          <li>简历和岗位信息：用户可随时删除，删除后立即从活跃数据库移除</li>
+          <li>操作日志和安全审计日志：保留不少于 6 个月（网络安全法要求）</li>
+          <li>Token 消耗记录：保留 3 年（财务合规要求）</li>
+        </ul>
+        <h3>6.3 删除机制</h3>
+        <ul>
+          <li>用户主动删除内容后，从活跃数据库中立即删除</li>
+          <li>账户注销后 30 日内完成所有个人信息删除或匿名化处理</li>
+          <li>备份系统中的数据在备份轮转周期内自动覆盖清除</li>
+          <li>法律法规要求保留的信息除外</li>
+        </ul>
+
+        <h2>七、个人信息安全事件应急响应</h2>
+        <h3>7.1 应急预案</h3>
+        <ul>
+          <li>已建立个人信息安全事件分级响应机制（一般/重要/重大/特别重大）</li>
+          <li>成立应急响应小组，明确职责分工和处置流程</li>
+        </ul>
+        <h3>7.2 事件处理流程</h3>
+        <ul>
+          <li><strong>发现阶段</strong>：通过安全监控系统、用户举报、第三方通知等渠道发现安全事件</li>
+          <li><strong>止损阶段</strong>：立即采取隔离、封堵、日志固化等措施防止影响扩大</li>
+          <li><strong>评估阶段</strong>：评估事件影响范围、受影响用户数量和可能造成的危害</li>
+          <li><strong>通知阶段</strong>：按照法律规定时限向有关主管部门报告，并通过站内消息、短信等方式通知受影响用户</li>
+          <li><strong>整改阶段</strong>：修复安全漏洞，完善安全防护措施</li>
+        </ul>
+        <h3>7.3 用户通知内容</h3>
+        <p>安全事件通知将包括：事件基本情况和原因、已泄露的信息类型、可能造成的风险、已采取和将要采取的补救措施、用户可自行采取的防护建议、我们的联系方式。</p>
+
+        <h2>八、个人信息保护影响评估</h2>
+        <p>根据《个人信息保护法》第55条，我们在以下情形中开展个人信息保护影响评估：</p>
+        <ul>
+          <li>处理敏感个人信息（如身份证号码、营业执照信息）</li>
+          <li>利用个人信息进行自动化决策（AI 匹配推荐）</li>
+          <li>向第三方提供个人信息（AI 模型服务商数据传输）</li>
+          <li>向境外提供个人信息（使用境外 AI 模型时）</li>
+        </ul>
+        <p>评估报告和处理情况记录保存不少于 3 年。</p>
+
+        <h2>九、个人信息保护负责人</h2>
+        <ul>
+          <li>杭州势行网络科技有限公司已依法指定个人信息保护负责人，负责监督个人信息处理活动和保护措施</li>
+          <li>个人信息保护负责人联系方式：通过「反馈建议」功能提交"个人信息保护"类型工单</li>
+          <li>我们将在 15 个工作日内受理并回复您的请求</li>
+          <li>如对处理结果不满意，您有权向<strong>浙江省网信办</strong>或<strong>杭州市市场监督管理局</strong>投诉举报</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+// --- 未成年人保护声明页面 ---
+const MinorProtectionView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
+        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">未成年人保护声明</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          杭州势行网络科技有限公司（以下简称"我们"）高度重视未成年人保护。本声明依据《中华人民共和国未成年人保护法》《中华人民共和国预防未成年人犯罪法》《儿童个人信息网络保护规定》及相关法律法规制定，适用于 Devnors 得若平台（以下简称"本平台"）提供的所有产品和服务。
+        </p>
+
+        <h2>一、服务对象说明</h2>
+        <p>Devnors 得若是面向成年人（年满 18 周岁且具有完全民事行为能力）的专业招聘服务平台。本平台的核心业务为求职招聘对接，涉及劳动合同和就业关系，依法要求用户具备完全民事行为能力。</p>
+        <ul>
+          <li>本平台<strong>不面向未满 18 周岁的未成年人</strong>提供注册和核心服务</li>
+          <li>注册账户时需验证手机号，用户须明确确认已年满 18 周岁</li>
+          <li>年满 16 周岁不满 18 周岁、以自己的劳动收入为主要生活来源的公民，依照《民法典》视为完全民事行为能力人，可在监护人知情同意下使用本平台</li>
+          <li>不满 16 周岁的未成年人不得注册或使用本平台</li>
+        </ul>
+
+        <h2>二、未成年人个人信息保护</h2>
+        <h3>2.1 儿童个人信息收集限制</h3>
+        <ul>
+          <li>我们<strong>不会主动收集未满 14 周岁儿童</strong>的任何个人信息</li>
+          <li>如发现误收集了未满 14 周岁儿童的个人信息，我们将<strong>立即停止处理并在 48 小时内删除</strong></li>
+          <li>在任何情况下，我们不会将儿童个人信息提供给第三方（法律强制要求除外）</li>
+        </ul>
+        <h3>2.2 14-18 周岁未成年人</h3>
+        <ul>
+          <li>对于 14-18 周岁的未成年人，在确有使用本平台服务需要的情况下（如勤工俭学、实习），需<strong>取得其监护人的明确书面同意</strong></li>
+          <li>监护人同意后，仅收集提供服务所必需的最少信息</li>
+          <li>不对未成年人用户画像进行个性化推荐</li>
+          <li>限制 AI 对话服务中可能影响未成年人身心健康的内容输出</li>
+        </ul>
+        <h3>2.3 未成年人信息专项保护</h3>
+        <ul>
+          <li>已指定专人负责未成年人个人信息保护工作</li>
+          <li>对涉及未成年人个人信息的操作进行严格的访问控制和审计</li>
+          <li>未成年人及其监护人有权随时要求查阅、更正或删除未成年人的个人信息</li>
+        </ul>
+
+        <h2>三、监护人权利与义务</h2>
+        <p>若您是未成年人的监护人，请特别注意以下事项：</p>
+        <h3>3.1 监护人权利</h3>
+        <ul>
+          <li><strong>知情权</strong>：了解被监护人在本平台上的活动情况</li>
+          <li><strong>同意权</strong>：被监护人注册使用本平台需取得您的同意</li>
+          <li><strong>查阅权</strong>：查阅被监护人在本平台的个人信息</li>
+          <li><strong>更正删除权</strong>：更正或要求删除被监护人的个人信息</li>
+          <li><strong>注销权</strong>：要求注销被监护人的账户</li>
+        </ul>
+        <h3>3.2 监护人义务</h3>
+        <ul>
+          <li>请教育和引导被监护人正确使用互联网服务</li>
+          <li>请指导被监护人在使用任何互联网服务前先阅读并理解相关协议</li>
+          <li>合理安排被监护人上网时间，关注其网络行为</li>
+        </ul>
+        <h3>3.3 监护人举报处理</h3>
+        <ul>
+          <li>如您发现被监护人未经您同意在本平台注册了账户，请<strong>立即</strong>通过「反馈建议」联系我们，并提供监护关系证明</li>
+          <li>我们将在核实身份后 <strong>24 小时内冻结</strong>该账户</li>
+          <li>在 <strong>7 个工作日内</strong>删除该账户全部个人信息</li>
+          <li>此类举报将作为<strong>最高优先级</strong>处理</li>
+        </ul>
+
+        <h2>四、内容安全保护</h2>
+        <h3>4.1 禁止内容</h3>
+        <ul>
+          <li>严禁发布任何危害未成年人身心健康的内容</li>
+          <li>严禁发布涉及非法雇佣未成年人的岗位信息（违反《禁止使用童工规定》等法规）</li>
+          <li>严禁发布引诱、教唆、胁迫未成年人从事违法活动的信息</li>
+          <li>严禁发布侮辱、欺凌、虐待未成年人的信息</li>
+          <li>严禁发布可能引诱未成年人沉迷网络的信息</li>
+        </ul>
+        <h3>4.2 技术保护措施</h3>
+        <ul>
+          <li>AI 对话服务内置多层内容安全过滤机制，自动拦截不适宜内容</li>
+          <li>用户发布的内容经过自动审核和人工巡查双重机制</li>
+          <li>建立未成年人相关内容的优先巡查和快速处置通道</li>
+        </ul>
+        <h3>4.3 用工合规检测</h3>
+        <ul>
+          <li>系统对岗位信息进行合规性检测，标记可能涉及违法用工（如超时工作、有害工种等）的岗位</li>
+          <li>发现涉嫌非法雇佣未成年人的行为，将保留证据并向劳动监察部门报告</li>
+        </ul>
+
+        <h2>五、算法推荐与未成年人</h2>
+        <ul>
+          <li>如识别到用户可能为未成年人，将<strong>不对其启用</strong>基于用户画像的个性化推荐</li>
+          <li>不向可能的未成年人用户推送诱导消费（如 Token 充值）的信息</li>
+          <li>不利用算法向可能的未成年人用户推送可能影响其价值观形成的内容</li>
+        </ul>
+
+        <h2>六、网络沉迷防护</h2>
+        <p>虽然本平台为专业工具型产品，但我们仍关注防沉迷问题：</p>
+        <ul>
+          <li>平台不设计游戏化机制或成瘾性功能来诱导用户持续使用</li>
+          <li>不在夜间（22:00-8:00）向未成年人推送通知消息</li>
+          <li>不设计刺激性消费引导机制诱导未成年人充值</li>
+        </ul>
+
+        <h2>七、投诉与举报</h2>
+        <p>如您发现本平台上存在任何侵害未成年人合法权益的行为，请通过以下方式举报：</p>
+        <h3>7.1 平台举报渠道</h3>
+        <ul>
+          <li>通过本平台「反馈建议」功能，选择"投诉"类型提交，请在标题中注明"未成年人保护"</li>
+          <li>涉及未成年人保护的举报将作为<strong>最高优先级</strong>处理</li>
+          <li>我们承诺在<strong> 24 小时内</strong>受理并响应涉及未成年人保护的举报</li>
+        </ul>
+        <h3>7.2 外部举报渠道</h3>
+        <ul>
+          <li><strong>全国网信系统举报中心</strong>：www.12377.cn</li>
+          <li><strong>全国未成年人保护热线</strong>：12309</li>
+          <li><strong>劳动保障监察投诉</strong>：12333</li>
+        </ul>
+        <h3>7.3 举报保护</h3>
+        <ul>
+          <li>我们严格保护举报人信息，不向被举报方透露举报人身份</li>
+          <li>禁止对举报人进行任何形式的打击报复</li>
+        </ul>
+
+        <h2>八、法律责任</h2>
+        <p>我们严格遵守《未成年人保护法》《预防未成年人犯罪法》《儿童个人信息网络保护规定》等法律法规。如因我们的过失导致未成年人权益受到侵害，将依法承担法律责任。</p>
+      </div>
+    </div>
+  );
+};
+
+// --- 投诉举报指引页面 ---
+const ComplaintGuideView = () => {
+  const navigate = useNavigate();
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">投诉举报指引</h1>
+          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
+        </div>
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-h2:text-lg prose-h2:mt-8 prose-h2:mb-3 prose-h3:text-base prose-h3:mt-5 prose-h3:mb-2 prose-p:text-sm prose-p:leading-relaxed prose-p:text-slate-600 prose-li:text-sm prose-li:text-slate-600">
+        <p className="text-sm text-slate-500 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+          Devnors 得若平台致力于为用户提供安全、合规的招聘服务环境。如您在使用过程中发现违法违规行为，欢迎通过以下渠道进行投诉举报。
+        </p>
+
+        <h2>一、可举报的违规行为</h2>
+        <h3>1.1 信息类违规</h3>
+        <ul>
+          <li>发布虚假招聘信息或欺诈性岗位</li>
+          <li>发布含有歧视性内容的职位（性别、年龄、民族、宗教等歧视）</li>
+          <li>冒用他人或他公司身份发布信息</li>
+          <li>发布违法、色情、暴力等不当内容</li>
+        </ul>
+        <h3>1.2 行为类违规</h3>
+        <ul>
+          <li>以招聘为名实施诈骗（收取费用、骗取个人信息等）</li>
+          <li>骚扰、威胁其他用户</li>
+          <li>非法收集、买卖个人信息</li>
+          <li>利用平台从事传销或其他非法活动</li>
+        </ul>
+        <h3>1.3 技术类违规</h3>
+        <ul>
+          <li>恶意攻击平台系统或干扰正常运行</li>
+          <li>使用自动化工具违规采集数据</li>
+          <li>利用系统漏洞获取不正当利益</li>
+        </ul>
+
+        <h2>二、举报渠道</h2>
+        <h3>2.1 平台内举报</h3>
+        <p>通过本平台「反馈建议」功能提交工单，选择"投诉"类型：</p>
+        <ul>
+          <li>标题中注明"举报"字样</li>
+          <li>详细描述违规行为、涉及的用户或职位信息</li>
+          <li>如有截图等证据材料，可在描述中说明</li>
+        </ul>
+        <h3>2.2 外部举报渠道</h3>
+        <ul>
+          <li>全国互联网违法和不良信息举报中心：www.12377.cn</li>
+          <li>国家网信办举报电话：12377</li>
+          <li>当地人力资源和社会保障部门</li>
+          <li>公安机关网络安全保卫部门</li>
+        </ul>
+
+        <h2>三、举报处理流程</h2>
+        <ul>
+          <li><strong>受理</strong>：收到举报后 24 小时内确认受理并发送通知</li>
+          <li><strong>调查</strong>：3 个工作日内完成初步调查核实</li>
+          <li><strong>处置</strong>：根据违规严重程度采取警告、下架内容、封禁账户等措施</li>
+          <li><strong>反馈</strong>：在处理完成后 5 个工作日内向举报人反馈处理结果</li>
+          <li><strong>移交</strong>：涉嫌违法犯罪的，依法移交公安机关或相关部门处理</li>
+        </ul>
+
+        <h2>四、举报人保护</h2>
+        <ul>
+          <li>我们对举报人信息严格保密，不向被举报方透露举报人身份</li>
+          <li>禁止任何形式的打击报复行为</li>
+          <li>举报人不会因善意举报行为受到不利处理</li>
+        </ul>
+
+        <h2>五、恶意举报责任</h2>
+        <p>如查实举报为恶意行为（捏造事实、诽谤他人），我们保留对恶意举报人采取限制措施和追究法律责任的权利。</p>
+      </div>
+    </div>
+  );
+};
+
+// --- 版本更新页面 ---
+const ChangelogView = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'platform' | 'agent'>('platform');
+  const [changelog, setChangelog] = useState<any[]>([]);
+  const [loadingChangelog, setLoadingChangelog] = useState(true);
+
+  useEffect(() => {
+    const fetchChangelog = async () => {
+      try {
+        setLoadingChangelog(true);
+        const { getChangelog } = await import('./services/apiService');
+        const data = await getChangelog();
+        setChangelog(data);
+      } catch (err) {
+        console.error('Failed to load changelog:', err);
+      } finally {
+        setLoadingChangelog(false);
+      }
+    };
+    fetchChangelog();
+  }, []);
+
+  const agentMajorVersions = [
+    {
+      version: 'Devnors 1.0',
+      date: '2026-02-02',
+      tag: '当前版本',
+      tagColor: 'bg-emerald-100 text-emerald-700',
+      summary: '首个正式版本，AI 原生招聘智能体',
+      tiers: [
+        {
+          name: 'Ultra',
+          label: '旗舰版',
+          gradient: 'from-amber-500 to-orange-500',
+          specs: [
+            { label: '上下文', value: '128K tokens · 8K 输出 · 20+ 轮对话' },
+            { label: '匹配', value: '准确率 ≥ 95%，简历解析 98%' },
+          ],
+          highlights: [
+            '全流程 Agent 编排，记忆系统深度融合',
+            '结构化 JSON 输出，可对接企业 ATS',
+          ],
+        },
+        {
+          name: 'Pro',
+          label: '专业版',
+          gradient: 'from-indigo-500 to-purple-500',
+          specs: [
+            { label: '上下文', value: '64K tokens · 4K 输出 · 10 轮对话' },
+            { label: '匹配', value: '准确率 ≥ 88%，简历解析 92%' },
+          ],
+          highlights: [
+            '智能匹配、简历解析、AI 对话、智能邀请/投递',
+          ],
+        },
+        {
+          name: '默认',
+          label: '基础版',
+          gradient: 'from-slate-400 to-slate-500',
+          specs: [
+            { label: '上下文', value: '16K tokens · 2K 输出 · 5 轮对话' },
+            { label: '匹配', value: '准确率 ≥ 80%，简历解析 85%' },
+          ],
+          highlights: [
+            '基础 AI 对话、岗位推荐、帮助中心问答',
+          ],
+        },
+      ],
+    },
+  ];
+
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">版本更新</h1>
+          <p className="text-slate-500 text-sm">Devnors 得若平台与 Agent 更新日志</p>
+        </div>
+      </div>
+
+      {/* Tab 切换 */}
+      <div className="flex gap-2 mb-8">
+        <button
+          onClick={() => setActiveTab('platform')}
+          className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === 'platform' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+        >
+          平台更新
+        </button>
+        <button
+          onClick={() => setActiveTab('agent')}
+          className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'agent' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+        >
+          <Bot size={16} /> Agent 更新
+        </button>
+      </div>
+
+      {activeTab === 'platform' ? (
+        loadingChangelog ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-200 border-t-indigo-600" />
+            <span className="ml-3 text-sm text-slate-500">加载更新记录...</span>
+          </div>
+        ) : changelog.length === 0 ? (
+          <div className="text-center py-20 text-slate-400 text-sm">暂无更新记录</div>
+        ) : (
+        <div className="relative">
+          {/* 时间轴线 */}
+          <div className="absolute left-[19px] top-0 bottom-0 w-px bg-slate-200" />
+
+          <div className="space-y-12">
+            {changelog.map((release: any, idx: number) => (
+              <div key={release.version} className="relative pl-12">
+                {/* 时间轴圆点 */}
+                <div className={`absolute left-2.5 top-1 w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`} />
+
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-black text-slate-900">{release.version}</span>
+                      {release.tag && (
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${release.tagColor}`}>{release.tag}</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-400 font-medium">{release.date}</span>
+                  </div>
+                  <div className="p-6 space-y-3">
+                    {release.items.map((item, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold shrink-0 mt-0.5 ${item.color}`}>{item.type}</span>
+                        <p className="text-sm text-slate-600">{item.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        )
+      ) : (
+        <div className="space-y-12">
+          {agentMajorVersions.map((major, mIdx) => (
+            <div key={major.version}>
+              {/* 大版本号头部 */}
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100">
+                  <Bot size={28} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-black text-slate-900">{major.version}</h2>
+                    {major.tag && <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${major.tagColor}`}>{major.tag}</span>}
+                  </div>
+                  <p className="text-sm text-slate-500 mt-0.5">{major.summary}</p>
+                </div>
+                <span className="text-xs text-slate-400 font-medium shrink-0">{major.date}</span>
+              </div>
+
+              {/* 子型号 */}
+              <div className="space-y-4">
+                {major.tiers.map((tier: any) => (
+                  <div key={tier.name} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden p-5">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <span className={`px-3 py-1 rounded-md text-xs font-black text-white bg-gradient-to-r ${tier.gradient} shadow-sm`}>
+                        {tier.name === '默认' ? major.version : `${major.version} ${tier.name}`}
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium">{tier.label}</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {tier.specs.map((s: any, si: number) => (
+                        <div key={`s-${si}`} className="flex items-start gap-3">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 mt-0.5 text-slate-500 bg-slate-100">{s.label}</span>
+                          <p className="text-sm text-slate-600">{s.value}</p>
+                        </div>
+                      ))}
+                      {tier.highlights.map((h: string, i: number) => (
+                        <div key={`h-${i}`} className="flex items-start gap-3">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold shrink-0 mt-0.5 text-indigo-600 bg-indigo-50">特性</span>
+                          <p className="text-sm text-slate-600">{h}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- 帮助中心页面 (HelpCenterView) ---
+const HelpCenterView = () => {
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const userId = user?.id || 0;
+
+  // FAQ 数据
+  const faqCategories = [
+    {
+      title: '平台介绍', icon: <Compass size={16} className="text-indigo-500" />,
+      items: [
+        { q: 'Devnors 是什么？', a: 'Devnors（得若）是一款 AI 驱动的智能招聘平台，连接求职者与企业方，通过 AI 技术实现简历解析、智能匹配、自动筛选、面试辅助等全流程智能招聘服务。' },
+        { q: '平台支持哪些角色？', a: '支持「求职者」和「企业方」两种角色。注册后首次登录需选择角色，之后可在右上角头像菜单随时切换，两种身份数据独立。' },
+        { q: '工作台是做什么的？', a: '工作台是统一管理招聘/求职流程的核心页面，展示所有招聘队列（Flow）。每个队列代表一个候选人与岗位的匹配流程，包含状态流转：AI 筛选 → 简历通过 → 意向确认 → 联系方式交换 → 面试安排 → 入职/淘汰。' },
+        { q: '记忆系统有什么用？', a: '记忆系统让 AI 更了解你。求职者可以记录求职偏好、技能特长、职业目标；企业方可以记录企业文化、招聘偏好。记忆会在 AI 对话和智能匹配中被自动引用，提升匹配精准度。' },
+      ]
+    },
+    {
+      title: '求职者指南', icon: <UserIcon size={16} className="text-emerald-500" />,
+      items: [
+        { q: '如何投递岗位？', a: '进入「岗位推荐」页面，点击岗位卡片上的「AI 投递」按钮。AI 会分析你的简历与岗位匹配度，自动投递并展示匹配分数和分析理由。已投递的岗位会始终标记为「已投递」。' },
+        { q: '如何查看投递状态？', a: '在工作台（/workbench）可以查看所有招聘队列，每个队列显示当前状态和详细流程。也可以在岗位推荐页，hover「已投递」标签查看投递详情。' },
+        { q: '如何编辑个人资料？', a: '进入「个人档案」页面编辑资料，或通过 AI 助手用对话方式完善个人信息。完善资料有助于提高岗位匹配精准度。' },
+        { q: 'AI 投递失败怎么办？', a: '检查 Token 余额是否充足（投递约消耗 1000-3000 Token）。如果提示「已投递」说明之前已操作过，无需重复。如仍有问题，请通过「反馈建议」提交工单。' },
+      ]
+    },
+    {
+      title: '企业方指南', icon: <Building2 size={16} className="text-blue-500" />,
+      items: [
+        { q: '如何发布职位？', a: '进入「职位管理」页面，点击添加新职位。填写职位标题、薪资、工作地点、职位描述等信息后发布。也可以通过 AI 助手对话式创建职位。' },
+        { q: '如何邀请候选人？', a: '在「人才池」页面浏览候选人，点击「AI 邀请」按钮。AI 会分析候选人简历与您的岗位匹配度，自动邀请到最合适的岗位，并展示匹配分数和分析理由。' },
+        { q: '如何管理招聘流程？', a: '在工作台查看所有招聘队列。可以按状态筛选（待筛选/面试中/已录用等）。在职位详情页可以查看所有申请者，推进流程或发送反馈。' },
+        { q: '企业认证有什么好处？', a: '通过企业认证后获得「已认证」标识，提高招聘信息可信度，增加候选人投递意愿。在设置页面提交营业执照、法人身份证等材料即可申请。' },
+      ]
+    },
+    {
+      title: 'Token 与计费', icon: <Coins size={16} className="text-amber-500" />,
+      items: [
+        { q: 'Token 是什么？', a: 'Token 是平台的 AI 服务消耗单位。使用 AI 功能（对话、简历解析、智能匹配、投递、邀请等）都会消耗 Token。余额不足时无法使用 AI 功能。' },
+        { q: '如何获取 Token？', a: '三种方式：① 注册赠送免费 Token；② 邀请好友注册，双方各获奖励（/invite 页面）；③ 在 Token 管理页面（/tokens）付费充值。' },
+        { q: '各功能消耗多少 Token？', a: 'AI 对话：约 500-2000；简历解析：约 4000；智能投递/邀请：约 1000-3000；市场分析：约 6000。所有消耗记录可在 Token 管理页面查看明细。' },
+        { q: 'Token 会过期吗？', a: '有效期内未使用的 Token 不会过期，请放心使用。具体有效期以充值套餐说明为准。' },
+      ]
+    },
+    {
+      title: '账号与设置', icon: <Settings size={16} className="text-slate-500" />,
+      items: [
+        { q: '如何修改密码？', a: '进入系统设置 → 账号信息，点击修改密码，输入旧密码和新密码即可。' },
+        { q: '如何切换求职者/企业方？', a: '点击右上角头像，在弹出菜单中点击「切换为求职者」或「切换为企业方」，即可瞬间切换身份。' },
+        { q: '消息通知怎么管理？', a: '在消息中心（/notifications）查看所有通知，支持按类型筛选（系统/匹配/面试/消息），可标记已读或删除。重要通知会特殊标记确保不遗漏。' },
+        { q: '如何提交反馈？', a: '点击页面底部「反馈建议」或右上角菜单中的「反馈工单」，选择类型（咨询/建议/缺陷/投诉），填写标题和描述即可提交。' },
+      ]
+    },
+  ];
+
+  // FAQ 展开状态
+  const [expandedCat, setExpandedCat] = useState<number>(0);
+  const [expandedQ, setExpandedQ] = useState<string | null>(null);
+
+  // AI 问答状态
+  const [chatMessages, setChatMessages] = useState<{role: string; content: string}[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
+  const quickQuestions = [
+    '如何发布职位？',
+    'Token 怎么充值？',
+    'AI 投递是怎么运作的？',
+    '怎么切换身份？',
+  ];
+
+  const handleAsk = async (question: string) => {
+    if (!question.trim() || chatLoading) return;
+    const q = question.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: q }]);
+    setChatLoading(true);
+    try {
+      const historyToSend = chatMessages.slice(-6).map(m => ({ role: m.role, content: m.content }));
+      const res = await fetch('/api/v1/public/helpdesk/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, question: q, history: historyToSend }),
+      });
+      const data = await res.json();
+      if (data.error === 'insufficient_tokens') {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Token 余额不足，无法使用 AI 问答。请前往 [Token 管理](/tokens) 页面充值。' }]);
+      } else if (data.response) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.error || 'AI 服务暂时不可用，请稍后再试。' }]);
+      }
+    } catch (err) {
+      console.error('[helpdesk] error:', err);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: '网络异常，请检查网络连接后重试。' }]);
+    }
+    setChatLoading(false);
+  };
+
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+            <BookOpen size={24} className="text-indigo-600" /> 帮助中心
+          </h1>
+          <p className="text-slate-500 text-sm">查看常见问题或向 AI 提问，快速获取帮助</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 左侧：常见问题速查 */}
+        <div className="lg:col-span-5">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-100">
+              <h2 className="font-black text-slate-900 flex items-center gap-2">
+                <MessageCircleQuestion size={18} className="text-indigo-500" /> 常见问题
+              </h2>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {faqCategories.map((cat, ci) => (
+                <div key={ci}>
+                  <button
+                    onClick={() => setExpandedCat(expandedCat === ci ? -1 : ci)}
+                    className={`w-full flex items-center justify-between px-5 py-3.5 text-sm font-bold transition-all hover:bg-slate-50 ${expandedCat === ci ? 'bg-slate-50 text-indigo-700' : 'text-slate-700'}`}
+                  >
+                    <span className="flex items-center gap-2.5">{cat.icon} {cat.title}</span>
+                    <ChevronDown size={14} className={`text-slate-400 transition-transform ${expandedCat === ci ? 'rotate-180' : ''}`} />
+                  </button>
+                  {expandedCat === ci && (
+                    <div className="bg-slate-50/50 animate-in fade-in duration-200">
+                      {cat.items.map((item, qi) => {
+                        const qKey = `${ci}-${qi}`;
+                        return (
+                          <div key={qi} className="border-t border-slate-100/80">
+                            <button
+                              onClick={() => setExpandedQ(expandedQ === qKey ? null : qKey)}
+                              className={`w-full text-left px-6 py-3 text-sm transition-all hover:bg-white flex items-start gap-2 ${expandedQ === qKey ? 'text-indigo-700 font-bold' : 'text-slate-600'}`}
+                            >
+                              <ChevronRight size={13} className={`mt-0.5 flex-shrink-0 transition-transform ${expandedQ === qKey ? 'rotate-90 text-indigo-500' : 'text-slate-400'}`} />
+                              {item.q}
+                            </button>
+                            {expandedQ === qKey && (
+                              <div className="px-6 pb-4 pl-11 animate-in fade-in duration-150">
+                                <p className="text-sm text-slate-600 leading-relaxed bg-white rounded-lg p-3 border border-slate-100">{item.a}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧：AI 智能问答 */}
+        <div className="lg:col-span-7">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col" style={{ height: '680px' }}>
+            {/* 标题栏 */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="font-black text-slate-900 flex items-center gap-2">
+                <Sparkles size={18} className="text-indigo-500" /> AI 智能问答
+              </h2>
+              <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">基于全站文档 · 消耗 Token</span>
+            </div>
+
+            {/* 聊天区域 */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {chatMessages.length === 0 && !chatLoading && (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+                    <Bot size={32} className="text-indigo-400" />
+                  </div>
+                  <p className="text-slate-500 font-bold text-sm mb-1">有什么可以帮到你？</p>
+                  <p className="text-slate-400 text-xs mb-6">我熟悉 Devnors 平台的所有功能，随时为你解答</p>
+                  {!isLoggedIn && (
+                    <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg mb-4">登录后即可使用 AI 问答功能</p>
+                  )}
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {quickQuestions.map((qq, i) => (
+                      <button
+                        key={i}
+                        onClick={() => isLoggedIn && handleAsk(qq)}
+                        disabled={!isLoggedIn}
+                        className="text-xs px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {qq}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-700 rounded-bl-sm'}`}>
+                    {msg.role === 'assistant' ? (
+                      <div className="prose prose-sm prose-slate max-w-none [&_p]:mb-1 [&_ul]:mb-1 [&_ol]:mb-1 [&_li]:mb-0.5 [&_a]:text-indigo-600">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-slate-100 rounded-xl px-4 py-3 rounded-bl-sm flex items-center gap-2 text-sm text-slate-500">
+                    <Loader2 size={14} className="animate-spin" /> 正在查找答案...
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* 输入区域 */}
+            <div className="p-4 border-t border-slate-100">
+              {chatMessages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {quickQuestions.filter(qq => !chatMessages.some(m => m.role === 'user' && m.content === qq)).slice(0, 3).map((qq, i) => (
+                    <button
+                      key={i}
+                      onClick={() => isLoggedIn && handleAsk(qq)}
+                      disabled={!isLoggedIn || chatLoading}
+                      className="text-[10px] px-2.5 py-1 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all disabled:opacity-40"
+                    >
+                      {qq}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); isLoggedIn && handleAsk(chatInput); } }}
+                  placeholder={isLoggedIn ? "输入你的问题..." : "请先登录以使用 AI 问答"}
+                  disabled={!isLoggedIn || chatLoading}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                />
+                <button
+                  onClick={() => handleAsk(chatInput)}
+                  disabled={!isLoggedIn || chatLoading || !chatInput.trim()}
+                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-sm flex items-center gap-1.5 transition-all disabled:opacity-50 active:scale-95"
+                >
+                  {chatLoading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- 反馈建议页面 (FeedbackView) ---
+const FeedbackView = () => {
+  const navigate = useNavigate();
+  const { user, isLoggedIn } = useAuth();
+  const userId = user?.id || 0;
+
+  // 表单状态
+  const [ticketType, setTicketType] = useState('question');
+  const [priority, setPriority] = useState('normal');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<any>(null);
+
+  // 工单列表
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // 加载工单列表
+  const loadTickets = async () => {
+    if (!userId) return;
+    setTicketsLoading(true);
+    try {
+      const params = new URLSearchParams({ user_id: String(userId) });
+      if (filterStatus) params.append('status', filterStatus);
+      const res = await fetch(`/api/v1/public/tickets?${params}`);
+      const data = await res.json();
+      if (data.success) setTickets(data.tickets || []);
+    } catch { /* ignore */ }
+    setTicketsLoading(false);
+  };
+
+  useEffect(() => { loadTickets(); }, [userId, filterStatus]);
+
+  // 提交工单
+  const handleSubmit = async () => {
+    if (!title.trim() || title.trim().length < 2) {
+      setSubmitResult({ success: false, message: '请填写标题（至少 2 个字）' });
+      return;
+    }
+    if (!content.trim() || content.trim().length < 5) {
+      setSubmitResult({ success: false, message: '请填写详细描述（至少 5 个字）' });
+      return;
+    }
+    setSubmitting(true);
+    setSubmitResult(null);
+    try {
+      const res = await fetch('/api/v1/public/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, type: ticketType, priority, title: title.trim(), content: content.trim(), contact: user?.phone || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSubmitResult({ success: true, message: data.message });
+        setTitle(''); setContent(''); setTicketType('question'); setPriority('normal');
+        loadTickets();
+      } else {
+        setSubmitResult({ success: false, message: data.error || '提交失败' });
+      }
+    } catch {
+      setSubmitResult({ success: false, message: '网络异常，请重试' });
+    }
+    setSubmitting(false);
+    setTimeout(() => setSubmitResult(null), 4000);
+  };
+
+  const typeOptions = [
+    { value: 'question', label: '咨询', icon: '💬', desc: '使用问题或功能疑问' },
+    { value: 'feature', label: '建议', icon: '💡', desc: '功能改进或新需求' },
+    { value: 'bug', label: '缺陷', icon: '🐛', desc: '功能异常或错误' },
+    { value: 'complaint', label: '投诉', icon: '📢', desc: '服务质量反馈' },
+  ];
+
+  const priorityOptions = [
+    { value: 'low', label: '低', color: 'text-slate-500 bg-slate-100' },
+    { value: 'normal', label: '普通', color: 'text-indigo-600 bg-indigo-50' },
+    { value: 'high', label: '高', color: 'text-amber-600 bg-amber-50' },
+    { value: 'urgent', label: '紧急', color: 'text-rose-600 bg-rose-50' },
+  ];
+
+  const statusLabels: Record<string, { label: string; color: string }> = {
+    open: { label: '待处理', color: 'bg-blue-100 text-blue-700' },
+    processing: { label: '处理中', color: 'bg-amber-100 text-amber-700' },
+    resolved: { label: '已解决', color: 'bg-emerald-100 text-emerald-700' },
+    closed: { label: '已关闭', color: 'bg-slate-100 text-slate-500' },
+  };
+
+  const typeLabels: Record<string, { label: string; icon: string }> = {
+    question: { label: '咨询', icon: '💬' },
+    feature: { label: '建议', icon: '💡' },
+    bug: { label: '缺陷', icon: '🐛' },
+    complaint: { label: '投诉', icon: '📢' },
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="pt-40 text-center">
+        <MessageSquare className="mx-auto text-slate-300 mb-4" size={64} />
+        <p className="text-slate-500 font-bold mb-4">请先登录提交反馈</p>
+        <button onClick={() => navigate('/login')} className="bg-indigo-600 text-white px-8 py-3 rounded font-black">去登录</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-32 pb-20 px-6 max-w-6xl mx-auto animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
+          <ChevronLeft size={20} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">反馈建议</h1>
+          <p className="text-slate-500 text-sm">提交工单，我们会认真对待每一条反馈</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* 左侧：提交表单 */}
+        <div className="lg:col-span-5">
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm sticky top-28">
+            <h2 className="text-lg font-black text-slate-900 mb-5 flex items-center gap-2">
+              <Edit3 size={18} className="text-indigo-600" /> 提交工单
+            </h2>
+
+            {/* 类型选择 */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">反馈类型</label>
+              <div className="grid grid-cols-2 gap-2">
+                {typeOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTicketType(opt.value)}
+                    className={`p-3 rounded-lg border text-left transition-all ${ticketType === opt.value ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300'}`}
+                  >
+                    <span className="text-lg">{opt.icon}</span>
+                    <span className={`ml-2 text-sm font-bold ${ticketType === opt.value ? 'text-indigo-700' : 'text-slate-700'}`}>{opt.label}</span>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 优先级 */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">优先级</label>
+              <div className="flex gap-2">
+                {priorityOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPriority(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${priority === opt.value ? opt.color + ' ring-1 ring-current' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 标题 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">标题</label>
+              <input
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="简要描述您的问题或建议"
+                maxLength={200}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+              />
+            </div>
+
+            {/* 描述 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">详细描述</label>
+              <textarea
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                placeholder="请详细描述您遇到的问题、期望的改进、或具体的使用场景..."
+                rows={5}
+                maxLength={5000}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all resize-none"
+              />
+              <p className="text-right text-[10px] text-slate-300 mt-1">{content.length}/5000</p>
+            </div>
+
+            {/* 提交 */}
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-100 disabled:opacity-60 active:scale-[0.98]"
+            >
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {submitting ? '提交中...' : '提交工单'}
+            </button>
+
+            {/* 提交结果 toast */}
+            {submitResult && (
+              <div className={`mt-4 p-3 rounded-lg text-sm font-bold flex items-center gap-2 ${submitResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                {submitResult.success ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                {submitResult.message}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 右侧：工单列表 */}
+        <div className="lg:col-span-7">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+              <Inbox size={18} className="text-slate-400" /> 我的工单
+              {tickets.length > 0 && <span className="text-xs text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded-full">{tickets.length}</span>}
+            </h2>
+            <div className="flex gap-1.5">
+              {[{ v: '', l: '全部' }, { v: 'open', l: '待处理' }, { v: 'processing', l: '处理中' }, { v: 'resolved', l: '已解决' }].map(f => (
+                <button
+                  key={f.v}
+                  onClick={() => setFilterStatus(f.v)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${filterStatus === f.v ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                >
+                  {f.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {ticketsLoading ? (
+            <div className="flex justify-center py-16"><Loader2 className="animate-spin text-indigo-600" size={28} /></div>
+          ) : tickets.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-16 text-center">
+              <Inbox size={48} className="mx-auto text-slate-200 mb-3" />
+              <p className="text-slate-400 font-bold text-sm">暂无工单记录</p>
+              <p className="text-slate-300 text-xs mt-1">提交您的第一条反馈吧</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tickets.map(t => {
+                const st = statusLabels[t.status] || statusLabels.open;
+                const tp = typeLabels[t.type] || typeLabels.question;
+                const isExpanded = expandedId === t.id;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => setExpandedId(isExpanded ? null : t.id)}
+                    className={`bg-white rounded-xl border p-5 cursor-pointer transition-all hover:shadow-md ${isExpanded ? 'border-indigo-200 shadow-md' : 'border-slate-100'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-sm">{tp.icon}</span>
+                          <h3 className="font-bold text-slate-900 text-sm truncate">{t.title}</h3>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${st.color}`}>{st.label}</span>
+                        </div>
+                        <p className="text-xs text-slate-400">#{t.id} · {t.created_at ? new Date(t.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                      </div>
+                      <ChevronDown size={16} className={`text-slate-300 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 animate-in fade-in duration-200">
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 mb-1">描述</p>
+                          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{t.content}</p>
+                        </div>
+                        {t.contact && (
+                          <div>
+                            <p className="text-xs font-bold text-slate-500 mb-1">联系方式</p>
+                            <p className="text-sm text-slate-600">{t.contact}</p>
+                          </div>
+                        )}
+                        {t.reply ? (
+                          <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
+                            <p className="text-xs font-bold text-emerald-700 mb-1 flex items-center gap-1"><MessageSquare size={12} /> 官方回复</p>
+                            <p className="text-sm text-emerald-800 whitespace-pre-wrap">{t.reply}</p>
+                            {t.replied_at && <p className="text-[10px] text-emerald-500 mt-2">{new Date(t.replied_at).toLocaleString('zh-CN')}</p>}
+                          </div>
+                        ) : (
+                          <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                            <p className="text-xs text-slate-400 flex items-center gap-1"><Clock size={11} /> 等待处理中，我们会尽快回复</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Token 余额不足全局提示 ---
+const TokenInsufficientModal = ({ show, balance, onClose }: { show: boolean; balance: number; onClose: () => void }) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-8 relative animate-in zoom-in-95 duration-300">
+        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Gem size={28} className="text-amber-500" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">Token 余额不足</h3>
+          <p className="text-sm text-slate-500">当前余额 <span className="font-bold text-amber-600">{(balance || 0).toLocaleString()}</span> Tokens，不足以完成本次操作</p>
+        </div>
+        <div className="space-y-3">
+          <button onClick={() => { onClose(); navigate('/tokens'); }} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+            <CreditCard size={18} /> 立即充值
+          </button>
+          <button onClick={() => { onClose(); navigate('/pricing'); }} className="w-full py-3 bg-white border-2 border-indigo-200 hover:border-indigo-400 text-indigo-600 font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+            <Sparkles size={18} /> 升级会员获取更多额度
+          </button>
+          {user?.invite_code && (
+            <div className="mt-4 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+              <p className="text-xs text-emerald-700 font-medium mb-1">邀请好友，双方各得 Token 奖励</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-sm font-mono bg-white px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-800 select-all">{user.invite_code}</code>
+                <button onClick={() => { navigator.clipboard.writeText(user.invite_code || ''); }} className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-all">
+                  复制
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 全局 token 不足事件
+const tokenInsufficientEvent = {
+  _listeners: [] as Array<(balance: number) => void>,
+  emit(balance: number) { this._listeners.forEach(fn => fn(balance)); },
+  on(fn: (balance: number) => void) { this._listeners.push(fn); return () => { this._listeners = this._listeners.filter(l => l !== fn); }; }
+};
+
+// 导出供 API 层调用
+(window as any).__showTokenInsufficient = (balance: number) => tokenInsufficientEvent.emit(balance);
 
 // 主应用内容组件
 const AppContent = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try { return localStorage.getItem('devnors_dark_mode') === 'true'; } catch { return false; }
   });
+  const [tokenModalShow, setTokenModalShow] = useState(false);
+  const [tokenModalBalance, setTokenModalBalance] = useState(0);
   const { isLoggedIn, userRole, user } = useAuth();
+
+  useEffect(() => {
+    const unsub = tokenInsufficientEvent.on((balance) => {
+      setTokenModalBalance(balance);
+      setTokenModalShow(true);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -19741,6 +22680,7 @@ const AppContent = () => {
 
   return (
     <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+      <TokenInsufficientModal show={tokenModalShow} balance={tokenModalBalance} onClose={() => setTokenModalShow(false)} />
       <Navbar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main className="flex-1">
         <Routes>
@@ -19773,6 +22713,16 @@ const AppContent = () => {
           <Route path="/employer/talent-pool" element={<TalentPoolView />} />
           <Route path="/tokens" element={<TokenManagementView />} />
           <Route path="/notifications" element={<NotificationCenterView />} />
+          <Route path="/feedback" element={<FeedbackView />} />
+          <Route path="/help" element={<HelpCenterView />} />
+          <Route path="/changelog" element={<ChangelogView />} />
+          <Route path="/privacy" element={<PrivacyPolicyView />} />
+          <Route path="/terms" element={<TermsOfServiceView />} />
+          <Route path="/copyright" element={<CopyrightView />} />
+          <Route path="/algorithm" element={<AlgorithmDisclosureView />} />
+          <Route path="/personal-info" element={<PersonalInfoProtectionView />} />
+          <Route path="/minor-protection" element={<MinorProtectionView />} />
+          <Route path="/complaint" element={<ComplaintGuideView />} />
           <Route path="/settings" element={<SettingsManagementView isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />} />
           <Route path="/about" element={<AboutUsView />} />
           <Route path="/ai-assistant" element={<AIAssistantView />} />
@@ -19795,17 +22745,21 @@ const AppContent = () => {
                 </Link>
                 <p className="text-slate-500 text-sm leading-relaxed mb-6">AI 原生招聘平台。助力人才实现职业梦想，为企业精准推荐全球精英。</p>
                 <div className="flex items-center gap-4">
-                  <a href="#" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-emerald-500 hover:text-white transition-all group">
-                    <MessageCircle size={20} />
+                  {/* 微信 */}
+                  <a href="#" title="微信" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-emerald-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05a6.582 6.582 0 0 1-.261-1.816c0-3.733 3.571-6.764 7.975-6.764.259 0 .51.02.761.04C17.46 4.539 13.46 2.188 8.69 2.188zm-2.6 4.408a1.09 1.09 0 0 1 1.092 1.089 1.09 1.09 0 0 1-1.092 1.089 1.09 1.09 0 0 1-1.093-1.09 1.09 1.09 0 0 1 1.093-1.088zm5.502 0a1.09 1.09 0 0 1 1.093 1.089 1.09 1.09 0 0 1-1.093 1.089 1.09 1.09 0 0 1-1.092-1.09 1.09 1.09 0 0 1 1.092-1.088zM16.216 9.05c-3.862 0-6.994 2.67-6.994 5.962 0 3.293 3.132 5.962 6.994 5.962.68 0 1.34-.086 1.975-.243a.723.723 0 0 1 .6.082l1.57.917a.271.271 0 0 0 .14.045c.132 0 .241-.11.241-.245 0-.06-.024-.118-.04-.176l-.322-1.218a.493.493 0 0 1 .177-.554C22.196 18.39 23.21 16.61 23.21 15.012c0-3.293-3.132-5.962-6.994-5.962zm-2.393 3.478a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814zm4.785 0a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814z"/></svg>
                   </a>
-                  <a href="#" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-rose-500 hover:text-white transition-all group">
-                    <Heart size={20} />
+                  {/* 抖音 */}
+                  <a href="#" title="抖音" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.001-.104z"/></svg>
                   </a>
-                  <a href="#" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-indigo-500 hover:text-white transition-all group">
-                    <Instagram size={20} />
+                  {/* 小红书 */}
+                  <a href="#" title="小红书" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-rose-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7h-2.03l.52-2.5H13.4l-.52 2.5h-1.86l.52-2.5H9.95l-.52 2.5H7.5v1.5h1.57l-.42 2H6.5v1.5h1.8L7.77 16.5h1.59l.52-2.5h1.86l-.52 2.5h1.59l.52-2.5H16.5V13h-2.03l.42-2H16.5V9.5zm-4.09 4h-1.86l.42-2h1.86l-.42 2z"/></svg>
                   </a>
-                  <a href="#" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-sky-500 hover:text-white transition-all group">
-                    <Twitter size={20} />
+                  {/* 轻识 */}
+                  <a href="#" title="轻识" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-indigo-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
                   </a>
                 </div>
               </div>
@@ -19823,9 +22777,12 @@ const AppContent = () => {
                   <div>
                     <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">法律</h4>
                     <div className="space-y-3">
-                      <a href="#" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">隐私政策</a>
-                      <a href="#" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">服务条款</a>
-                      <a href="#" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版权声明</a>
+                      <Link to="/terms" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">服务条款</Link>
+                      <Link to="/privacy" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">隐私政策</Link>
+                      <Link to="/personal-info" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">个人信息保护</Link>
+                      <Link to="/algorithm" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">算法说明</Link>
+                      <Link to="/copyright" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版权声明</Link>
+                      <Link to="/minor-protection" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">未成年人保护</Link>
                     </div>
                   </div>
                   <div>
@@ -19833,8 +22790,9 @@ const AppContent = () => {
                     <div className="space-y-3">
                       <Link to="/about" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">关于我们</Link>
                       <Link to="/tokens" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">资金账户</Link>
-                      <a href="#" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">帮助中心</a>
-                      <a href="#" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">反馈建议</a>
+                      <Link to="/help" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">帮助中心</Link>
+                      <Link to="/feedback" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">反馈建议</Link>
+                      <Link to="/changelog" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版本更新</Link>
                     </div>
                   </div>
                 </div>
@@ -19842,7 +22800,7 @@ const AppContent = () => {
             </div>
             <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
               <p className="text-xs text-slate-400">© 2024 Devnors 得若智能体. All rights reserved.</p>
-              <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Multi-Agent Synergy</p>
+              <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Devnors Multi-Agent Synergy</p>
             </div>
           </div>
         </footer>

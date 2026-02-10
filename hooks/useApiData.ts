@@ -9,6 +9,7 @@ import {
   getPublicJobs,
   getPublicJob,
   getPublicFlows,
+  getFlowStats,
   getPublicFlow,
   getPublicTalents,
   getTokenStats,
@@ -86,6 +87,14 @@ export function useFlows(limit: number = 10, userId?: number) {
     () => getPublicFlows(limit, userId),
     [],
     [limit, userId]
+  );
+}
+
+export function useFlowStats(userId?: number) {
+  return useApiData(
+    () => getFlowStats(userId),
+    { viewed: 0, applied: 0, passed: 0, pending: 0, rejected: 0, total: 0, avgMatch: 0 },
+    [userId]
   );
 }
 
@@ -187,6 +196,7 @@ export default {
   usePublicJobs,
   usePublicJob,
   useFlows,
+  useFlowStats,
   useFlow,
   useTalents,
   useTokenStats,

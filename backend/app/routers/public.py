@@ -6,14 +6,15 @@ import json
 from typing import List, Optional
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query, Body, HTTPException
+from fastapi import APIRouter, Depends, Query, Body, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db, AsyncSessionLocal
+from app.utils.audit import log_audit
 from app.models.job import Job, JobTag, JobStatus
-from app.models.flow import Flow, FlowStatus, FlowStage
+from app.models.flow import Flow, FlowStatus, FlowStage, FlowTimeline
 from app.models.candidate import Candidate, CandidateProfile
 from app.schemas.job import JobListResponse, JobResponse
 
@@ -196,18 +197,11 @@ def _format_salary(job) -> str:
 async def get_public_flows(
     limit: int = Query(10, ge=1, le=50),
     user_id: Optional[int] = Query(None, description="当前登录用户ID，按角色过滤"),
+    candidate_id: Optional[int] = Query(None, description="按候选人ID过滤"),
     db: AsyncSession = Depends(get_db)
 ):
     """获取工作流列表 — 根据用户角色返回不同视角的数据"""
     from app.models.user import User, UserRole
-
-    # 确定用户角色
-    user_role = None
-    if user_id:
-        u_result = await db.execute(select(User).where(User.id == user_id))
-        u = u_result.scalar_one_or_none()
-        if u:
-            user_role = u.role
 
     # 构建查询
     query = (
@@ -215,19 +209,31 @@ async def get_public_flows(
         .options(selectinload(Flow.steps), selectinload(Flow.timeline))
     )
 
-    if user_role in (UserRole.RECRUITER, UserRole.ADMIN):
-        # 企业方：只看自己发起的招聘流程
-        query = query.where(Flow.recruiter_id == user_id)
-    elif user_role == UserRole.CANDIDATE:
-        # 人才方：通过 candidate 表关联查自己的 flow
-        cand_result = await db.execute(
-            select(Candidate.id).where(Candidate.user_id == user_id)
-        )
-        cand_id = cand_result.scalar_one_or_none()
-        if cand_id:
-            query = query.where(Flow.candidate_id == cand_id)
-        else:
-            return []  # 该用户没有 candidate 记录
+    # 如果指定了 candidate_id，直接按候选人过滤
+    user_role = None
+    if candidate_id:
+        query = query.where(Flow.candidate_id == candidate_id)
+    elif user_id:
+        # 确定用户角色
+        user_role = None
+        u_result = await db.execute(select(User).where(User.id == user_id))
+        u = u_result.scalar_one_or_none()
+        if u:
+            user_role = u.role
+
+        if user_role in (UserRole.RECRUITER, UserRole.ADMIN):
+            # 企业方：只看自己发起的招聘流程
+            query = query.where(Flow.recruiter_id == user_id)
+        elif user_role == UserRole.CANDIDATE:
+            # 人才方：通过 candidate 表关联查自己的 flow
+            cand_result = await db.execute(
+                select(Candidate.id).where(Candidate.user_id == user_id)
+            )
+            cand_id = cand_result.scalar_one_or_none()
+            if cand_id:
+                query = query.where(Flow.candidate_id == cand_id)
+            else:
+                return []  # 该用户没有 candidate 记录
 
     query = query.order_by(Flow.updated_at.desc()).limit(limit)
     result = await db.execute(query)
@@ -319,6 +325,84 @@ async def get_public_flows(
     return flow_list
 
 
+@router.get("/flows/stats")
+async def get_flow_stats(
+    user_id: Optional[int] = Query(None, description="当前登录用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取工作流统计数据 — 查看岗位数、投递数、通过数等"""
+    from app.models.user import User, UserRole
+    from sqlalchemy import func as sa_func
+
+    if not user_id:
+        return {"viewed": 0, "applied": 0, "passed": 0, "pending": 0, "rejected": 0, "total": 0, "avgMatch": 0}
+
+    # 确定用户角色
+    u_result = await db.execute(select(User).where(User.id == user_id))
+    u = u_result.scalar_one_or_none()
+    if not u:
+        return {"viewed": 0, "applied": 0, "passed": 0, "pending": 0, "rejected": 0, "total": 0, "avgMatch": 0}
+
+    user_role = u.role
+
+    # 构建基础查询
+    base_query = select(Flow)
+
+    if user_role in (UserRole.RECRUITER, UserRole.ADMIN):
+        base_query = base_query.where(Flow.recruiter_id == user_id)
+    elif user_role == UserRole.CANDIDATE:
+        cand_result = await db.execute(
+            select(Candidate.id).where(Candidate.user_id == user_id)
+        )
+        cand_id = cand_result.scalar_one_or_none()
+        if not cand_id:
+            return {"viewed": 0, "applied": 0, "passed": 0, "pending": 0, "rejected": 0, "total": 0, "avgMatch": 0}
+        base_query = base_query.where(Flow.candidate_id == cand_id)
+
+    # 获取所有相关 flows
+    result = await db.execute(base_query)
+    flows = result.scalars().all()
+
+    total = len(flows)
+    if total == 0:
+        return {"viewed": 0, "applied": 0, "passed": 0, "pending": 0, "rejected": 0, "total": 0, "avgMatch": 0}
+
+    # 统计各状态
+    passed = sum(1 for f in flows if f.status.value in ("accepted", "offer"))
+    rejected = sum(1 for f in flows if f.status.value == "rejected")
+    pending = total - passed - rejected  # 进行中（含 screening/interviewing/evaluating 等）
+    avg_match = round(sum(f.match_score or 0 for f in flows) / total, 1)
+
+    # "查看岗位" = 关联的不重复 job 数量（模拟：实际投递的岗位 + 额外浏览的岗位）
+    unique_jobs = len(set(f.job_id for f in flows))
+    # 模拟浏览量：投递数 * 8~12 倍（真实场景中 AI 会扫描大量岗位后筛选投递）
+    viewed = unique_jobs * 10 + total * 50
+
+    # 企业方视角的标签不同
+    if user_role in (UserRole.RECRUITER, UserRole.ADMIN):
+        return {
+            "invited": total,          # 已邀请候选人数
+            "screened": pending + passed,  # 已筛选
+            "passed": passed,          # 已通过
+            "rejected": rejected,      # 未通过
+            "pending": pending,        # 进行中
+            "total": total,
+            "avgMatch": avg_match,
+            "role": "employer",
+        }
+    else:
+        return {
+            "viewed": viewed,          # AI 查看岗位数
+            "applied": total,          # 已投递岗位数
+            "passed": passed,          # 已通过
+            "rejected": rejected,      # 未通过
+            "pending": pending,        # 进行中
+            "total": total,
+            "avgMatch": avg_match,
+            "role": "candidate",
+        }
+
+
 @router.get("/flows/{flow_id}")
 async def get_public_flow(
     flow_id: int,
@@ -347,16 +431,34 @@ async def get_public_flow(
     )
     candidate = candidate_result.scalar_one_or_none()
     
+    # 构建进度节点
+    stage_val = flow.current_stage.value if flow.current_stage else "parse"
+    stage_map = {"parse": 1, "benchmark": 2, "first_interview": 3, "second_interview": 3, "final": 4}
+    step = stage_map.get(stage_val, 1)
+    nodes = ['邀请', '匹配', '筛选', '面试', '结果']
+
+    # 映射前端状态
+    status_val = flow.status.value if flow.status else "pending"
+    status_map_detail = {
+        "accepted": "completed",
+        "rejected": "rejected",
+        "evaluating": "screening",
+    }
+    frontend_status = status_map_detail.get(status_val, status_val)
+
     return {
         "id": flow.id,
+        "candidateId": flow.candidate_id,
         "candidateName": candidate.profile.display_name if candidate and candidate.profile else "未知",
         "role": job.title if job else "未知职位",
         "company": job.company if job else "未知公司",
-        "stage": flow.current_stage.value,
-        "status": flow.status.value,
+        "stage": stage_val,
+        "status": frontend_status,
         "matchScore": flow.match_score or 0,
-        "currentStep": flow.current_step,
-        "totalSteps": 5,
+        "currentStep": step,
+        "totalSteps": len(nodes),
+        "nodes": nodes,
+        "salary": _format_salary(job) if job else "面议",
         "tokensConsumed": flow.tokens_consumed,
         "agentsUsed": flow.agents_used or [],
         "steps": [{
@@ -1384,7 +1486,7 @@ async def get_tasks(
         select(Todo)
         .where(Todo.user_id == user_id)
         .order_by(Todo.updated_at.desc())
-        .limit(10)
+        .limit(30)
     )
     todos = result.scalars().all()
     
@@ -1662,16 +1764,24 @@ class ChatRequest(BaseModel):
     history: list = []
     model: str = "Devnors 1.0"
     context: str = ""  # 可选的上下文，如任务信息
+    user_id: int = 0  # 用于 token 计费
 
 
 @router.post("/chat")
 async def chat_with_assistant(
     request: ChatRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """AI 助手聊天接口 - 优先使用 MiniMax"""
     import httpx
     from app.config import settings
+    
+    # Token 余额检查
+    if request.user_id:
+        balance = await check_token_balance(db, request.user_id)
+        if balance < 500:  # 最低预估消耗
+            return {"error": "insufficient_tokens", "balance": balance, "required": 500, "response": "", "tokens_used": 0, "model": request.model}
     
     # 系统提示
     system_prompt = """你是 Devnors 得若 AI 智能招聘助手，专门帮助用户解决招聘相关的问题。你的能力包括：
@@ -1731,6 +1841,22 @@ async def chat_with_assistant(
                         reply = result["choices"][0].get("message", {}).get("content", "")
                         tokens = result.get("usage", {}).get("total_tokens", 0)
                         
+                        # 记录 token 消耗
+                        if request.user_id and tokens > 0:
+                            await record_and_deduct_tokens(
+                                db, request.user_id, TokenAction.CHAT, tokens,
+                                model_name="abab6.5s-chat", description="AI 对话"
+                            )
+                            # 记录审计日志
+                            await log_audit(
+                                db, user_id=request.user_id,
+                                action=f"AI 对话（消耗 {tokens} tokens）",
+                                actor="系统", category="ai", risk_level="info",
+                                ip_address=raw_request.client.host if raw_request.client else None,
+                                user_agent=raw_request.headers.get("user-agent"),
+                            )
+                            await db.commit()
+                        
                         return {
                             "response": reply,
                             "tokens_used": tokens,
@@ -1776,6 +1902,23 @@ async def chat_with_assistant(
                 if "candidates" in result and len(result["candidates"]) > 0:
                     reply = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     tokens = result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                    
+                    # 记录 token 消耗
+                    if request.user_id and tokens > 0:
+                        await record_and_deduct_tokens(
+                            db, request.user_id, TokenAction.CHAT, tokens,
+                            model_name="gemini-2.0-flash", description="AI 对话"
+                        )
+                        # 记录审计日志
+                        await log_audit(
+                            db, user_id=request.user_id,
+                            action=f"AI 对话（消耗 {tokens} tokens）",
+                            actor="系统", category="ai", risk_level="info",
+                            ip_address=raw_request.client.host if raw_request.client else None,
+                            user_agent=raw_request.headers.get("user-agent"),
+                        )
+                        await db.commit()
+                    
                     return {"response": reply, "tokens_used": tokens, "model": request.model}
         except Exception as e:
             print(f"Gemini API error: {e}")
@@ -2036,11 +2179,15 @@ async def get_recruitment_suggestions(
                     result = response.json()
                     if result.get("choices"):
                         reply = result["choices"][0].get("message", {}).get("content", "")
+                        tokens = result.get("usage", {}).get("total_tokens", 0)
                         # 解析 JSON
                         import re
                         json_match = re.search(r'\{[\s\S]*\}', reply)
                         if json_match:
                             data = json.loads(json_match.group())
+                            if user_id and tokens > 0:
+                                await record_and_deduct_tokens(db, user_id, TokenAction.JOB_MATCH, tokens, model_name="abab6.5s-chat", description="招聘建议生成")
+                                await db.commit()
                             return {
                                 "company_name": company_name,
                                 "company_summary": data.get("company_summary", ""),
@@ -2065,10 +2212,14 @@ async def get_recruitment_suggestions(
                     result = response.json()
                     if "candidates" in result:
                         reply = result["candidates"][0]["content"]["parts"][0].get("text", "")
+                        tokens = result.get("usageMetadata", {}).get("totalTokenCount", 0)
                         import re
                         json_match = re.search(r'\{[\s\S]*\}', reply)
                         if json_match:
                             data = json.loads(json_match.group())
+                            if user_id and tokens > 0:
+                                await record_and_deduct_tokens(db, user_id, TokenAction.JOB_MATCH, tokens, model_name="gemini-2.0-flash", description="招聘建议生成")
+                                await db.commit()
                             return {
                                 "company_name": company_name,
                                 "company_summary": data.get("company_summary", ""),
@@ -2473,8 +2624,115 @@ TOKEN_ACTION_NAMES = {
     TokenAction.MARKET_ANALYSIS: "市场分析",
     TokenAction.ROUTE_DISPATCH: "全局路由",
     TokenAction.CHAT: "AI 对话",
+    TokenAction.INVITE_REWARD: "邀请奖励",
     TokenAction.OTHER: "其他",
 }
+
+
+# ---------- Token 通用工具函数 ----------
+
+async def check_token_balance(db: AsyncSession, user_id: int) -> int:
+    """检查用户 Token 余额，返回可用余额"""
+    result = await db.execute(
+        select(func.coalesce(func.sum(TokenPackage.remaining_tokens), 0))
+        .where(TokenPackage.user_id == user_id)
+        .where(TokenPackage.is_active == True)
+        .where(TokenPackage.remaining_tokens > 0)
+    )
+    balance = result.scalar() or 0
+    # 如果没有任何套餐，给默认 50000 免费额度
+    if balance == 0:
+        pkg_count_result = await db.execute(
+            select(func.count(TokenPackage.id)).where(TokenPackage.user_id == user_id)
+        )
+        pkg_count = pkg_count_result.scalar() or 0
+        if pkg_count == 0:
+            # 自动创建免费套餐
+            free_pkg = TokenPackage(
+                user_id=user_id,
+                package_type=PackageType.FREE,
+                total_tokens=50000,
+                used_tokens=0,
+                remaining_tokens=50000,
+                is_active=True,
+                price=0
+            )
+            db.add(free_pkg)
+            await db.flush()
+            return 50000
+    return balance
+
+
+async def record_and_deduct_tokens(
+    db: AsyncSession,
+    user_id: int,
+    action: TokenAction,
+    tokens_used: int,
+    model_name: str = None,
+    flow_id: int = None,
+    description: str = None
+) -> dict:
+    """记录 token 消耗并从用户套餐扣减，返回余额信息"""
+    if tokens_used <= 0:
+        return {"success": True, "tokens_deducted": 0, "remaining": await check_token_balance(db, user_id)}
+
+    # 创建消耗记录
+    usage = TokenUsage(
+        user_id=user_id,
+        action=action,
+        tokens_used=tokens_used,
+        model_name=model_name,
+        flow_id=flow_id,
+        description=description
+    )
+    db.add(usage)
+
+    # 从最早过期的套餐开始扣减
+    remaining_to_deduct = tokens_used
+    result = await db.execute(
+        select(TokenPackage)
+        .where(TokenPackage.user_id == user_id)
+        .where(TokenPackage.is_active == True)
+        .where(TokenPackage.remaining_tokens > 0)
+        .order_by(TokenPackage.expires_at.asc().nullslast())
+    )
+    packages = result.scalars().all()
+
+    for pkg in packages:
+        if remaining_to_deduct <= 0:
+            break
+        deduct = min(remaining_to_deduct, pkg.remaining_tokens)
+        pkg.used_tokens += deduct
+        pkg.remaining_tokens = max(0, pkg.remaining_tokens - deduct)
+        remaining_to_deduct -= deduct
+
+    await db.flush()
+
+    # 计算剩余余额
+    new_balance = sum(p.remaining_tokens for p in packages)
+
+    # Token 余额不足提醒（阈值 2000）
+    if new_balance < 2000 and new_balance + tokens_used >= 2000:
+        try:
+            await send_notification(
+                db, user_id,
+                title="Token 余额不足",
+                content=f"您的 Token 余额仅剩 {new_balance:,}，部分 AI 功能可能受限，建议及时充值",
+                type=NotificationType.SYSTEM,
+                importance=NotificationImportance.IMPORTANT,
+                icon="AlertCircle", color="text-rose-600", bg_color="bg-rose-50",
+                link="/tokens",
+                sender="系统",
+            )
+        except Exception:
+            pass  # 不影响主流程
+
+    return {
+        "success": True,
+        "tokens_deducted": tokens_used,
+        "remaining": new_balance,
+        "action": action.value
+    }
 
 
 @router.get("/tokens/stats")
@@ -2500,12 +2758,13 @@ async def get_token_stats(
     total_used = sum(p.used_tokens for p in packages) if packages else 0
     total_purchased = sum(p.price for p in packages) if packages else 0
     
-    # 获取今日消耗
+    # 获取今日消耗（只算正数，排除奖励）
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     result = await db.execute(
         select(func.sum(TokenUsage.tokens_used))
         .where(TokenUsage.user_id == user_id)
         .where(TokenUsage.created_at >= today)
+        .where(TokenUsage.tokens_used > 0)
     )
     today_usage = result.scalar() or 0
     
@@ -2516,6 +2775,7 @@ async def get_token_stats(
         .where(TokenUsage.user_id == user_id)
         .where(TokenUsage.created_at >= yesterday)
         .where(TokenUsage.created_at < today)
+        .where(TokenUsage.tokens_used > 0)
     )
     yesterday_usage = result.scalar() or 1  # 避免除零
     
@@ -2528,6 +2788,7 @@ async def get_token_stats(
         select(func.sum(TokenUsage.tokens_used))
         .where(TokenUsage.user_id == user_id)
         .where(TokenUsage.created_at >= week_ago)
+        .where(TokenUsage.tokens_used > 0)
     )
     week_usage = result.scalar() or 1
     daily_avg = week_usage / 7
@@ -2554,6 +2815,76 @@ async def get_token_stats(
     }
 
 
+@router.get("/tokens/stats/by-agent")
+async def get_token_stats_by_agent(
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """按智能体/操作类型分组统计 Token 消耗"""
+    result = await db.execute(
+        select(
+            TokenUsage.action,
+            func.sum(TokenUsage.tokens_used).label("total"),
+            func.count(TokenUsage.id).label("count")
+        )
+        .where(TokenUsage.user_id == user_id)
+        .where(TokenUsage.tokens_used > 0)  # 排除奖励（负数）
+        .group_by(TokenUsage.action)
+        .order_by(func.sum(TokenUsage.tokens_used).desc())
+    )
+    rows = result.all()
+    
+    grand_total = sum(r[1] for r in rows) if rows else 1  # 避免除零
+    
+    agents = []
+    for action, total, count in rows:
+        pct = round(total / grand_total * 100, 1)
+        agents.append({
+            "action": action.value,
+            "name": TOKEN_ACTION_NAMES.get(action, action.value),
+            "total_tokens": total,
+            "tokens": total,
+            "tokens_display": f"{total:,}",
+            "count": count,
+            "percentage": pct,
+            "share": f"{pct}%",
+        })
+    
+    return {
+        "agents": agents,
+        "total_tokens": grand_total,
+        "grand_total": grand_total,
+        "grand_total_display": f"{grand_total:,}"
+    }
+
+
+def _map_model_display(raw) -> str:
+    """将底层模型名映射为 Devnors 品牌名"""
+    if not raw:
+        return ""
+    _MODEL_MAP = {
+        "abab6.5s-chat": "Devnors 1.0",
+        "abab6.5s": "Devnors 1.0",
+        "MiniMax-abab6.5s": "Devnors 1.0",
+        "gemini-2.0-flash": "Devnors 1.0 Pro",
+        "gemini-2.0-flash-lite": "Devnors 1.0",
+        "gemini-2.5-pro": "Devnors 1.0 Ultra",
+        "gemini-2.5-flash": "Devnors 1.0 Pro",
+        "Gemini-2.0-flash": "Devnors 1.0 Pro",
+    }
+    # 精确匹配或模糊匹配
+    if raw in _MODEL_MAP:
+        return _MODEL_MAP[raw]
+    raw_lower = raw.lower()
+    if "abab" in raw_lower or "minimax" in raw_lower:
+        return "Devnors 1.0"
+    if "gemini" in raw_lower and "pro" in raw_lower:
+        return "Devnors 1.0 Ultra"
+    if "gemini" in raw_lower:
+        return "Devnors 1.0 Pro"
+    return raw
+
+
 @router.get("/tokens/history")
 async def get_token_history(
     user_id: int = Query(..., description="用户ID"),
@@ -2571,42 +2902,35 @@ async def get_token_history(
     )
     records = result.scalars().all()
     
-    # 如果没有记录，返回一些示例数据
+    # 如果没有记录，返回空列表（模拟数据已通过脚本插入数据库）
     if not records:
-        # 生成最近7天的模拟数据
-        sample_data = []
-        for i in range(7):
-            date = datetime.utcnow() - timedelta(days=i)
-            actions = [TokenAction.RESUME_PARSE, TokenAction.INTERVIEW, TokenAction.PROFILE_BUILD, TokenAction.ROUTE_DISPATCH]
-            action = actions[i % len(actions)]
-            tokens = [42500, 89000, 12400, 56000, 92000, 15000, 34000][i]
-            sample_data.append({
-                "id": i + 1,
-                "date": date.strftime("%Y-%m-%d"),
-                "action": action.value,
-                "type": TOKEN_ACTION_NAMES.get(action, "其他"),
-                "tokens": tokens,
-                "cost": f"¥{tokens/10000:.2f}",
-                "description": f"AI {TOKEN_ACTION_NAMES.get(action, '任务')}"
-            })
         return {
-            "items": sample_data,
-            "total": len(sample_data),
+            "items": [],
+            "total": 0,
             "has_more": False
         }
     
+    # 获取总数
+    count_result = await db.execute(
+        select(func.count(TokenUsage.id)).where(TokenUsage.user_id == user_id)
+    )
+    total_count = count_result.scalar() or 0
+
     return {
         "items": [{
             "id": r.id,
             "date": r.created_at.strftime("%Y-%m-%d"),
+            "created_at": r.created_at.isoformat(),
             "action": r.action.value,
             "type": TOKEN_ACTION_NAMES.get(r.action, "其他"),
+            "tokens_used": r.tokens_used,
             "tokens": r.tokens_used,
-            "cost": f"¥{r.tokens_used/10000:.2f}",
-            "description": r.description or f"AI {TOKEN_ACTION_NAMES.get(r.action, '任务')}"
+            "cost": f"¥{abs(r.tokens_used)/10000:.2f}",
+            "description": r.description or f"AI {TOKEN_ACTION_NAMES.get(r.action, '任务')}",
+            "model_name": _map_model_display(r.model_name)
         } for r in records],
-        "total": len(records),
-        "has_more": len(records) >= limit
+        "total": total_count,
+        "has_more": (offset + limit) < total_count
     }
 
 
@@ -2671,37 +2995,58 @@ async def get_token_chart(
 
 @router.get("/tokens/packages")
 async def get_available_packages():
-    """获取可购买的 Token 套餐"""
+    """获取可购买的 Token 套餐 — ¥1 = 10,000 Tokens"""
     return {
+        "exchange_rate": "¥1 = 10,000 Tokens",
         "packages": [
             {
                 "id": "starter",
-                "name": "入门体验",
-                "tokens": 100000,
-                "tokens_display": "100,000",
-                "price": 99,
-                "discount": None,
+                "name": "入门版",
+                "tokens": 500000,
+                "tokens_display": "500K",
+                "price": 39.9,
+                "unit_price": "¥0.08/万",
+                "discount": "热销",
                 "accent": "bg-indigo-50"
             },
             {
-                "id": "pro",
-                "name": "精英猎聘",
-                "tokens": 1000000,
-                "tokens_display": "1,000,000",
-                "price": 799,
+                "id": "standard",
+                "name": "标准版",
+                "tokens": 2000000,
+                "tokens_display": "2M",
+                "price": 129,
+                "unit_price": "¥0.065/万",
                 "discount": "性价比最高",
+                "popular": True,
+                "accent": "bg-blue-50"
+            },
+            {
+                "id": "pro",
+                "name": "专业版",
+                "tokens": 5000000,
+                "tokens_display": "5M",
+                "price": 299,
+                "unit_price": "¥0.06/万",
+                "discount": "省 40%",
                 "accent": "bg-amber-50"
             },
             {
                 "id": "enterprise",
-                "name": "企业旗舰",
-                "tokens": 10000000,
-                "tokens_display": "10,000,000",
-                "price": 6999,
-                "discount": "-20%",
+                "name": "企业版",
+                "tokens": 20000000,
+                "tokens_display": "20M",
+                "price": 899,
+                "unit_price": "¥0.045/万",
+                "discount": "省 55%",
                 "accent": "bg-rose-50"
             }
-        ]
+        ],
+        "tiers": [
+            {"name": "FREE", "monthly_tokens": 50000, "monthly_price": 0},
+            {"name": "PRO", "monthly_tokens": 2000000, "monthly_price": 199},
+            {"name": "ULTRA", "monthly_tokens": 30000000, "monthly_price": 1797}
+        ],
+        "invite_reward": {"inviter": 50000, "invitee": 20000}
     }
 
 
@@ -2752,203 +3097,145 @@ async def record_token_usage(
     }
 
 
-# ============ 消息通知相关接口 ============
+# ============ 消息通知系统 ============
+from app.models.notification import Notification, NotificationType, NotificationImportance
+
+
+async def send_notification(
+    db: AsyncSession,
+    user_id: int,
+    title: str,
+    content: str,
+    type: NotificationType = NotificationType.SYSTEM,
+    importance: NotificationImportance = NotificationImportance.NORMAL,
+    icon: str = "Bell",
+    color: str = "text-slate-600",
+    bg_color: str = "bg-slate-50",
+    link: str = "/notifications",
+    sender: str = "系统",
+    related_flow_id: int = None,
+    related_job_id: int = None,
+    related_candidate_id: int = None,
+):
+    """
+    统一发送通知的工具函数。
+    重要程度策略：
+    - CRITICAL: 必定发送（安全警告、面试结果、联系互换）
+    - IMPORTANT: 尊重用户推送设置
+    - NORMAL / LOW: 尊重推送设置，LOW 不计入未读红点
+    """
+    notif = Notification(
+        user_id=user_id,
+        type=(type.value if hasattr(type, 'value') else str(type)).lower(),
+        importance=(importance.value if hasattr(importance, 'value') else str(importance)).lower(),
+        title=title,
+        content=content,
+        icon=icon,
+        color=color,
+        bg_color=bg_color,
+        link=link,
+        sender=sender,
+        related_flow_id=related_flow_id,
+        related_job_id=related_job_id,
+        related_candidate_id=related_candidate_id,
+    )
+    db.add(notif)
+    return notif
+
+
+def _format_time(dt) -> str:
+    """将 datetime 格式化为友好的时间字符串"""
+    from datetime import datetime, timezone
+    if not dt:
+        return "刚刚"
+    now = datetime.utcnow()
+    diff = now - dt
+    minutes = int(diff.total_seconds() / 60)
+    if minutes < 1:
+        return "刚刚"
+    if minutes < 60:
+        return f"{minutes}分钟前"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}小时前"
+    days = hours // 24
+    if days == 1:
+        return "昨天"
+    if days < 30:
+        return f"{days}天前"
+    return dt.strftime("%m月%d日")
+
 
 @router.get("/notifications")
 async def get_notifications(
     user_id: int = Query(..., description="用户ID"),
-    notification_type: Optional[str] = Query(None, description="通知类型: system/match/interview/message"),
+    notification_type: Optional[str] = Query(None, alias="type", description="通知类型: system/match/interview/message"),
     unread_only: bool = Query(False, description="仅未读"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取用户通知列表"""
-    import random
-    
-    # 基础通知模板
-    notification_templates = [
-        {
-            "type": "match",
-            "title": "新的职位匹配",
-            "content_template": "您的简历与「{job_title} - {company}」匹配度达到 {match_rate}%",
-            "icon": "Target",
-            "color": "text-indigo-600",
-            "bgColor": "bg-indigo-50",
-            "link": "/jobs"
-        },
-        {
-            "type": "interview",
-            "title": "面试邀请",
-            "content_template": "{company}邀请您参加「{job_title}」岗位的{interview_type}",
-            "icon": "Calendar",
-            "color": "text-emerald-600",
-            "bgColor": "bg-emerald-50",
-            "link": "/workbench"
-        },
-        {
-            "type": "system",
-            "title": "系统通知",
-            "content_template": "{message}",
-            "icon": "Bell",
-            "color": "text-amber-600",
-            "bgColor": "bg-amber-50",
-            "link": "/settings"
-        },
-        {
-            "type": "message",
-            "title": "新消息",
-            "content_template": "{sender}回复了您：「{preview}」",
-            "icon": "MessageSquare",
-            "color": "text-violet-600",
-            "bgColor": "bg-violet-50",
-            "link": "/ai-assistant"
-        },
-        {
-            "type": "match",
-            "title": "简历被查看",
-            "content_template": "{company}的招聘官查看了您的简历",
-            "icon": "Eye",
-            "color": "text-cyan-600",
-            "bgColor": "bg-cyan-50",
-            "link": "/candidate/profile"
-        },
-        {
-            "type": "system",
-            "title": "Token 余额提醒",
-            "content_template": "您的 Token 余额不足 {threshold}，建议及时充值",
-            "icon": "AlertCircle",
-            "color": "text-rose-600",
-            "bgColor": "bg-rose-50",
-            "link": "/tokens"
-        },
-        {
-            "type": "interview",
-            "title": "面试结果通知",
-            "content_template": "恭喜！您通过了「{company} - {job_title}」的{stage}",
-            "icon": "CheckCircle2",
-            "color": "text-emerald-600",
-            "bgColor": "bg-emerald-50",
-            "link": "/workbench"
-        },
-        {
-            "type": "match",
-            "title": "人才推荐",
-            "content_template": "系统为您推荐了 {count} 位高匹配度候选人",
-            "icon": "Users",
-            "color": "text-indigo-600",
-            "bgColor": "bg-indigo-50",
-            "link": "/employer/talent-pool"
-        },
-        {
-            "type": "system",
-            "title": "账户升级成功",
-            "content_template": "您的账户已升级为 {plan} 版本，解锁更多高级功能",
-            "icon": "Zap",
-            "color": "text-amber-600",
-            "bgColor": "bg-amber-50",
-            "link": "/settings"
-        },
-        {
-            "type": "match",
-            "title": "职位更新提醒",
-            "content_template": "您关注的「{company}」发布了新职位：{job_title}",
-            "icon": "Briefcase",
-            "color": "text-indigo-600",
-            "bgColor": "bg-indigo-50",
-            "link": "/jobs"
-        }
-    ]
-    
-    # 示例数据
-    companies = ["字节跳动", "腾讯科技", "阿里巴巴", "美团", "京东", "百度", "华为", "小米", "滴滴", "蚂蚁集团"]
-    job_titles = ["高级前端工程师", "资深后端工程师", "算法工程师", "产品经理", "技术负责人", "全栈开发", "数据分析师", "AI 工程师"]
-    interview_types = ["视频面试", "电话面试", "现场面试", "技术面试", "HR 面试"]
-    stages = ["一面", "二面", "终面", "HR 面"]
-    senders = ["HR 李明", "招聘经理张总", "技术面试官王工", "猎头顾问陈经理"]
-    plans = ["Pro", "Ultra", "Enterprise"]
-    messages = [
-        "您的简历已通过初筛",
-        "新版本已发布，请及时更新",
-        "您的账户安全设置已更新",
-        "感谢您的反馈，我们会持续改进"
-    ]
-    previews = [
-        "关于薪资范围可以面谈...",
-        "期待与您进一步沟通...",
-        "您的技术背景非常匹配我们的需求...",
-        "请问您方便参加下周的面试吗..."
-    ]
-    
-    # 时间生成函数
-    def generate_time(minutes_ago: int) -> str:
-        if minutes_ago < 60:
-            return f"{minutes_ago}分钟前"
-        elif minutes_ago < 1440:
-            return f"{minutes_ago // 60}小时前"
-        elif minutes_ago < 2880:
-            return "昨天"
-        else:
-            return f"{minutes_ago // 1440}天前"
-    
-    # 生成通知
-    notifications = []
-    for i in range(15):
-        template = random.choice(notification_templates)
-        
-        # 填充模板
-        content = template["content_template"]
-        content = content.replace("{company}", random.choice(companies))
-        content = content.replace("{job_title}", random.choice(job_titles))
-        content = content.replace("{match_rate}", str(random.randint(80, 98)))
-        content = content.replace("{interview_type}", random.choice(interview_types))
-        content = content.replace("{stage}", random.choice(stages))
-        content = content.replace("{sender}", random.choice(senders))
-        content = content.replace("{preview}", random.choice(previews))
-        content = content.replace("{threshold}", "10,000")
-        content = content.replace("{count}", str(random.randint(3, 8)))
-        content = content.replace("{plan}", random.choice(plans))
-        content = content.replace("{message}", random.choice(messages))
-        
-        # 时间递增
-        minutes_ago = i * random.randint(30, 180)
-        
-        notifications.append({
-            "id": i + 1,
-            "type": template["type"],
-            "title": template["title"],
-            "content": content,
-            "time": generate_time(minutes_ago),
-            "timestamp": (datetime.utcnow() - timedelta(minutes=minutes_ago)).isoformat(),
-            "read": i >= 3,  # 前 3 条未读
-            "icon": template["icon"],
-            "color": template["color"],
-            "bgColor": template["bgColor"],
-            "link": template["link"]
-        })
-    
-    # 筛选
+    """获取用户通知列表（数据库实时查询）"""
+    # 构建查询
+    query = select(Notification).where(
+        Notification.user_id == user_id,
+        Notification.is_deleted == False
+    )
     if notification_type:
-        notifications = [n for n in notifications if n["type"] == notification_type]
-    
+        query = query.where(Notification.type == notification_type)
     if unread_only:
-        notifications = [n for n in notifications if not n["read"]]
-    
+        query = query.where(Notification.is_read == False)
+    query = query.order_by(Notification.created_at.desc())
+
+    # 总数
+    count_q = select(func.count(Notification.id)).where(
+        Notification.user_id == user_id,
+        Notification.is_deleted == False
+    )
+    if notification_type:
+        count_q = count_q.where(Notification.type == notification_type)
+    total_result = await db.execute(count_q)
+    total = total_result.scalar() or 0
+
+    # 未读数（全局，不按 type 过滤）— LOW 级别不计入未读
+    unread_q = select(func.count(Notification.id)).where(
+        Notification.user_id == user_id,
+        Notification.is_deleted == False,
+        Notification.is_read == False,
+        Notification.importance != "low",
+    )
+    unread_result = await db.execute(unread_q)
+    unread_count = unread_result.scalar() or 0
+
     # 分页
-    total = len(notifications)
-    start = (page - 1) * page_size
-    end = start + page_size
-    paginated = notifications[start:end]
-    
-    # 统计
-    unread_count = len([n for n in notifications if not n["read"]])
-    
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    rows = result.scalars().all()
+
+    notifications = []
+    for n in rows:
+        notifications.append({
+            "id": n.id,
+            "type": (n.type.value if hasattr(n.type, 'value') else str(n.type)).lower(),
+            "importance": (n.importance.value if hasattr(n.importance, 'value') else str(n.importance)).lower(),
+            "title": n.title,
+            "content": n.content,
+            "time": _format_time(n.created_at),
+            "timestamp": n.created_at.isoformat() if n.created_at else "",
+            "read": n.is_read,
+            "icon": n.icon or "Bell",
+            "color": n.color or "text-slate-600",
+            "bgColor": n.bg_color or "bg-slate-50",
+            "link": n.link or "/notifications",
+            "sender": n.sender or "系统",
+        })
+
     return {
-        "notifications": paginated,
+        "notifications": notifications,
         "total": total,
         "unread_count": unread_count,
         "page": page,
-        "page_size": page_size
+        "page_size": page_size,
     }
 
 
@@ -2959,18 +3246,21 @@ async def mark_notification_read(
     db: AsyncSession = Depends(get_db)
 ):
     """标记通知已读"""
-    # 这里应该更新数据库中的通知状态
-    # 由于没有通知表，返回模拟响应
+    from sqlalchemy import update
     if notification_id:
-        return {
-            "success": True,
-            "message": f"通知 {notification_id} 已标记为已读"
-        }
+        await db.execute(
+            update(Notification)
+            .where(Notification.id == notification_id, Notification.user_id == user_id)
+            .values(is_read=True)
+        )
     else:
-        return {
-            "success": True,
-            "message": "所有通知已标记为已读"
-        }
+        await db.execute(
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.is_read == False)
+            .values(is_read=True)
+        )
+    await db.commit()
+    return {"success": True, "message": "已标记为已读"}
 
 
 @router.delete("/notifications/{notification_id}")
@@ -2979,11 +3269,15 @@ async def delete_notification(
     user_id: int = Query(..., description="用户ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """删除通知"""
-    return {
-        "success": True,
-        "message": f"通知 {notification_id} 已删除"
-    }
+    """软删除通知"""
+    from sqlalchemy import update
+    await db.execute(
+        update(Notification)
+        .where(Notification.id == notification_id, Notification.user_id == user_id)
+        .values(is_deleted=True)
+    )
+    await db.commit()
+    return {"success": True, "message": f"通知 {notification_id} 已删除"}
 
 
 @router.get("/notifications/unread-count")
@@ -2991,11 +3285,477 @@ async def get_unread_count(
     user_id: int = Query(..., description="用户ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取未读通知数量"""
-    import random
-    # 返回随机未读数量（实际应从数据库查询）
+    """获取未读通知数量（LOW 级别不计入）"""
+    result = await db.execute(
+        select(func.count(Notification.id)).where(
+            Notification.user_id == user_id,
+            Notification.is_deleted == False,
+            Notification.is_read == False,
+            Notification.importance != "low",
+        )
+    )
+    return {"unread_count": result.scalar() or 0}
+
+
+# ============ 帮助中心 AI 问答接口 ============
+
+HELPDESK_KNOWLEDGE_BASE = """
+# Devnors 得若 - 全站帮助文档
+
+## 一、平台简介
+Devnors（得若）是一款 AI 驱动的智能招聘平台，连接求职者与企业方，通过 AI 技术实现简历解析、智能匹配、自动筛选、面试辅助等全流程智能招聘服务。
+- 官网口号：「AI 重新定义招聘」
+- 当前版本：Devnors 1.0 Ultra · 旗舰版
+- 支持角色：求职者（Candidate）和企业方（Employer），登录后可随时切换
+
+## 二、角色与切换
+- 注册后首次登录需选择角色（求职者 / 企业方）
+- 登录后可在右上角头像菜单中点击「切换为求职者」或「切换为企业方」随时切换
+- 两种身份数据独立，各自拥有不同的功能菜单和工作台
+
+## 三、核心功能
+
+### 3.1 AI 助手（/ai-assistant）
+- 多功能 AI 聊天助手，支持自然语言交互
+- 求职者模式：智能投递、简历优化、职业规划、DISC 测评
+- 企业方模式：发布职位、邀请候选人、企业资料完善、企业认证
+- 使用 AI 助手消耗 Token
+
+### 3.2 工作台（/workbench）
+- 统一管理招聘/求职流程的核心页面
+- 展示所有进行中的招聘队列（Flow）
+- 每个队列代表一个候选人与一个岗位的匹配流程
+- 队列状态流转：AI 智能筛选 → 简历已过 → 双方意向确认 → 联系方式交换 → 面试安排 → 已入职/已淘汰
+- 可按状态筛选和搜索队列
+- 包含任务列表（TodoList），AI 助手会自动创建和追踪任务
+
+### 3.3 记忆系统（/candidate/memory 或 /employer/memory）
+- 让 AI 更了解你的个性化记忆存储
+- 求职者：记录求职偏好、技能特长、职业目标等
+- 企业方：记录企业文化、招聘偏好、团队特点等
+- 记忆会在 AI 对话和智能匹配中被自动引用
+- 支持添加、编辑、删除记忆条目
+
+### 3.4 简历解析
+- 上传 PDF/Word 简历，AI 自动解析提取结构化信息
+- 解析内容包括：基本信息、教育经历、工作经历、技能标签、项目经验
+- 解析结果用于 AI 匹配和推荐
+
+## 四、求职者功能
+
+### 4.1 求职者中心（/candidate）
+- 求职者首页仪表盘
+- 展示记忆概要、推荐岗位、进行中的投递流程
+- 快捷入口：AI 助手、投递岗位、查看记忆
+
+### 4.2 个人主页（/candidate/home）
+- 展示求职者完整档案：头像、基本信息、技能雷达图
+- 职业发展路径、理想岗位、个人简介
+
+### 4.3 岗位推荐（/candidate/jobs）
+- AI 根据求职者记忆和简历推荐匹配岗位
+- 每个岗位卡片展示公司、薪资、地点、标签
+- 点击「AI 投递」按钮：AI 分析简历与岗位匹配度 → 自动投递 → 显示匹配分数和分析理由
+- 已投递的岗位始终标记为「已投递」，hover 可查看投递详情（匹配分数、AI 分析、所在队列）
+- 点击详情可直接跳转到对应的招聘队列
+
+### 4.4 岗位详情（/candidate/job/:jobId）
+- 查看岗位完整信息：职责、要求、薪资、公司信息
+- 「AI 投递」按钮功能同岗位推荐页
+- 投递后显示匹配详情
+
+### 4.5 个人档案编辑（/candidate/profile）
+- 编辑求职者个人资料
+
+## 五、企业方功能
+
+### 5.1 企业中心（/employer）
+- 企业方首页仪表盘
+- 展示记忆概要、在招岗位、推荐候选人
+- 快捷入口：AI 助手、发布职位、查看记忆
+
+### 5.2 企业主页（/employer/home）
+- 展示企业完整档案：Logo、名称、行业、规模、地址
+- 企业介绍、统计数据、快捷操作
+
+### 5.3 职位管理（/employer/post）
+- 列表展示所有已发布的岗位
+- 支持创建新职位、编辑、上下架、删除
+- 每个职位卡片显示：标题、薪资、状态（招聘中/已暂停/已关闭）、申请人数
+
+### 5.4 职位详情（/employer/post/:postId）
+- 查看岗位详细信息和所有申请者
+- 按状态筛选申请者（待筛选/面试中/已录用/已淘汰）
+- 查看候选人简历、AI 匹配分析
+- 操作：推进流程、发送反馈
+
+### 5.5 人才池（/employer/talent-pool）
+- 浏览平台人才库
+- 搜索和筛选候选人
+- 点击「AI 邀请」按钮：AI 分析候选人简历与我方岗位匹配度 → 自动邀请到最合适的岗位 → 显示匹配分数和分析理由
+- 已邀请的候选人始终标记为「已邀请」，hover 可查看邀请详情
+- 点击详情可跳转到对应的招聘队列
+
+## 六、Token 体系
+
+### 6.1 什么是 Token
+- Token 是平台的 AI 服务消耗单位
+- 使用 AI 功能（对话、简历解析、智能匹配、投递、邀请等）都会消耗 Token
+- Token 余额不足时无法使用 AI 功能
+
+### 6.2 如何获取 Token
+- **注册赠送**：新用户注册自动赠送免费 Token
+- **邀请奖励**：邀请好友注册，双方各获得奖励 Token（/invite 页面获取邀请链接）
+- **付费充值**：在 Token 管理页面（/tokens）购买 Token 套餐
+
+### 6.3 Token 消耗规则
+- AI 对话：每次对话根据实际用量消耗（通常 500-2000 Token）
+- 简历解析：约 4000 Token
+- 智能投递/邀请：约 1000-3000 Token
+- 市场分析：约 6000 Token
+- 所有消耗记录可在 Token 管理页面查看明细
+
+### 6.4 Token 管理（/tokens）
+- 查看当前余额和使用趋势
+- 查看消耗明细和充值记录
+- 购买 Token 套餐
+- Token 有效期内未使用不会过期
+
+## 七、系统设置（/settings）
+
+### 7.1 账号信息
+- 修改姓名、手机号、邮箱、头像
+- 修改登录密码
+
+### 7.2 基础设置（企业方）
+- 企业展示名称、行业、规模、地址
+- 联系方式、官网、企业简介
+
+### 7.3 企业认证（企业方）
+- 提交营业执照、法人身份证等认证材料
+- 认证通过后获得「已认证」标识，提高人才信任度
+
+### 7.4 个人认证（求职者）
+- 提交身份证、学历证明等认证材料
+- 认证通过后获得「已认证」标识
+
+### 7.5 AI 引擎配置
+- 高级用户可配置自定义 AI 模型
+- 支持设置自定义 API Key
+
+### 7.6 API 密钥管理
+- 管理 API 密钥
+- 查看 API 调用量
+
+### 7.7 团队管理（企业方）
+- 邀请团队成员
+- 设置成员角色和权限
+- 转让管理员
+
+### 7.8 审计日志
+- 查看所有操作记录
+- 支持按类别和时间筛选
+- 导出日志
+
+## 八、消息中心（/notifications）
+- 接收系统通知、匹配通知、面试通知、消息通知
+- 通知分为重要（关键/重要）和一般（普通/低优先级）
+- 重要通知会特殊标记，确保不遗漏
+- 支持按类型筛选、标记已读、删除
+- 未读通知数量在导航栏 Bell 图标上实时显示
+
+## 九、反馈工单（/feedback）
+- 提交反馈工单：选择类型（咨询/建议/缺陷/投诉）和优先级
+- 填写标题和详细描述
+- 查看已提交的工单列表和处理状态
+- 工单状态：待处理 → 处理中 → 已解决 → 已关闭
+- 查看管理员回复
+
+## 十、常见问题
+
+Q: 注册时需要什么信息？
+A: 手机号 + 密码即可注册，注册后选择角色（求职者/企业方）。
+
+Q: 忘记密码怎么办？
+A: 在登录页点击忘记密码，通过手机验证码重置。
+
+Q: Token 余额不足怎么办？
+A: 前往 Token 管理页面充值，或邀请好友注册获取奖励 Token。
+
+Q: AI 投递/邀请失败怎么办？
+A: 检查 Token 余额是否充足；如果提示"已投递/已邀请"说明之前已操作过，无需重复。
+
+Q: 如何查看我的投递/被邀请状态？
+A: 在工作台（/workbench）查看所有招聘队列，每个队列显示当前状态和详细流程。
+
+Q: 怎么切换求职者和企业方身份？
+A: 点击右上角头像，在菜单中点击「切换为求职者」或「切换为企业方」。
+
+Q: 企业认证有什么好处？
+A: 获得认证标识，提高招聘信息可信度，增加候选人投递意愿。
+
+Q: 如何联系客服？
+A: 在 footer 点击「反馈建议」提交工单，我们会尽快处理。
+"""
+
+
+@router.post("/helpdesk/chat")
+async def helpdesk_chat(
+    req: dict,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """帮助中心 AI 问答接口 - 基于文档知识库回答用户问题"""
+    import httpx
+    from app.config import settings
+
+    user_id = req.get("user_id", 0)
+    question = (req.get("question") or "").strip()
+    history = req.get("history") or []
+
+    if not question:
+        return {"error": "请输入您的问题", "response": "", "tokens_used": 0}
+
+    # Token 余额检查
+    if user_id:
+        balance = await check_token_balance(db, user_id)
+        if balance < 500:
+            return {"error": "insufficient_tokens", "balance": balance, "required": 500, "response": "", "tokens_used": 0}
+
+    # 构造 system prompt（注入全站文档）
+    system_prompt = f"""你是 Devnors 得若平台的帮助中心智能客服。你的任务是根据以下平台文档，准确、耐心地回答用户关于平台使用的各种问题。
+
+注意事项：
+1. 只回答与 Devnors 平台相关的问题，如果用户问了无关问题，礼貌地引导回平台话题
+2. 回答要简洁、实用，使用中文
+3. 如果文档中没有对应信息，如实告知并建议用户通过「反馈建议」提交工单
+4. 适当使用 Markdown 格式让回答更清晰
+
+---
+{HELPDESK_KNOWLEDGE_BASE}
+---"""
+
+    model_used = ""
+    reply = ""
+    tokens = 0
+
+    # 优先使用 MiniMax
+    minimax_api_key = settings.minimax_api_key or ""
+    if minimax_api_key:
+        try:
+            messages = [{"role": "system", "content": system_prompt}]
+            for msg in history[-6:]:
+                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+            messages.append({"role": "user", "content": question})
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                    headers={
+                        "Authorization": f"Bearer {minimax_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "abab6.5s-chat",
+                        "messages": messages,
+                        "max_tokens": 2048,
+                        "temperature": 0.5,
+                        "top_p": 0.9,
+                    }
+                )
+                result = response.json()
+                if result.get("base_resp", {}).get("status_code", 0) == 0:
+                    if "choices" in result and len(result["choices"]) > 0:
+                        reply = result["choices"][0].get("message", {}).get("content", "")
+                        tokens = result.get("usage", {}).get("total_tokens", 0)
+                        model_used = "abab6.5s-chat"
+        except Exception as e:
+            print(f"[helpdesk] MiniMax error: {e}")
+
+    # 兜底：Gemini
+    if not reply:
+        gemini_api_key = settings.gemini_api_key or ""
+        if gemini_api_key:
+            try:
+                contents = []
+                contents.append({"role": "user", "parts": [{"text": f"[系统指令] {system_prompt}"}]})
+                contents.append({"role": "model", "parts": [{"text": "好的，我是 Devnors 帮助中心智能客服，很高兴为您解答平台使用问题。"}]})
+                for msg in history[-6:]:
+                    role = "user" if msg.get("role") == "user" else "model"
+                    contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+                contents.append({"role": "user", "parts": [{"text": question}]})
+
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}",
+                        headers={"Content-Type": "application/json"},
+                        json={
+                            "contents": contents,
+                            "generationConfig": {"temperature": 0.5, "topP": 0.9, "maxOutputTokens": 2048}
+                        }
+                    )
+                    result = response.json()
+                    if "candidates" in result and len(result["candidates"]) > 0:
+                        reply = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        tokens = result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                        model_used = "gemini-2.0-flash"
+            except Exception as e:
+                print(f"[helpdesk] Gemini error: {e}")
+
+    if not reply:
+        return {"response": "抱歉，AI 服务暂时不可用，请稍后再试。您也可以通过「反馈建议」提交工单获取帮助。", "tokens_used": 0, "model": ""}
+
+    # 记录 token 消耗
+    if user_id and tokens > 0:
+        await record_and_deduct_tokens(
+            db, user_id, TokenAction.CHAT, tokens,
+            model_name=model_used, description="帮助中心 AI 问答"
+        )
+        await log_audit(
+            db, user_id=user_id,
+            action=f"帮助中心问答（消耗 {tokens} tokens）",
+            actor="系统", category="ai", risk_level="info",
+            ip_address=raw_request.client.host if raw_request.client else None,
+            user_agent=raw_request.headers.get("user-agent"),
+        )
+        await db.commit()
+
+    return {"response": reply, "tokens_used": tokens, "model": model_used}
+
+
+# ============ 工单/反馈建议接口 ============
+from app.models.ticket import Ticket
+
+
+@router.post("/tickets")
+async def create_ticket(
+    req: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """提交反馈工单"""
+    user_id = req.get("user_id")
+    title = (req.get("title") or "").strip()
+    content = (req.get("content") or "").strip()
+    ticket_type = req.get("type", "question")
+    priority = req.get("priority", "normal")
+    contact = (req.get("contact") or "").strip() or None
+
+    if not user_id:
+        return {"error": "请先登录", "success": False}
+    if not title or len(title) < 2:
+        return {"error": "请填写标题（至少 2 个字）", "success": False}
+    if not content or len(content) < 5:
+        return {"error": "请填写详细描述（至少 5 个字）", "success": False}
+    if ticket_type not in ("bug", "feature", "question", "complaint"):
+        ticket_type = "question"
+    if priority not in ("low", "normal", "high", "urgent"):
+        priority = "normal"
+
+    ticket = Ticket(
+        user_id=user_id,
+        type=ticket_type,
+        priority=priority,
+        status="open",
+        title=title[:200],
+        content=content[:5000],
+        contact=contact[:200] if contact else None,
+    )
+    db.add(ticket)
+    await db.flush()
+
+    # 发送通知确认
+    await send_notification(
+        db, user_id,
+        title="反馈已收到",
+        content=f"您的工单 #{ticket.id}「{title[:30]}」已提交，我们会尽快处理",
+        type=NotificationType.SYSTEM,
+        importance=NotificationImportance.NORMAL,
+        icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+        link="/feedback",
+        sender="系统",
+    )
+
+    await db.commit()
+
     return {
-        "unread_count": random.randint(1, 5)
+        "success": True,
+        "ticket_id": ticket.id,
+        "message": f"工单 #{ticket.id} 提交成功，感谢您的反馈！",
+    }
+
+
+@router.get("/tickets")
+async def get_tickets(
+    user_id: int = Query(..., description="用户ID"),
+    status: Optional[str] = Query(None, description="工单状态: open/processing/resolved/closed"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取用户的工单列表"""
+    query = select(Ticket).where(Ticket.user_id == user_id)
+    if status:
+        query = query.where(Ticket.status == status)
+    query = query.order_by(Ticket.created_at.desc())
+
+    # 总数
+    count_q = select(func.count(Ticket.id)).where(Ticket.user_id == user_id)
+    if status:
+        count_q = count_q.where(Ticket.status == status)
+    total = (await db.execute(count_q)).scalar() or 0
+
+    # 分页
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(query)).scalars().all()
+
+    tickets = []
+    for t in rows:
+        tickets.append({
+            "id": t.id,
+            "type": t.type,
+            "priority": t.priority,
+            "status": t.status,
+            "title": t.title,
+            "content": t.content,
+            "contact": t.contact,
+            "reply": t.reply,
+            "replied_at": t.replied_at.isoformat() if t.replied_at else None,
+            "created_at": t.created_at.isoformat() if t.created_at else "",
+            "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+        })
+
+    return {"success": True, "tickets": tickets, "total": total, "page": page}
+
+
+@router.get("/tickets/{ticket_id}")
+async def get_ticket_detail(
+    ticket_id: int,
+    user_id: int = Query(..., description="用户ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取工单详情"""
+    result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id, Ticket.user_id == user_id)
+    )
+    t = result.scalar_one_or_none()
+    if not t:
+        return {"error": "工单不存在", "success": False}
+
+    return {
+        "success": True,
+        "ticket": {
+            "id": t.id,
+            "type": t.type,
+            "priority": t.priority,
+            "status": t.status,
+            "title": t.title,
+            "content": t.content,
+            "contact": t.contact,
+            "reply": t.reply,
+            "replied_at": t.replied_at.isoformat() if t.replied_at else None,
+            "created_at": t.created_at.isoformat() if t.created_at else "",
+            "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+        }
     }
 
 
@@ -4002,6 +4762,12 @@ async def smart_match_candidates(
     import httpx
     from app.config import settings
     
+    # Token 余额检查
+    if req.user_id:
+        balance = await check_token_balance(db, req.user_id)
+        if balance < 2000:
+            raise HTTPException(status_code=402, detail={"error": "insufficient_tokens", "balance": balance, "required": 2000})
+    
     # 1. 查询已发布的岗位详情
     job_result = await db.execute(
         select(Job).options(selectinload(Job.tags)).where(Job.id.in_(req.job_ids))
@@ -4143,6 +4909,10 @@ async def smart_match_candidates(
                 if result.get("base_resp", {}).get("status_code", 0) == 0:
                     if "choices" in result and len(result["choices"]) > 0:
                         ai_response_text = result["choices"][0].get("message", {}).get("content", "")
+                        _mm_tokens = result.get("usage", {}).get("total_tokens", 0)
+                        if req.user_id and _mm_tokens > 0:
+                            await record_and_deduct_tokens(db, req.user_id, TokenAction.JOB_MATCH, _mm_tokens, model_name="abab6.5s-chat", description="智能候选人匹配")
+                            await db.commit()
         except Exception as e:
             print(f"[smart-match] MiniMax error: {e}")
     
@@ -4159,6 +4929,10 @@ async def smart_match_candidates(
                 result = response.json()
                 if "candidates" in result:
                     ai_response_text = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    _gm_tokens = result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                    if req.user_id and _gm_tokens > 0:
+                        await record_and_deduct_tokens(db, req.user_id, TokenAction.JOB_MATCH, _gm_tokens, model_name="gemini-2.0-flash", description="智能候选人匹配")
+                        await db.commit()
         except Exception as e:
             print(f"[smart-match] Gemini error: {e}")
     
@@ -4739,6 +5513,13 @@ async def _run_smart_screen(task_id: str, job_ids: List[int], user_id: int, todo
                             r = resp.json()
                             if r.get("base_resp", {}).get("status_code", 0) == 0 and "choices" in r:
                                 ai_text = r["choices"][0].get("message", {}).get("content", "")
+                                _et = r.get("usage", {}).get("total_tokens", 0)
+                                if user_id and _et > 0:
+                                    try:
+                                        async with AsyncSessionLocal() as _tdb:
+                                            await record_and_deduct_tokens(_tdb, user_id, TokenAction.ROUTE_DISPATCH, _et, model_name="abab6.5s-chat", description="智能筛选-企业审核")
+                                            await _tdb.commit()
+                                    except: pass
                     except Exception as e:
                         print(f"[screen-employer] MiniMax error: {e}")
                 if not ai_text and gemini_api_key:
@@ -4748,6 +5529,13 @@ async def _run_smart_screen(task_id: str, job_ids: List[int], user_id: int, todo
                             r = resp.json()
                             if "candidates" in r:
                                 ai_text = r["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                                _et = r.get("usageMetadata", {}).get("totalTokenCount", 0)
+                                if user_id and _et > 0:
+                                    try:
+                                        async with AsyncSessionLocal() as _tdb:
+                                            await record_and_deduct_tokens(_tdb, user_id, TokenAction.ROUTE_DISPATCH, _et, model_name="gemini-2.0-flash", description="智能筛选-企业审核")
+                                            await _tdb.commit()
+                                    except: pass
                     except Exception as e:
                         print(f"[screen-employer] Gemini error: {e}")
             finally:
@@ -4855,6 +5643,13 @@ async def _run_smart_screen(task_id: str, job_ids: List[int], user_id: int, todo
                             r = resp.json()
                             if r.get("base_resp", {}).get("status_code", 0) == 0 and "choices" in r:
                                 ai_text2 = r["choices"][0].get("message", {}).get("content", "")
+                                _ct = r.get("usage", {}).get("total_tokens", 0)
+                                if user_id and _ct > 0:
+                                    try:
+                                        async with AsyncSessionLocal() as _tdb:
+                                            await record_and_deduct_tokens(_tdb, user_id, TokenAction.ROUTE_DISPATCH, _ct, model_name="abab6.5s-chat", description="智能筛选-候选人审核")
+                                            await _tdb.commit()
+                                    except: pass
                     except Exception as e:
                         print(f"[screen-candidate] MiniMax error: {e}")
                 if not ai_text2 and gemini_api_key:
@@ -4864,6 +5659,13 @@ async def _run_smart_screen(task_id: str, job_ids: List[int], user_id: int, todo
                             r = resp.json()
                             if "candidates" in r:
                                 ai_text2 = r["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                                _ct = r.get("usageMetadata", {}).get("totalTokenCount", 0)
+                                if user_id and _ct > 0:
+                                    try:
+                                        async with AsyncSessionLocal() as _tdb:
+                                            await record_and_deduct_tokens(_tdb, user_id, TokenAction.ROUTE_DISPATCH, _ct, model_name="gemini-2.0-flash", description="智能筛选-候选人审核")
+                                            await _tdb.commit()
+                                    except: pass
                     except Exception as e:
                         print(f"[screen-candidate] Gemini error: {e}")
             finally:
@@ -5040,6 +5842,25 @@ async def _run_smart_screen(task_id: str, job_ids: List[int], user_id: int, todo
                             action=f"智能筛选通过（企业 {r.get('employer_score', 0)}分 / 候选人意向 {r.get('candidate_interest', 0)}分）· 联系方式已自动互换",
                             agent_name="smart_screen",
                         ))
+                        # 通知：筛选通过（关键消息）
+                        try:
+                            cand_q = await db.execute(select(Candidate.user_id).where(Candidate.id == c_id))
+                            c_uid = cand_q.scalar()
+                            if c_uid:
+                                await send_notification(db, c_uid,
+                                    title="恭喜！AI 筛选通过", content=f"您在「{j.title}」岗位的智能筛选已通过，联系方式已互换",
+                                    type=NotificationType.INTERVIEW, importance=NotificationImportance.CRITICAL,
+                                    icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+                                    link=f"/workbench/flow/{flow.id}", sender="smart_screen",
+                                    related_flow_id=flow.id, related_job_id=j.id, related_candidate_id=c_id)
+                            await send_notification(db, user_id,
+                                title="候选人筛选通过", content=f"{r.get('name', '候选人')} 在「{j.title}」岗位的筛选已通过（{r.get('employer_score', 0)}分）",
+                                type=NotificationType.INTERVIEW, importance=NotificationImportance.IMPORTANT,
+                                icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+                                link=f"/workbench/flow/{flow.id}", sender="smart_screen",
+                                related_flow_id=flow.id, related_job_id=j.id, related_candidate_id=c_id)
+                        except Exception:
+                            pass
                     elif r.get("employer_pass"):
                         flow.status = FlowStatus.SCREENING
                         flow.current_stage = FlowStage.BENCHMARK
@@ -5623,6 +6444,555 @@ async def seed_mock_candidates(
     }
 
 
+@router.post("/quick-invite")
+async def quick_invite_candidate(
+    req: dict,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """AI 智能邀请候选人 — 用大模型分析候选人简历与企业岗位，匹配最佳岗位并创建 Flow"""
+    import httpx, json as _json
+    from app.config import settings as app_settings
+
+    candidate_id = req.get("candidate_id")
+    user_id = req.get("user_id")
+    if not candidate_id or not user_id:
+        return {"error": "缺少参数", "success": False}
+
+    # ---------- 1. 获取候选人信息 ----------
+    cand_result = await db.execute(
+        select(Candidate)
+        .options(selectinload(Candidate.profile), selectinload(Candidate.skills))
+        .where(Candidate.id == candidate_id)
+    )
+    candidate = cand_result.scalar_one_or_none()
+    if not candidate:
+        return {"error": "候选人不存在", "success": False}
+
+    cand_name = candidate.profile.display_name if candidate.profile else f"候选人#{candidate_id}"
+    cand_role = candidate.profile.current_role if candidate.profile else "未知"
+    cand_exp = candidate.profile.experience_years if candidate.profile else 0
+    cand_summary = candidate.profile.summary if candidate.profile else ""
+    cand_skills = [s.name for s in (candidate.skills or [])]
+
+    # ---------- 2. 获取企业活跃岗位 ----------
+    from app.models.job import JobStatus as JStatus
+    jobs_result = await db.execute(
+        select(Job).where(Job.owner_id == user_id, Job.status == JStatus.ACTIVE).order_by(Job.created_at.desc())
+    )
+    jobs = jobs_result.scalars().all()
+    if not jobs:
+        return {"error": "暂无活跃岗位，请先发布岗位", "success": False}
+
+    # 筛选出尚未关联该候选人的岗位
+    available_jobs = []
+    for job in jobs:
+        existing = await db.execute(
+            select(Flow).where(Flow.candidate_id == candidate_id, Flow.job_id == job.id)
+        )
+        if not existing.scalar_one_or_none():
+            available_jobs.append(job)
+
+    if not available_jobs:
+        return {"error": "该候选人已加入所有岗位的招聘流程", "success": False}
+
+    # ---------- 3. 检查 Token 余额 ----------
+    balance = await check_token_balance(db, user_id)
+    if balance < 100:
+        return {"error": "Token 余额不足，请先充值", "success": False}
+
+    # ---------- 4. 构建 AI 分析 Prompt ----------
+    jobs_desc = "\n".join([
+        f"岗位{i+1}: [ID={j.id}] {j.title} | 地点: {j.location or '远程'} | 薪资: {j.salary_min or '面议'}K-{j.salary_max or '面议'}K | 描述: {(j.description or '')[:200]}"
+        for i, j in enumerate(available_jobs[:8])
+    ])
+
+    prompt = f"""你是一位资深 AI 猎头，请分析以下候选人简历并从企业岗位中选出最匹配的岗位。
+
+## 候选人信息
+- 姓名: {cand_name}
+- 当前职位: {cand_role}
+- 工作经验: {cand_exp} 年
+- 技能: {', '.join(cand_skills[:10])}
+- 简介: {cand_summary[:300]}
+
+## 企业可用岗位
+{jobs_desc}
+
+## 要求
+请返回严格 JSON 格式（不要包含 markdown）：
+{{"job_id": 最匹配的岗位ID(数字), "match_score": 匹配度(70-98的整数), "reason": "一句话说明匹配原因(30字内)", "queue": "智能筛选队列"}}
+"""
+
+    # ---------- 5. 调用 AI 大模型分析 ----------
+    ai_provider = app_settings.ai_provider  # "minimax" or "gemini"
+    minimax_key = app_settings.minimax_api_key
+    gemini_key = app_settings.gemini_api_key
+    ai_reason = ""
+    ai_match_score = 0
+    ai_job_id = None
+    ai_queue = "智能筛选队列"
+    tokens_used = 0
+    model_name = ""
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            if ai_provider == "minimax" and minimax_key:
+                # ---- MiniMax (abab6.5s-chat) ----
+                model_name = "abab6.5s-chat"
+                resp = await client.post(
+                    "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                    headers={
+                        "Authorization": f"Bearer {minimax_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "abab6.5s-chat",
+                        "messages": [
+                            {"role": "system", "content": "你是一位资深 AI 猎头。只返回严格 JSON，不包含 markdown 标记。"},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "max_tokens": 256,
+                        "temperature": 0.3,
+                    }
+                )
+                result = resp.json()
+                if result.get("base_resp", {}).get("status_code", 0) == 0:
+                    if "choices" in result and len(result["choices"]) > 0:
+                        text = result["choices"][0].get("message", {}).get("content", "")
+                        tokens_used = result.get("usage", {}).get("total_tokens", 0)
+                        clean = text.strip()
+                        if clean.startswith("```"):
+                            clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                        parsed = _json.loads(clean)
+                        ai_job_id = parsed.get("job_id")
+                        ai_match_score = min(98, max(70, int(parsed.get("match_score", 80))))
+                        ai_reason = parsed.get("reason", "")[:50]
+                        ai_queue = parsed.get("queue", "智能筛选队列")[:20]
+                else:
+                    print(f"[quick-invite] MiniMax error: {result.get('base_resp', {})}")
+
+            elif gemini_key:
+                # ---- Gemini (gemini-2.0-flash) ----
+                model_name = "gemini-2.0-flash"
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 256}
+                    }
+                )
+                result = resp.json()
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    text = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    tokens_used = result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                    clean = text.strip()
+                    if clean.startswith("```"):
+                        clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                    parsed = _json.loads(clean)
+                    ai_job_id = parsed.get("job_id")
+                    ai_match_score = min(98, max(70, int(parsed.get("match_score", 80))))
+                    ai_reason = parsed.get("reason", "")[:50]
+                    ai_queue = parsed.get("queue", "智能筛选队列")[:20]
+    except Exception as e:
+        print(f"[quick-invite] AI error ({ai_provider}): {e}")
+
+    # ---------- 6. 确定目标岗位（AI 选的 or fallback） ----------
+    target_job = None
+    if ai_job_id:
+        for j in available_jobs:
+            if j.id == ai_job_id:
+                target_job = j
+                break
+    if not target_job:
+        target_job = available_jobs[0]
+        ai_match_score = ai_match_score or min(95, 70 + len(cand_skills) * 3)
+
+    match_score = ai_match_score or min(95, 70 + len(cand_skills) * 3)
+
+    # ---------- 7. 记录 Token 消耗 ----------
+    if tokens_used > 0:
+        await record_and_deduct_tokens(
+            db, user_id, TokenAction.JOB_MATCH, tokens_used,
+            model_name=model_name or ai_provider,
+            description=f"AI 智能邀请分析：{cand_name} → {target_job.title}"
+        )
+        # 审计日志
+        await log_audit(
+            db, user_id=user_id,
+            action=f"AI 智能邀请：{cand_name} → {target_job.title}（消耗 {tokens_used} tokens）",
+            actor="smart_invite", category="ai", risk_level="info",
+            ip_address=raw_request.client.host if raw_request.client else None,
+            user_agent=raw_request.headers.get("user-agent"),
+        )
+
+    # ---------- 8. 创建 Flow ----------
+    flow = Flow(
+        candidate_id=candidate_id,
+        job_id=target_job.id,
+        recruiter_id=user_id,
+        status=FlowStatus.SCREENING,
+        current_stage=FlowStage.PARSE,
+        current_step=1,
+        match_score=match_score,
+        details=f"AI 智能邀请：{ai_reason}" if ai_reason else "智能邀请匹配",
+        last_action=f"AI 邀请 — 加入{ai_queue}",
+        agents_used=["smart_invite", model_name] if tokens_used > 0 else ["smart_invite"],
+    )
+    db.add(flow)
+    await db.flush()
+
+    db.add(FlowTimeline(
+        flow_id=flow.id,
+        action=f"AI 智能邀请：{cand_name} 匹配「{target_job.title}」（{match_score}%）",
+        agent_name="smart_invite",
+        tokens_used=tokens_used,
+    ))
+
+    # --- 发送通知 ---
+    # 通知候选人：收到邀请（重要）
+    await send_notification(
+        db, candidate.user_id,
+        title="收到 AI 智能邀请",
+        content=f"企业对您发起了智能邀请，岗位「{target_job.title}」匹配度 {match_score}%",
+        type=NotificationType.MATCH,
+        importance=NotificationImportance.IMPORTANT,
+        icon="Target", color="text-indigo-600", bg_color="bg-indigo-50",
+        link=f"/workbench/flow/{flow.id}",
+        sender="smart_invite",
+        related_flow_id=flow.id, related_job_id=target_job.id, related_candidate_id=candidate_id,
+    )
+    # 通知招聘方：邀请已发出（一般）
+    await send_notification(
+        db, user_id,
+        title="AI 邀请已发出",
+        content=f"已将 {cand_name} 邀请加入「{target_job.title}」{ai_queue}（匹配度 {match_score}%）",
+        type=NotificationType.MATCH,
+        importance=NotificationImportance.NORMAL,
+        icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+        link=f"/workbench/flow/{flow.id}",
+        sender="smart_invite",
+        related_flow_id=flow.id, related_job_id=target_job.id, related_candidate_id=candidate_id,
+    )
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "flow_id": flow.id,
+        "candidate_name": cand_name,
+        "job_title": target_job.title,
+        "match_score": match_score,
+        "ai_reason": ai_reason,
+        "ai_queue": ai_queue,
+        "tokens_used": tokens_used,
+        "model_name": model_name or "",
+        "message": f"AI 分析完成：{cand_name} 已加入「{target_job.title}」{ai_queue}（匹配度 {match_score}%）",
+    }
+
+
+@router.get("/my-invites")
+async def get_my_invites(
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取当前用户通过 AI 智能邀请过的所有候选人（含详情），用于持久化已邀请状态"""
+    result = await db.execute(
+        select(Flow, Job.title)
+        .join(Job, Flow.job_id == Job.id, isouter=True)
+        .where(Flow.recruiter_id == user_id)
+        .where(Flow.details.like("%智能邀请%"))
+        .order_by(Flow.created_at.desc())
+    )
+    rows = result.all()
+
+    invites = {}
+    for f, job_title in rows:
+        cid = f.candidate_id
+        if cid not in invites:
+            invites[cid] = {
+                "candidate_id": cid,
+                "flow_id": f.id,
+                "job_title": job_title or "未知岗位",
+                "match_score": f.match_score or 0,
+                "details": f.details or "",
+                "last_action": f.last_action or "",
+                "created_at": f.created_at.isoformat() if f.created_at else "",
+            }
+
+    return {"success": True, "invites": invites}
+
+
+@router.post("/quick-apply")
+async def quick_apply_job(
+    req: dict,
+    raw_request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """AI 智能投递 — 候选人用大模型分析自身简历与岗位匹配度，自动投递"""
+    import httpx, json as _json
+    from app.config import settings as app_settings
+
+    job_id = req.get("job_id")
+    user_id = req.get("user_id")
+    if not job_id or not user_id:
+        return {"error": "缺少参数", "success": False}
+
+    # ---------- 1. 获取候选人信息 ----------
+    cand_result = await db.execute(
+        select(Candidate)
+        .options(selectinload(Candidate.profile), selectinload(Candidate.skills))
+        .where(Candidate.user_id == user_id)
+    )
+    candidate = cand_result.scalar_one_or_none()
+    if not candidate:
+        return {"error": "请先完善候选人档案", "success": False}
+
+    cand_name = candidate.profile.display_name if candidate.profile else f"用户#{user_id}"
+    cand_role = candidate.profile.current_role if candidate.profile else "未知"
+    cand_exp = candidate.profile.experience_years if candidate.profile else 0
+    cand_summary = candidate.profile.summary if candidate.profile else ""
+    cand_skills = [s.name for s in (candidate.skills or [])]
+
+    # ---------- 2. 获取岗位信息 ----------
+    job_result = await db.execute(select(Job).where(Job.id == job_id))
+    job = job_result.scalar_one_or_none()
+    if not job:
+        return {"error": "岗位不存在", "success": False}
+
+    # ---------- 3. 检查是否已投递 ----------
+    existing_result = await db.execute(
+        select(Flow).where(Flow.candidate_id == candidate.id, Flow.job_id == job_id)
+    )
+    existing_flow = existing_result.scalars().first()
+    # 只有当候选人已经通过 AI 智能投递过才拒绝（details 包含"智能投递"）
+    if existing_flow and existing_flow.details and "智能投递" in existing_flow.details:
+        return {"error": "您已投递过该岗位", "success": False}
+
+    # ---------- 4. 检查 Token 余额 ----------
+    balance = await check_token_balance(db, user_id)
+    if balance < 100:
+        return {"error": "Token 余额不足，请先充值", "success": False}
+
+    # ---------- 5. 构建 AI Prompt ----------
+    salary_str = f"{job.salary_min or '面议'}K-{job.salary_max or '面议'}K"
+    prompt = f"""你是一位资深 AI 求职顾问，请分析候选人简历与岗位的匹配程度，并给出投递建议。
+
+## 候选人信息
+- 姓名: {cand_name}
+- 当前职位: {cand_role}
+- 工作经验: {cand_exp} 年
+- 技能: {', '.join(cand_skills[:10])}
+- 简介: {cand_summary[:300]}
+
+## 目标岗位
+- 岗位: {job.title}
+- 公司: {job.company or '未知'}
+- 地点: {job.location or '远程'}
+- 薪资: {salary_str}
+- 描述: {(job.description or '')[:300]}
+
+## 要求
+请返回严格 JSON 格式（不要包含 markdown）：
+{{"match_score": 匹配度(70-98的整数), "reason": "一句话说明匹配原因(30字内)", "suggestion": "一句话求职建议(30字内)", "queue": "AI筛选队列"}}
+"""
+
+    # ---------- 6. 调用 AI 大模型 ----------
+    ai_provider = app_settings.ai_provider
+    minimax_key = app_settings.minimax_api_key
+    gemini_key = app_settings.gemini_api_key
+    ai_reason = ""
+    ai_suggestion = ""
+    ai_match_score = 0
+    ai_queue = "AI筛选队列"
+    tokens_used = 0
+    model_name = ""
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            if ai_provider == "minimax" and minimax_key:
+                model_name = "abab6.5s-chat"
+                resp = await client.post(
+                    "https://api.minimax.chat/v1/text/chatcompletion_v2",
+                    headers={"Authorization": f"Bearer {minimax_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "abab6.5s-chat",
+                        "messages": [
+                            {"role": "system", "content": "你是一位资深 AI 求职顾问。只返回严格 JSON，不包含 markdown 标记。"},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "max_tokens": 256,
+                        "temperature": 0.3,
+                    }
+                )
+                result = resp.json()
+                if result.get("base_resp", {}).get("status_code", 0) == 0:
+                    if "choices" in result and len(result["choices"]) > 0:
+                        text = result["choices"][0].get("message", {}).get("content", "")
+                        tokens_used = result.get("usage", {}).get("total_tokens", 0)
+                        clean = text.strip()
+                        if clean.startswith("```"):
+                            clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                        parsed = _json.loads(clean)
+                        ai_match_score = min(98, max(70, int(parsed.get("match_score", 80))))
+                        ai_reason = parsed.get("reason", "")[:50]
+                        ai_suggestion = parsed.get("suggestion", "")[:50]
+                        ai_queue = parsed.get("queue", "AI筛选队列")[:20]
+            elif gemini_key:
+                model_name = "gemini-2.0-flash"
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_key}",
+                    headers={"Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.3, "maxOutputTokens": 256}}
+                )
+                result = resp.json()
+                if "candidates" in result and len(result["candidates"]) > 0:
+                    text = result["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    tokens_used = result.get("usageMetadata", {}).get("totalTokenCount", 0)
+                    clean = text.strip()
+                    if clean.startswith("```"):
+                        clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                    parsed = _json.loads(clean)
+                    ai_match_score = min(98, max(70, int(parsed.get("match_score", 80))))
+                    ai_reason = parsed.get("reason", "")[:50]
+                    ai_suggestion = parsed.get("suggestion", "")[:50]
+                    ai_queue = parsed.get("queue", "AI筛选队列")[:20]
+    except Exception as e:
+        print(f"[quick-apply] AI error ({ai_provider}): {e}")
+
+    match_score = ai_match_score or min(95, 70 + len(cand_skills) * 3)
+
+    # ---------- 7. 记录 Token 消耗 ----------
+    if tokens_used > 0:
+        await record_and_deduct_tokens(
+            db, user_id, TokenAction.JOB_MATCH, tokens_used,
+            model_name=model_name or ai_provider,
+            description=f"AI 智能投递分析：{cand_name} → {job.title}"
+        )
+        await log_audit(
+            db, user_id=user_id,
+            action=f"AI 智能投递：{cand_name} → {job.title}（消耗 {tokens_used} tokens）",
+            actor="smart_apply", category="ai", risk_level="info",
+            ip_address=raw_request.client.host if raw_request.client else None,
+            user_agent=raw_request.headers.get("user-agent"),
+        )
+
+    # ---------- 8. 创建或更新 Flow ----------
+    if existing_flow:
+        # 已有其他来源的 Flow（邀请/种子），更新为投递状态
+        existing_flow.match_score = match_score
+        existing_flow.details = f"AI 智能投递：{ai_reason}" if ai_reason else "AI 智能投递"
+        existing_flow.last_action = f"AI 投递 — 加入{ai_queue}"
+        existing_flow.agents_used = list(set((existing_flow.agents_used or []) + ["smart_apply"] + ([model_name] if tokens_used > 0 else [])))
+        flow = existing_flow
+    else:
+        flow = Flow(
+            candidate_id=candidate.id,
+            job_id=job_id,
+            recruiter_id=job.owner_id,
+            status=FlowStatus.SCREENING,
+            current_stage=FlowStage.PARSE,
+            current_step=1,
+            match_score=match_score,
+            details=f"AI 智能投递：{ai_reason}" if ai_reason else "AI 智能投递",
+            last_action=f"AI 投递 — 加入{ai_queue}",
+            agents_used=["smart_apply", model_name] if tokens_used > 0 else ["smart_apply"],
+        )
+        db.add(flow)
+    await db.flush()
+
+    db.add(FlowTimeline(
+        flow_id=flow.id,
+        action=f"AI 智能投递：{cand_name} 投递「{job.title}」（{match_score}%）",
+        agent_name="smart_apply",
+        tokens_used=tokens_used,
+    ))
+
+    # --- 发送通知 ---
+    # 通知候选人：投递成功确认（一般）
+    await send_notification(
+        db, user_id,
+        title="AI 投递成功",
+        content=f"已投递「{job.title}」（{job.company or ''}），匹配度 {match_score}%，已加入{ai_queue}",
+        type=NotificationType.MATCH,
+        importance=NotificationImportance.NORMAL,
+        icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+        link=f"/workbench/flow/{flow.id}",
+        sender="smart_apply",
+        related_flow_id=flow.id, related_job_id=job_id,
+    )
+    # 通知招聘方：收到新投递（重要）
+    await send_notification(
+        db, job.owner_id,
+        title="收到新投递",
+        content=f"{cand_name} 通过 AI 智能投递了「{job.title}」岗位（匹配度 {match_score}%）",
+        type=NotificationType.MATCH,
+        importance=NotificationImportance.IMPORTANT,
+        icon="Users", color="text-indigo-600", bg_color="bg-indigo-50",
+        link=f"/workbench/flow/{flow.id}",
+        sender="smart_apply",
+        related_flow_id=flow.id, related_job_id=job_id, related_candidate_id=candidate.id,
+    )
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "flow_id": flow.id,
+        "job_title": job.title,
+        "company": job.company or "",
+        "match_score": match_score,
+        "ai_reason": ai_reason,
+        "ai_suggestion": ai_suggestion,
+        "ai_queue": ai_queue,
+        "tokens_used": tokens_used,
+        "model_name": model_name or "",
+        "message": f"AI 分析完成：已投递「{job.title}」，加入{ai_queue}（匹配度 {match_score}%）",
+    }
+
+
+@router.get("/my-applies")
+async def get_my_applies(
+    user_id: int = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取当前用户通过 AI 智能投递过的所有岗位（含详情），用于持久化已投递状态"""
+    # 先找到该用户对应的候选人
+    cand_result = await db.execute(
+        select(Candidate.id).where(Candidate.user_id == user_id)
+    )
+    candidate_id = cand_result.scalar_one_or_none()
+    if not candidate_id:
+        return {"success": True, "applies": {}}
+
+    result = await db.execute(
+        select(Flow, Job.title, Job.company)
+        .join(Job, Flow.job_id == Job.id, isouter=True)
+        .where(Flow.candidate_id == candidate_id)
+        .where(Flow.details.like("%智能投递%"))
+        .order_by(Flow.created_at.desc())
+    )
+    rows = result.all()
+
+    applies = {}
+    for f, job_title, job_company in rows:
+        jid = f.job_id
+        if jid not in applies:
+            applies[jid] = {
+                "job_id": jid,
+                "flow_id": f.id,
+                "job_title": job_title or "未知岗位",
+                "company": job_company or "",
+                "match_score": f.match_score or 0,
+                "details": f.details or "",
+                "last_action": f.last_action or "",
+                "created_at": f.created_at.isoformat() if f.created_at else "",
+            }
+
+    return {"success": True, "applies": applies}
+
+
 @router.post("/flows/complete-exchange")
 async def complete_exchange_flows(
     req: dict,
@@ -5652,11 +7022,39 @@ async def complete_exchange_flows(
             flow.last_action = "联系方式已互换"
             flow.details = (flow.details or "") + " | 联系方式已互换，招聘流程完成"
             flow.completed_at = datetime.utcnow()
+            await db.flush()
             db.add(FlowTimeline(
-                flow=flow,
+                flow_id=flow.id,
                 action="联系方式互换完成，招聘全流程结束",
                 agent_name="system",
             ))
+            # --- 发送通知：联系方式互换（关键消息，双方都需收到） ---
+            # 查候选人 user_id
+            cand_res = await db.execute(select(Candidate.user_id).where(Candidate.id == flow.candidate_id))
+            cand_uid = cand_res.scalar()
+            if cand_uid:
+                await send_notification(
+                    db, cand_uid,
+                    title="联系方式已互换",
+                    content=f"恭喜！招聘流程已完成，您可以查看对方联系方式",
+                    type=NotificationType.MESSAGE,
+                    importance=NotificationImportance.CRITICAL,
+                    icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+                    link=f"/workbench/flow/{flow.id}",
+                    sender="system",
+                    related_flow_id=flow.id, related_job_id=jid, related_candidate_id=flow.candidate_id,
+                )
+            await send_notification(
+                db, flow.recruiter_id,
+                title="联系方式已互换",
+                content=f"候选人联系方式已互换，招聘流程圆满完成",
+                type=NotificationType.MESSAGE,
+                importance=NotificationImportance.CRITICAL,
+                icon="CheckCircle2", color="text-emerald-600", bg_color="bg-emerald-50",
+                link=f"/workbench/flow/{flow.id}",
+                sender="system",
+                related_flow_id=flow.id, related_job_id=jid, related_candidate_id=flow.candidate_id,
+            )
             updated += 1
     
     if updated > 0:
@@ -5974,3 +7372,35 @@ async def get_invite_records(
         })
 
     return {"total": total, "items": items}
+
+
+# ============ 版本更新记录接口 ============
+from app.models.changelog import Changelog
+
+
+@router.get("/changelog")
+async def get_changelog(db: AsyncSession = Depends(get_db)):
+    """获取平台版本更新记录，按版本分组返回"""
+    result = await db.execute(
+        select(Changelog).order_by(Changelog.version.desc(), Changelog.sort_order.asc())
+    )
+    records = result.scalars().all()
+
+    # 按 version 分组
+    versions_map: dict = {}
+    for r in records:
+        if r.version not in versions_map:
+            versions_map[r.version] = {
+                "version": r.version,
+                "date": r.date,
+                "tag": r.tag or "",
+                "tagColor": r.tag_color or "",
+                "items": [],
+            }
+        versions_map[r.version]["items"].append({
+            "type": r.item_type,
+            "color": r.item_color,
+            "desc": r.description,
+        })
+
+    return list(versions_map.values())
