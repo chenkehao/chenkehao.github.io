@@ -64,6 +64,15 @@ import {
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+// 后端存储 UTC 时间但 isoformat() 不带 Z 后缀，需要补上让浏览器正确转为本地时间
+const parseUTC = (dateStr: string | null | undefined): Date => {
+  if (!dateStr) return new Date(0);
+  // 如果已经有 Z 或时区偏移则直接解析
+  if (dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr)) return new Date(dateStr);
+  // 否则补上 Z 标记为 UTC
+  return new Date(dateStr + 'Z');
+};
+
 interface TimelineItem {
   time: string;
   action: string;
@@ -113,16 +122,16 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 45200,
     stage: '初试阶段',
     nextAction: '等待面试官反馈',
-    nextSchedule: '2024-01-18 14:00',
+    nextSchedule: '2026-02-18 14:00',
     agents: ['简历解析智能体', '面试评估智能体'],
     details: '候选人已完成技术初试，AI 面试官生成了详细的面试评估报告，包括技术能力、项目经验、算法思维等多个维度的评分。目前等待企业面试官进行人工复核。',
     timeline: [
-      { time: '2024-01-10 09:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5200 },
-      { time: '2024-01-10 09:15', action: '多维画像构建', agent: '画像构建智能体', tokens: 3800 },
-      { time: '2024-01-10 10:00', action: '岗位匹配分析', agent: '匹配评估智能体', tokens: 4500 },
-      { time: '2024-01-11 14:00', action: 'AI 模拟面试', agent: '面试评估智能体', tokens: 12500 },
-      { time: '2024-01-12 16:00', action: '面试实录生成', agent: '面试评估智能体', tokens: 8200 },
-      { time: '2024-01-15 10:00', action: '进入初试阶段', agent: '路由调度智能体', tokens: 2100 },
+      { time: '2026-02-03 09:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5200 },
+      { time: '2026-02-03 09:15', action: '多维画像构建', agent: '画像构建智能体', tokens: 3800 },
+      { time: '2026-02-03 10:00', action: '岗位匹配分析', agent: '匹配评估智能体', tokens: 4500 },
+      { time: '2026-02-04 14:00', action: 'AI 模拟面试', agent: '面试评估智能体', tokens: 12500 },
+      { time: '2026-02-05 16:00', action: '面试实录生成', agent: '面试评估智能体', tokens: 8200 },
+      { time: '2026-02-08 10:00', action: '进入初试阶段', agent: '路由调度智能体', tokens: 2100 },
     ]
   },
   { 
@@ -142,15 +151,15 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 32100,
     stage: '对标阶段',
     nextAction: '等待 HR 确认对标结果',
-    nextSchedule: '2024-01-17 11:00',
+    nextSchedule: '2026-02-17 11:00',
     agents: ['简历解析智能体', '市场分析智能体'],
     details: '候选人简历已解析完成，AI 完成了候选人与目标岗位的多维度对比分析。目前系统正在等待 HR 确认对标结果，以决定是否推进到下一阶段。',
     timeline: [
-      { time: '2024-01-12 10:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 4800 },
-      { time: '2024-01-12 10:30', action: '市场薪资对标', agent: '市场分析智能体', tokens: 6200 },
-      { time: '2024-01-12 14:00', action: '能力画像对比', agent: '画像构建智能体', tokens: 5500 },
-      { time: '2024-01-13 09:00', action: '综合评估报告', agent: '匹配评估智能体', tokens: 4100 },
-      { time: '2024-01-13 16:00', action: '待 HR 审核', agent: '路由调度智能体', tokens: 1500 },
+      { time: '2026-02-05 10:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 4800 },
+      { time: '2026-02-05 10:30', action: '市场薪资对标', agent: '市场分析智能体', tokens: 6200 },
+      { time: '2026-02-05 14:00', action: '能力画像对比', agent: '画像构建智能体', tokens: 5500 },
+      { time: '2026-02-06 09:00', action: '综合评估报告', agent: '匹配评估智能体', tokens: 4100 },
+      { time: '2026-02-06 16:00', action: '待 HR 审核', agent: '路由调度智能体', tokens: 1500 },
     ]
   },
   { 
@@ -170,14 +179,14 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 18500,
     stage: '解析阶段',
     nextAction: '安排技术面试',
-    nextSchedule: '2024-01-19 10:00',
+    nextSchedule: '2026-02-19 10:00',
     agents: ['简历解析智能体'],
     details: '候选人简历已成功解析并通过初筛。AI 完成了基础的能力评估，目前系统已将任务分配给对应的招聘流程，等待下一步技术面试的安排。',
     timeline: [
-      { time: '2024-01-14 08:00', action: '简历上传', agent: '系统', tokens: 0 },
-      { time: '2024-01-14 08:10', action: '简历解析完成', agent: '简历解析智能体', tokens: 6500 },
-      { time: '2024-01-14 09:00', action: '初筛通过', agent: '筛选评估智能体', tokens: 4200 },
-      { time: '2024-01-14 09:30', action: '路由分发成功', agent: '路由调度智能体', tokens: 2800 },
+      { time: '2026-02-07 08:00', action: '简历上传', agent: '系统', tokens: 0 },
+      { time: '2026-02-07 08:10', action: '简历解析完成', agent: '简历解析智能体', tokens: 6500 },
+      { time: '2026-02-07 09:00', action: '初筛通过', agent: '筛选评估智能体', tokens: 4200 },
+      { time: '2026-02-07 09:30', action: '路由分发成功', agent: '路由调度智能体', tokens: 2800 },
     ]
   },
   { 
@@ -197,16 +206,16 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 78500,
     stage: '完成阶段',
     nextAction: '发放 Offer 通知',
-    nextSchedule: '2024-01-20 09:00',
+    nextSchedule: '2026-02-20 09:00',
     agents: ['简历解析智能体', '面试评估智能体', '市场分析智能体', '路由调度智能体'],
     details: '候选人已完成所有面试流程，综合评估结果优秀。AI 自动完成了薪资对标分析，并生成了详细的 Offer 建议。目前等待企业发放正式 Offer。',
     timeline: [
-      { time: '2024-01-08 10:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5800 },
-      { time: '2024-01-08 11:00', action: '市场薪资对标', agent: '市场分析智能体', tokens: 7500 },
-      { time: '2024-01-09 14:00', action: 'AI 初试完成', agent: '面试评估智能体', tokens: 15200 },
-      { time: '2024-01-11 10:00', action: 'AI 复试完成', agent: '面试评估智能体', tokens: 18500 },
-      { time: '2024-01-15 16:00', action: '综合评估完成', agent: '匹配评估智能体', tokens: 9500 },
-      { time: '2024-01-16 14:00', action: '薪资对标通过', agent: '市场分析智能体', tokens: 6200 },
+      { time: '2026-01-20 10:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5800 },
+      { time: '2026-01-20 11:00', action: '市场薪资对标', agent: '市场分析智能体', tokens: 7500 },
+      { time: '2026-01-21 14:00', action: 'AI 初试完成', agent: '面试评估智能体', tokens: 15200 },
+      { time: '2026-01-23 10:00', action: 'AI 复试完成', agent: '面试评估智能体', tokens: 18500 },
+      { time: '2026-02-05 16:00', action: '综合评估完成', agent: '匹配评估智能体', tokens: 9500 },
+      { time: '2026-02-06 14:00', action: '薪资对标通过', agent: '市场分析智能体', tokens: 6200 },
     ]
   },
   { 
@@ -226,14 +235,14 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 38400,
     stage: '对标阶段',
     nextAction: '完成技术能力评估',
-    nextSchedule: '2024-01-18 09:00',
+    nextSchedule: '2026-02-18 09:00',
     agents: ['简历解析智能体', '技术评估智能体'],
     details: '候选人简历已解析完成，AI 正在进行深度的技术能力评估。代码逻辑扫描已完成，目前正在进行技术能力综合评估。',
     timeline: [
-      { time: '2024-01-13 11:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5100 },
-      { time: '2024-01-13 14:00', action: 'GitHub 项目扫描', agent: '技术评估智能体', tokens: 8900 },
-      { time: '2024-01-14 10:00', action: '代码逻辑扫描', agent: '技术评估智能体', tokens: 11200 },
-      { time: '2024-01-15 09:00', action: '技术能力画像', agent: '画像构建智能体', tokens: 7200 },
+      { time: '2026-02-06 11:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 5100 },
+      { time: '2026-02-06 14:00', action: 'GitHub 项目扫描', agent: '技术评估智能体', tokens: 8900 },
+      { time: '2026-02-07 10:00', action: '代码逻辑扫描', agent: '技术评估智能体', tokens: 11200 },
+      { time: '2026-02-08 09:00', action: '技术能力画像', agent: '画像构建智能体', tokens: 7200 },
     ]
   },
   { 
@@ -253,14 +262,14 @@ const MOCK_FLOW_DATA: FlowData[] = [
     tokensConsumed: 52300,
     stage: '初试阶段',
     nextAction: '确认面试时间',
-    nextSchedule: '2024-01-17 15:00',
+    nextSchedule: '2026-02-17 15:00',
     agents: ['简历解析智能体', '面试评估智能体', '沟通协调智能体'],
     details: '候选人已完成意向确认，AI 已与候选人沟通确认面试意愿。目前正在协调面试官时间，等待最终面试时间确认。',
     timeline: [
-      { time: '2024-01-11 09:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 4900 },
-      { time: '2024-01-11 10:30', action: '市场薪资对标', agent: '市场分析智能体', tokens: 5800 },
-      { time: '2024-01-12 14:00', action: 'AI 初试预约', agent: '沟通协调智能体', tokens: 4200 },
-      { time: '2024-01-13 11:00', action: '候选人意向确认', agent: '沟通协调智能体', tokens: 2800 },
+      { time: '2026-02-04 09:00', action: '简历解析完成', agent: '简历解析智能体', tokens: 4900 },
+      { time: '2026-02-04 10:30', action: '市场薪资对标', agent: '市场分析智能体', tokens: 5800 },
+      { time: '2026-02-05 14:00', action: 'AI 初试预约', agent: '沟通协调智能体', tokens: 4200 },
+      { time: '2026-02-06 11:00', action: '候选人意向确认', agent: '沟通协调智能体', tokens: 2800 },
     ]
   },
 ];
@@ -377,35 +386,35 @@ const RECOMMENDED_JOBS = [
 ];
 
 const ENTERPRISE_MEMORIES = [
-  { id: 1, type: '文化', content: '崇尚极客精神，扁平化管理，每两周一次技术内部分享。', date: '2024-05-10', importance: 'High', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
-  { id: 2, type: '技术', content: '核心架构基于 Go/Rust，前端偏好 React 生态，极其看重代码的可测试性。', date: '2024-05-12', importance: 'Medium', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' },
-  { id: 3, type: '要求', content: '寻找具有‘自驱动力’和‘全球化协同经验’的人才，有开源贡献背景者优先。', date: '2024-05-15', importance: 'High', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  { id: 4, type: '策略', content: '优先满足 100% 远程办公需求，重点考察候选人的异步沟通能力。', date: '2024-05-18', importance: 'Medium', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  { id: 1, type: '文化', content: '崇尚极客精神，扁平化管理，每两周一次技术内部分享。', date: '2026-01-10', importance: 'High', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  { id: 2, type: '技术', content: '核心架构基于 Go/Rust，前端偏好 React 生态，极其看重代码的可测试性。', date: '2026-01-12', importance: 'Medium', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' },
+  { id: 3, type: '要求', content: '寻找具有‘自驱动力’和‘全球化协同经验’的人才，有开源贡献背景者优先。', date: '2026-01-15', importance: 'High', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  { id: 4, type: '策略', content: '优先满足 100% 远程办公需求，重点考察候选人的异步沟通能力。', date: '2026-01-18', importance: 'Medium', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
 ];
 
 const CANDIDATE_MEMORIES = [
-  { id: 1, type: '技能', content: 'React 生态精通，TypeScript 严格模式实践者，追求代码可维护性。', date: '2024-05-10', importance: 'High', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' },
-  { id: 2, type: '经验', content: '5 年+ 前端架构经验，主导过多个百万级用户产品重构项目。', date: '2024-05-12', importance: 'Medium', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  { id: 3, type: '偏好', content: '倾向于扁平化文化团队，重视技术分享和持续学习氛围。', date: '2024-05-15', importance: 'High', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
-  { id: 4, type: '目标', content: '寻求 AI 方向转型机会，希望在智能体产品领域深耕。', date: '2024-05-18', importance: 'Medium', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  { id: 1, type: '技能', content: 'React 生态精通，TypeScript 严格模式实践者，追求代码可维护性。', date: '2026-01-10', importance: 'High', color: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20' },
+  { id: 2, type: '经验', content: '5 年+ 前端架构经验，主导过多个百万级用户产品重构项目。', date: '2026-01-12', importance: 'Medium', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  { id: 3, type: '偏好', content: '倾向于扁平化文化团队，重视技术分享和持续学习氛围。', date: '2026-01-15', importance: 'High', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  { id: 4, type: '目标', content: '寻求 AI 方向转型机会，希望在智能体产品领域深耕。', date: '2026-01-18', importance: 'Medium', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
 ];
 
 const MOCK_QUALIFICATIONS = [
   { id: 1, title: '国家高新技术企业', description: '连续三年获得认证，在 AI 算法领域拥有核心自主知识产权。', icon: Medal, color: 'text-amber-500', bg: 'bg-amber-50' },
   { id: 2, title: 'ISO 27001 信息安全认证', description: '达到国际顶级数据安全标准，确保人才数据与企业机密万无一失。', icon: ShieldCheck, color: 'text-blue-500', bg: 'bg-blue-50' },
-  { id: 3, title: '2023 年度最佳 AI 雇主', description: '由行业媒体评选，表彰我们在人机协作办公模式上的卓越创新。', icon: Trophy, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+  { id: 3, title: '2025 年度最佳 AI 雇主', description: '由行业媒体评选，表彰我们在人机协作办公模式上的卓越创新。', icon: Trophy, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   { id: 4, title: '可信云服务认证', description: '我们的智能体部署环境经过严格的云计算合规与性能测试。', icon: Verified, color: 'text-emerald-500', bg: 'bg-emerald-50' },
   { id: 5, title: '产学研合作基地', description: '与国内 Top 3 高校建立联合实验室，持续输送前沿 AI 研究成果。', icon: Landmark, color: 'text-rose-500', bg: 'bg-rose-50' },
 ];
 
 const MOCK_TOKEN_HISTORY = [
-  { date: '2024-05-15', tokens: 42500, type: '简历解析', cost: '¥4.25' },
-  { date: '2024-05-16', tokens: 89000, type: '多智能体面试', cost: '¥8.90' },
-  { date: '2024-05-17', tokens: 12400, type: '画像调优', cost: '¥1.24' },
-  { date: '2024-05-18', tokens: 56000, type: '简历解析', cost: '¥5.60' },
-  { date: '2024-05-19', tokens: 92000, type: '多智能体面试', cost: '¥9.20' },
-  { date: '2024-05-20', tokens: 15000, type: '全局路由', cost: '¥1.50' },
-  { date: '2024-05-21', tokens: 34000, type: '简历解析', cost: '¥3.40' },
+  { date: '2026-01-15', tokens: 42500, type: '简历解析', cost: '¥4.25' },
+  { date: '2026-02-06', tokens: 89000, type: '多智能体面试', cost: '¥8.90' },
+  { date: '2026-02-07', tokens: 12400, type: '画像调优', cost: '¥1.24' },
+  { date: '2026-01-18', tokens: 56000, type: '简历解析', cost: '¥5.60' },
+  { date: '2026-02-09', tokens: 92000, type: '多智能体面试', cost: '¥9.20' },
+  { date: '2026-02-10', tokens: 15000, type: '全局路由', cost: '¥1.50' },
+  { date: '2026-02-11', tokens: 34000, type: '简历解析', cost: '¥3.40' },
 ];
 
 const MOCK_USAGE_CHART = [
@@ -491,13 +500,13 @@ const MOCK_TALENTS: TalentInfo[] = [
     interviewQuestions: ["如何解决大规模并发下的模型推理延迟？", "描述一次你处理复杂分布式系统崩溃的经历。", "你对 AI Agent 协同工作的未来怎么看？"],
     optimizationSuggestions: ["增加在特定垂直行业的 LLM 应用案例。", "提升对于新型多模态模型的理解。", "加强对于云原生架构的深入掌握。"],
     certifications: [
-      { name: 'AWS Solutions Architect Professional', issuer: 'Amazon Web Services', date: '2024-03', icon: Award, color: 'bg-amber-100 text-amber-600' },
-      { name: 'Google Cloud Professional Data Engineer', issuer: 'Google Cloud', date: '2023-11', icon: Trophy, color: 'bg-blue-100 text-blue-600' },
-      { name: 'Kubernetes Administrator (CKA)', issuer: 'CNCF', date: '2023-08', icon: ShieldCheck, color: 'bg-indigo-100 text-indigo-600' },
+      { name: 'AWS Solutions Architect Professional', issuer: 'Amazon Web Services', date: '2026-01', icon: Award, color: 'bg-amber-100 text-amber-600' },
+      { name: 'Google Cloud Professional Data Engineer', issuer: 'Google Cloud', date: '2025-11', icon: Trophy, color: 'bg-blue-100 text-blue-600' },
+      { name: 'Kubernetes Administrator (CKA)', issuer: 'CNCF', date: '2025-08', icon: ShieldCheck, color: 'bg-indigo-100 text-indigo-600' },
     ],
     awards: [
-      { name: '年度最佳架构师奖', org: '中国互联网协会', year: '2024', description: '优秀分布式系统设计能力表彰', icon: Trophy, color: 'bg-amber-100 text-amber-600' },
-      { name: '开源杰出贡献者', org: 'Apache Foundation', year: '2023', description: 'Kubernetes 社区核心贡献者', icon: Medal, color: 'bg-red-100 text-red-600' },
+      { name: '年度最佳架构师奖', org: '中国互联网协会', year: '2026', description: '优秀分布式系统设计能力表彰', icon: Trophy, color: 'bg-amber-100 text-amber-600' },
+      { name: '开源杰出贡献者', org: 'Apache Foundation', year: '2025', description: 'Kubernetes 社区核心贡献者', icon: Medal, color: 'bg-red-100 text-red-600' },
     ],
     credentials: [
       { name: '信息系统安全专家 (CISP)', authority: '中国信息安全测评中心', validUntil: '2026-12', icon: Verified, color: 'bg-emerald-100 text-emerald-600' },
@@ -528,11 +537,11 @@ const MOCK_TALENTS: TalentInfo[] = [
     interviewQuestions: ["如何平衡设计美感与实际业务需求的冲突？", "分享一个你主导的从 0 到 1 的设计案例。", "你如何看待 AI 在 UI 设计流程中的替代作用？"],
     optimizationSuggestions: ["更多地展示设计决策背后的数据支撑。", "学习基础的前端交互代码实现。", "尝试跨领域的 C端设计尝试。"],
     certifications: [
-      { name: 'Google UX Design Professional Certificate', issuer: 'Google', date: '2024-01', icon: Award, color: 'bg-blue-100 text-blue-600' },
-      { name: 'Interaction Design Foundation Professional', issuer: 'IDEO', date: '2023-06', icon: Trophy, color: 'bg-pink-100 text-pink-600' },
+      { name: 'Google UX Design Professional Certificate', issuer: 'Google', date: '2026-01', icon: Award, color: 'bg-blue-100 text-blue-600' },
+      { name: 'Interaction Design Foundation Professional', issuer: 'IDEO', date: '2025-06', icon: Trophy, color: 'bg-pink-100 text-pink-600' },
     ],
     awards: [
-      { name: '红点设计大奖', org: 'Design Zentrum Nordrhein Westfalen', year: '2023', description: '企业级 B2B SaaS 产品界面设计', icon: Medal, color: 'bg-red-100 text-red-600' },
+      { name: '红点设计大奖', org: 'Design Zentrum Nordrhein Westfalen', year: '2025', description: '企业级 B2B SaaS 产品界面设计', icon: Medal, color: 'bg-red-100 text-red-600' },
     ],
     credentials: []
   }
@@ -773,9 +782,15 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
   const { user, isLoggedIn, userRole, logout, setUserRole } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [switchOverlay, setSwitchOverlay] = useState<{ show: boolean; phase: 'switching' | 'done'; newRole: string } | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [navTokenBalance, setNavTokenBalance] = useState<string>('--');
+  const [tokenBalanceChanged, setTokenBalanceChanged] = useState(false);
+  const prevTokenBalance = useRef<string>('--');
+  const rawBalanceRef = useRef<number>(0);
+  const animFrameRef = useRef<number>(0);
 
-  // 获取未读通知数量
+  // 获取未读通知数量 + Token 余额
   useEffect(() => {
     const fetchUnreadCount = async () => {
       if (!isLoggedIn || !user?.id) return;
@@ -787,9 +802,58 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
         console.error('获取未读通知数量失败:', error);
       }
     };
+    const fetchTokenBalance = async () => {
+      if (!isLoggedIn || !user?.id) return;
+      try {
+        const { getTokenStats } = await import('./services/apiService');
+        const stats = await getTokenStats(user.id);
+        const balance = stats?.balance || 0;
+        const formatBalance = (val: number): string => {
+          if (val >= 1000000) return `${(val / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+          if (val >= 1000) return `${(val / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+          return Math.round(val).toLocaleString();
+        };
+        const oldBalance = rawBalanceRef.current;
+        const newFormatted = formatBalance(balance);
+        // 首次加载或数值未变化：直接设置
+        if (prevTokenBalance.current === '--' || oldBalance === balance) {
+          rawBalanceRef.current = balance;
+          prevTokenBalance.current = newFormatted;
+          setNavTokenBalance(newFormatted);
+        } else {
+          // 数值变化：滚动动画
+          setTokenBalanceChanged(true);
+          cancelAnimationFrame(animFrameRef.current);
+          const duration = 800; // 动画时长 ms
+          const startTime = performance.now();
+          const startVal = oldBalance;
+          const diff = balance - oldBalance;
+          const animate = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // easeOutCubic 缓动
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const current = startVal + diff * eased;
+            setNavTokenBalance(formatBalance(current));
+            if (progress < 1) {
+              animFrameRef.current = requestAnimationFrame(animate);
+            } else {
+              rawBalanceRef.current = balance;
+              prevTokenBalance.current = newFormatted;
+              setNavTokenBalance(newFormatted);
+              setTimeout(() => setTokenBalanceChanged(false), 400);
+            }
+          };
+          animFrameRef.current = requestAnimationFrame(animate);
+        }
+      } catch (error) {
+        console.error('获取 Token 余额失败:', error);
+      }
+    };
     fetchUnreadCount();
+    fetchTokenBalance();
     // 每 30 秒刷新一次
-    const interval = setInterval(fetchUnreadCount, 30000);
+    const interval = setInterval(() => { fetchUnreadCount(); fetchTokenBalance(); }, 30000);
     return () => clearInterval(interval);
   }, [isLoggedIn, user?.id]);
 
@@ -844,7 +908,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 <div className="p-1 bg-white rounded shadow-sm group-hover:rotate-12 transition-transform">
                   <CircleDollarSign size={14} className="text-amber-500" />
                 </div>
-                <span className="text-xs font-bold text-slate-700">1.2M</span>
+                <span className={`text-xs font-bold transition-all duration-500 ${tokenBalanceChanged ? 'text-amber-600 scale-110' : 'text-slate-700 scale-100'}`} style={{ display: 'inline-block' }}>{navTokenBalance}</span>
               </Link>
               <div className="w-px h-5 bg-slate-200 mx-1"></div>
               <Link to="/notifications" className="relative p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="消息中心">
@@ -960,12 +1024,20 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                     <button 
                       disabled={isSwitching}
                       onClick={async () => {
-                        setIsSwitching(true);
                         const newRole = userRole === 'candidate' ? 'employer' : 'candidate';
-                        await setUserRole(newRole);
-                        setIsSwitching(false);
                         setShowUserMenu(false);
-                        navigate('/ai-assistant');
+                        setIsSwitching(true);
+                        // 显示过渡弹窗 - 切换中
+                        setSwitchOverlay({ show: true, phase: 'switching', newRole });
+                        await setUserRole(newRole);
+                        // 切换完成
+                        setSwitchOverlay({ show: true, phase: 'done', newRole });
+                        setIsSwitching(false);
+                        // 停留1.2秒展示结果后跳转
+                        setTimeout(() => {
+                          setSwitchOverlay(null);
+                          navigate('/ai-assistant');
+                        }, 1200);
                       }}
                       className="w-full flex items-center gap-3 px-4 h-10 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50"
                     >
@@ -996,6 +1068,43 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
           )}
         </div>
       </div>
+
+      {/* 身份切换全屏过渡弹窗 */}
+      {switchOverlay?.show && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl p-10 max-w-sm w-full mx-4 text-center animate-in zoom-in-95 duration-300">
+            {switchOverlay.phase === 'switching' ? (
+              <>
+                <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-indigo-50 flex items-center justify-center">
+                  <Loader2 size={32} className="text-indigo-600 animate-spin" />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-2">正在切换身份</h3>
+                <p className="text-sm text-slate-500">
+                  正在切换至<span className="font-bold text-indigo-600">{switchOverlay.newRole === 'employer' ? '企业方' : '求职者'}</span>模式...
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-emerald-50 flex items-center justify-center">
+                  {switchOverlay.newRole === 'employer' ? (
+                    <Building2 size={32} className="text-emerald-600" />
+                  ) : (
+                    <UserIcon size={32} className="text-emerald-600" />
+                  )}
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-2">切换成功</h3>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 mb-3">
+                  <CheckCircle2 size={16} className="text-emerald-500" />
+                  <span className="text-sm font-bold text-emerald-700">
+                    当前身份：{switchOverlay.newRole === 'employer' ? '企业方' : '求职者'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">正在跳转至 AI 助手...</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
@@ -2446,7 +2555,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
                     <span className="text-slate-300">·</span>
                     <span>{user?.account_tier === 'ULTRA' ? 'Devnors 1.0 Ultra · 旗舰版' : user?.account_tier === 'PRO' ? 'Devnors 1.0 Pro · 专业版' : 'Devnors 1.0 · 基础版'}</span>
                     <span className="text-slate-300">·</span>
-                    <span>注册于 {user?.created_at ? new Date(user.created_at).toLocaleDateString('zh-CN') : '未知'}</span>
+                    <span>注册于 {user?.created_at ? parseUTC(user.created_at).toLocaleDateString('zh-CN') : '未知'}</span>
                   </div>
                 </div>
               </div>
@@ -4081,6 +4190,8 @@ const TokenManagementView = () => {
   const [agentTotal, setAgentTotal] = useState(0);
   const [packagesData, setPackagesData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [codeCopiedT, setCodeCopiedT] = useState(false);
+  const [linkCopiedT, setLinkCopiedT] = useState(false);
   
   // 加载数据
   useEffect(() => {
@@ -4345,21 +4456,53 @@ const TokenManagementView = () => {
       {(() => {
         const myInviteCode = user?.invite_code || '';
         const myInviteLink = myInviteCode ? `${window.location.origin}${window.location.pathname}#/login?ref=${myInviteCode}` : '';
+        const doCopy = (text: string, setFlag: (v: boolean) => void) => {
+          try {
+            navigator.clipboard.writeText(text).then(() => {
+              setFlag(true);
+              setTimeout(() => setFlag(false), 2000);
+            }).catch(() => {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              setFlag(true);
+              setTimeout(() => setFlag(false), 2000);
+            });
+          } catch {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            setFlag(true);
+            setTimeout(() => setFlag(false), 2000);
+          }
+        };
         return (
-          <div className="mb-10 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-100 overflow-hidden">
-            <div className="p-6">
+          <div className="mb-10 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-lg shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+            <div className="p-6 relative z-10">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-base font-black text-slate-900 mb-1 flex items-center gap-2">
-                    <Gift size={18} className="text-amber-500" /> 邀请好友，双方获赠 Token
+                  <h3 className="text-base font-black text-white mb-1 flex items-center gap-2">
+                    <Gift size={18} /> 邀请好友，双方获赠 Token
                   </h3>
-                  <p className="text-sm text-slate-600">
-                    每邀请一位好友注册，您获得 <span className="font-bold text-amber-600">{inviteReward.inviter?.toLocaleString()} tokens</span>，好友获得 <span className="font-bold text-amber-600">{inviteReward.invitee?.toLocaleString()} tokens</span>
+                  <p className="text-sm text-indigo-200">
+                    每邀请一位好友注册，您获得 <span className="font-bold text-white">{inviteReward.inviter?.toLocaleString()} tokens</span>，好友获得 <span className="font-bold text-white">{inviteReward.invitee?.toLocaleString()} tokens</span>
                   </p>
                 </div>
                 <button 
                   onClick={() => navigate('/invite')}
-                  className="px-4 py-2 text-amber-600 text-xs font-bold hover:underline whitespace-nowrap flex items-center gap-1"
+                  className="px-4 py-2 text-white text-xs font-bold hover:underline whitespace-nowrap flex items-center gap-1"
                 >
                   查看邀请记录 <ChevronRight size={14} />
                 </button>
@@ -4368,31 +4511,31 @@ const TokenManagementView = () => {
               {/* 邀请码 + 邀请链接 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* 邀请码 */}
-                <div className="bg-white/80 rounded-xl border border-amber-100 p-4 flex items-center justify-between">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] text-slate-400 mb-1">邀请码</p>
-                    <div className="text-xl font-black text-slate-900 tracking-[0.2em]">{myInviteCode || '------'}</div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">好友注册时填写此邀请码</p>
+                    <p className="text-[11px] text-indigo-300 mb-1">邀请码</p>
+                    <div className="text-xl font-black text-white tracking-[0.2em]">{myInviteCode || '------'}</div>
+                    <p className="text-[10px] text-indigo-300/70 mt-0.5">好友注册时填写此邀请码</p>
                   </div>
                   <button 
-                    onClick={() => { navigator.clipboard.writeText(myInviteCode); }}
-                    className="px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all flex items-center gap-1"
+                    onClick={() => doCopy(myInviteCode, setCodeCopiedT)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${codeCopiedT ? 'bg-emerald-500 text-white' : 'bg-white text-indigo-700 hover:bg-indigo-50'}`}
                   >
-                    <Link2 size={12} /> 复制
+                    {codeCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Link2 size={12} /> 复制</>}
                   </button>
                 </div>
                 {/* 邀请链接 */}
-                <div className="bg-white/80 rounded-xl border border-amber-100 p-4 flex items-center justify-between">
+                <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-4 flex items-center justify-between">
                   <div className="min-w-0 flex-1 mr-3">
-                    <p className="text-[11px] text-slate-400 mb-1">邀请链接</p>
-                    <div className="text-xs font-mono text-slate-600 truncate">{myInviteLink || '------'}</div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">好友点击链接直接注册</p>
+                    <p className="text-[11px] text-indigo-300 mb-1">邀请链接</p>
+                    <div className="text-xs font-mono text-indigo-100 truncate">{myInviteLink || '------'}</div>
+                    <p className="text-[10px] text-indigo-300/70 mt-0.5">好友点击链接直接注册</p>
                   </div>
                   <button 
-                    onClick={() => { navigator.clipboard.writeText(myInviteLink); }}
-                    className="px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-all flex items-center gap-1 whitespace-nowrap"
+                    onClick={() => doCopy(myInviteLink, setLinkCopiedT)}
+                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap ${linkCopiedT ? 'bg-emerald-500 text-white' : 'bg-white text-indigo-700 hover:bg-indigo-50'}`}
                   >
-                    <Share2 size={12} /> 复制
+                    {linkCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Share2 size={12} /> 复制</>}
                   </button>
                 </div>
               </div>
@@ -4462,7 +4605,7 @@ const TokenManagementView = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-900">{h.description || actionTypeMap[h.action] || actionTypeMap[h.action?.toUpperCase()] || h.type || h.action || '未知'}{h.action ? <span className="ml-1.5 text-[10px] text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded">{h.action}</span> : null}</p>
-                    <p className="text-xs text-slate-400">{h.created_at ? new Date(h.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : h.date || ''}</p>
+                    <p className="text-xs text-slate-400">{h.created_at ? parseUTC(h.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : h.date || ''}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -4968,7 +5111,7 @@ const TodoListView = () => {
       </button>
 
       <div className="mb-10">
-        <h1 className="text-3xl font-black text-slate-900 mb-2">待办事项</h1>
+        <h1 className="text-3xl font-black text-slate-900 mb-2">任务中心</h1>
         <p className="text-slate-500 font-medium">管理您所有的任务，包括 Agent 分发和自行创建的任务</p>
       </div>
 
@@ -5199,7 +5342,7 @@ const FlowDetailView = () => {
               </span>
             )}
             {flow.salary && (
-              <span className="text-sm text-slate-500 flex items-center gap-1"><Coins size={14} className="text-emerald-500" /> {flow.salary}</span>
+              <span className="text-sm text-slate-500 flex items-center gap-1"><CircleDollarSign size={14} className="text-emerald-500" /> {flow.salary}</span>
             )}
           </div>
         </div>
@@ -5281,7 +5424,7 @@ const FlowDetailView = () => {
                     <div className="flex-1 pb-4">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-bold text-slate-900">{item.action}</span>
-                        <span className="text-xs text-slate-400">{item.time ? new Date(item.time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        <span className="text-xs text-slate-400">{item.time ? parseUTC(item.time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         {item.agent && <span className="text-xs text-indigo-600 font-medium">{item.agent}</span>}
@@ -6443,7 +6586,7 @@ const PricingView = () => {
             </p>
           </div>
           <button 
-            onClick={() => navigate('/tokens')}
+            onClick={() => navigate('/invite')}
             className="px-6 py-3 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all whitespace-nowrap"
           >
             查看邀请码
@@ -7812,7 +7955,7 @@ const JobDetailView = () => {
               <h4 className="font-black text-slate-900 mb-2 flex items-center gap-2">
                 <Clock size={18} className="text-emerald-600" /> 发布时间
               </h4>
-              <p className="text-slate-600 font-medium">2024-01-15</p>
+              <p className="text-slate-600 font-medium">2026-02-10</p>
             </div>
             <div className="bg-slate-50 rounded p-6 border border-slate-100">
               <h4 className="font-black text-slate-900 mb-2 flex items-center gap-2">
@@ -9602,7 +9745,7 @@ const JobPostDetailView = () => {
       if (priorityDiff !== 0) return priorityDiff;
       // 同优先级内再按用户选择的排序方式
       if (sortBy === 'score') return (b.match_score || 0) - (a.match_score || 0);
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      return parseUTC(b.created_at || 0).getTime() - parseUTC(a.created_at || 0).getTime();
     });
 
   const acceptedCount = applications.filter(a => a.status === 'accepted').length;
@@ -9655,7 +9798,7 @@ const JobPostDetailView = () => {
               <span className="flex items-center gap-1.5"><Building2 size={14} className="text-slate-400" /> {jobData.company}</span>
               <span className="flex items-center gap-1.5"><MapPin size={14} className="text-slate-400" /> {jobData.location}</span>
               <span className="font-black text-indigo-600">{formatSalary(jobData.salary_min, jobData.salary_max)}</span>
-              <span className="flex items-center gap-1.5 text-slate-400"><Calendar size={14} /> {jobData.created_at ? new Date(jobData.created_at).toLocaleDateString('zh-CN') : '-'}</span>
+              <span className="flex items-center gap-1.5 text-slate-400"><Calendar size={14} /> {jobData.created_at ? parseUTC(jobData.created_at).toLocaleDateString('zh-CN') : '-'}</span>
             </div>
             {jobData.tags && jobData.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
@@ -9815,7 +9958,7 @@ const JobPostDetailView = () => {
                     </div>
                     <div className="flex items-center gap-4 mt-4 md:mt-0 w-full md:w-auto justify-between md:justify-end">
                       <div className="text-right">
-                        <div className="text-xs text-slate-400 font-bold">{app.created_at ? new Date(app.created_at).toLocaleDateString('zh-CN') : '-'}</div>
+                        <div className="text-xs text-slate-400 font-bold">{app.created_at ? parseUTC(app.created_at).toLocaleDateString('zh-CN') : '-'}</div>
                         {app.last_action && <div className="text-xs text-slate-400 font-bold mt-1 max-w-[180px] truncate">{app.last_action}</div>}
                       </div>
                       {/* 反馈评价按钮已移至联系方式区域 */}
@@ -9985,7 +10128,7 @@ const JobPostDetailView = () => {
                     : log.actor_type === 'system' 
                     ? <><Settings2 size={11} className="inline -mt-0.5" /> 系统</>
                     : <><UserIcon size={11} className="inline -mt-0.5" /> 用户</>;
-                  const timeStr = log.created_at ? new Date(log.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                  const timeStr = log.created_at ? parseUTC(log.created_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                   
                   return (
                     <div key={log.id} className="relative pl-12 pb-6 group">
@@ -11607,29 +11750,47 @@ const AIAssistantView = () => {
         return type === 'personal_verification' || title === '完善个人认证信息' || 
           (title.includes('个人') && title.includes('认证'));
       });
+      const jobSearchTask = taskList.find((t: any) => {
+        const title = t.title || t.task || '';
+        const type = (t.todo_type || t.type || '').toLowerCase();
+        return type === 'job_search' || title.includes('找工作') || title.includes('求职');
+      });
       
       const resumeCompleted = resumeTask?.status?.toLowerCase() === 'completed';
       const certCompleted = personalCertTask?.status?.toLowerCase() === 'completed';
+      const jobSearchCompleted = jobSearchTask?.status?.toLowerCase() === 'completed';
       
       const pendingGuides: string[] = [];
-      if (!resumeCompleted && (resumeTask || isNewUser)) {
+      // 简历资料（未完成 或 无任务记录 → 默认显示）
+      if (!resumeCompleted) {
         pendingGuides.push('[[TASK:完善简历资料:profile_complete:📝]]');
       }
-      if (!certCompleted && personalCertTask) {
+      // 个人认证
+      if (!certCompleted) {
+        pendingGuides.push('[[TASK:完善个人认证信息:personal_verification:🔐]]');
+      }
+      // 找工作（简历完善后引导求职）
+      if (resumeCompleted && !jobSearchCompleted) {
+        pendingGuides.push('[[TASK:开始找工作:job_search:🚀]]');
+      }
+      
+      // 兜底：至少显示简历和认证两项
+      if (pendingGuides.length === 0) {
+        pendingGuides.push('[[TASK:完善简历资料:profile_complete:📝]]');
         pendingGuides.push('[[TASK:完善个人认证信息:personal_verification:🔐]]');
       }
       
-      if (pendingGuides.length > 0) {
-        return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 求职助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的目标职位和核心技能~`;
+      if (resumeCompleted && certCompleted && jobSearchCompleted) {
+        return `👋 **${userName}，欢迎回来！**\n\n您的资料已完善，现在可以开始智能求职啦：\n\n[[TASK:开始找工作:job_search:🚀]]\n\n或直接告诉我您的目标职位和核心技能~`;
       }
       
-      return `${userName}您好！我是您的 AI 求职助手 💼\n\n我可以帮您：\n• 匹配合适职位\n• 优化简历内容\n• 准备面试问题\n• 职业发展规划\n\n今天想了解什么？`;
+      return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 求职助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的目标职位和核心技能~`;
     }
   };
   
-  // 对话持久化的 localStorage keys
-  const GENERAL_MESSAGES_KEY = `devnors_general_messages_${userId || 'guest'}`;
-  const TASK_MESSAGES_KEY = `devnors_task_messages_${userId || 'guest'}`;
+  // 对话持久化的 localStorage keys（按角色隔离，切换身份后各自独立）
+  const GENERAL_MESSAGES_KEY = `devnors_general_messages_${userId || 'guest'}_${userRole}`;
+  const TASK_MESSAGES_KEY = `devnors_task_messages_${userId || 'guest'}_${userRole}`;
   
   // 从 localStorage 加载对话（作为后备）
   const loadSavedMessages = () => {
@@ -11729,6 +11890,12 @@ const AIAssistantView = () => {
   // 从后端加载历史对话（首次进入时只加载通用对话，任务对话按需加载）
   useEffect(() => {
     if (!userId || chatHistoryLoaded) return;
+    // 角色切换时跳过后端加载（后端消息不区分角色，会覆盖新身份的欢迎消息）
+    if (isRoleSwitchRef.current) {
+      setChatHistoryLoaded(true);
+      isRoleSwitchRef.current = false;
+      return;
+    }
     const loadFromBackend = async () => {
       try {
         const { getChatMessages } = await import('./services/apiService');
@@ -11737,6 +11904,11 @@ const AIAssistantView = () => {
         const generalMsgs = await getChatMessages(userId, undefined, 100);
         if (generalMsgs && generalMsgs.length > 0) {
           const formatted = generalMsgs.map((m: any) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+          // 始终用当前角色的欢迎消息替换第一条（后端不区分角色，可能包含旧角色内容）
+          const freshWelcome = getWelcomeMessage();
+          if (formatted[0]?.role === 'assistant') {
+            formatted[0] = { role: 'assistant', content: freshWelcome };
+          }
           setGeneralMessages(formatted);
           persistedGeneralCount.current = formatted.length;
         }
@@ -11768,26 +11940,50 @@ const AIAssistantView = () => {
   };
   
   // 当用户身份变化时，重新加载对话或显示欢迎消息
+  const prevRoleRef = useRef(userRole);
+  const isRoleSwitchRef = useRef(false);
   useEffect(() => {
-    // 重置持久化计数器和加载状态，让后端重新加载
+    const isRoleSwitch = prevRoleRef.current !== userRole && prevRoleRef.current !== null;
+    prevRoleRef.current = userRole;
+    isRoleSwitchRef.current = isRoleSwitch;
+    
+    // 重置持久化计数器
     persistedGeneralCount.current = 0;
     persistedTaskCounts.current = {};
     loadedTaskIds.current = new Set();
-    setChatHistoryLoaded(false);
     
-    const savedMessages = loadSavedMessages();
-    // 始终用当前身份生成的欢迎消息替换第一条，防止身份切换后显示旧身份的内容
-    const freshWelcome = getWelcomeMessage();
-    if (savedMessages.length <= 1) {
-      setGeneralMessages([{role: 'assistant', content: freshWelcome}]);
-    } else {
-      const updated = [...savedMessages];
-      if (updated[0]?.role === 'assistant') {
-        updated[0] = {role: 'assistant', content: freshWelcome};
-      }
-      setGeneralMessages(updated);
+    // 切换身份时：不重新从后端加载（后端消息不区分角色，会覆盖新欢迎消息）
+    // 仅在非角色切换时（如首次进入、userId 变化）才触发后端加载
+    if (!isRoleSwitch) {
+      setChatHistoryLoaded(false);
     }
-    setTaskMessages(loadSavedTaskMessages());
+    
+    // 切换身份时取消当前选中的任务（避免显示另一个角色的任务）
+    if (isRoleSwitch) {
+      setSelectedTask(null);
+    }
+    
+    // 始终用当前身份生成的欢迎消息
+    const freshWelcome = getWelcomeMessage();
+    if (isRoleSwitch) {
+      // 角色切换：强制全新对话，清除旧角色残留
+      setGeneralMessages([{role: 'assistant', content: freshWelcome}]);
+      setTaskMessages({});
+      // 重置持久化计数为1（包含欢迎消息），防止重复持久化
+      persistedGeneralCount.current = 1;
+    } else {
+      const savedMessages = loadSavedMessages();
+      if (savedMessages.length <= 1) {
+        setGeneralMessages([{role: 'assistant', content: freshWelcome}]);
+      } else {
+        const updated = [...savedMessages];
+        if (updated[0]?.role === 'assistant') {
+          updated[0] = {role: 'assistant', content: freshWelcome};
+        }
+        setGeneralMessages(updated);
+      }
+      setTaskMessages(loadSavedTaskMessages());
+    }
   }, [userId, isLoggedIn, userRole]);
   
   const [inputMessage, setInputMessage] = useState('');
@@ -11868,8 +12064,8 @@ const AIAssistantView = () => {
       list = roleFilteredTasks.filter((t: any) => t.status?.toLowerCase() === 'completed');
       // 已完成任务按创建时间倒序排列（最近创建的任务排前面，最早创建的排后面）
       list.sort((a: any, b: any) => {
-        const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
-        const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
+        const timeA = parseUTC(a.created_at || a.createdAt || 0).getTime();
+        const timeB = parseUTC(b.created_at || b.createdAt || 0).getTime();
         return timeB - timeA;
       });
     } else {
@@ -14425,7 +14621,7 @@ ${memCtx}
           
           const recentJobPreference = memories.find((m: any) => {
             if (m.type?.toLowerCase() !== 'preference' || !m.content?.includes('求职偏好')) return false;
-            const memoryDate = new Date(m.created_at || m.createdAt);
+            const memoryDate = parseUTC(m.created_at || m.createdAt);
             return memoryDate > oneMonthAgo;
           });
           
@@ -15024,7 +15220,7 @@ ${recentContext}
           
           const recentJobPreference = memories.find((m: any) => {
             if (m.type?.toLowerCase() !== 'preference' || !m.content?.includes('求职偏好')) return false;
-            const memoryDate = new Date(m.created_at || m.createdAt);
+            const memoryDate = parseUTC(m.created_at || m.createdAt);
             return memoryDate > oneMonthAgo;
           });
           
@@ -19640,7 +19836,7 @@ const JobManagementView = () => {
                     </div>
                   </div>
                   <div className="text-xs text-slate-400 text-right hidden md:block">
-                    {job.created_at ? new Date(job.created_at).toLocaleDateString('zh-CN') : '-'}
+                    {job.created_at ? parseUTC(job.created_at).toLocaleDateString('zh-CN') : '-'}
                   </div>
                   <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button onClick={() => openEdit(job)} className="p-2.5 bg-white text-slate-400 hover:text-indigo-600 rounded border border-slate-100 hover:border-indigo-200 transition-all" title="编辑"><Edit3 size={16} /></button>
@@ -20232,6 +20428,7 @@ const InviteFriendView = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // 加载邀请统计
   useEffect(() => {
@@ -20336,10 +20533,40 @@ const InviteFriendView = () => {
               <span>邀请码：<span className="font-mono font-bold text-white text-base tracking-[0.15em]">{inviteCode}</span></span>
             </div>
             <button 
-              onClick={() => { navigator.clipboard.writeText(inviteCode); }}
-              className="px-3 py-1 bg-white/15 hover:bg-white/25 rounded-lg text-white text-xs font-bold transition-all"
+              onClick={() => {
+                try {
+                  navigator.clipboard.writeText(inviteCode).then(() => {
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }).catch(() => {
+                    // fallback: 使用 execCommand
+                    const ta = document.createElement('textarea');
+                    ta.value = inviteCode;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  });
+                } catch {
+                  const ta = document.createElement('textarea');
+                  ta.value = inviteCode;
+                  ta.style.position = 'fixed';
+                  ta.style.opacity = '0';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 2000);
+                }
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${codeCopied ? 'bg-emerald-500 text-white' : 'bg-white/15 hover:bg-white/25 text-white'}`}
             >
-              复制邀请码
+              {codeCopied ? '✓ 已复制' : '复制邀请码'}
             </button>
           </div>
           <p className="mt-2 text-indigo-300/70 text-[11px]">好友可通过链接注册，或在注册页手动输入邀请码</p>
@@ -20434,7 +20661,7 @@ const InviteFriendView = () => {
                   </div>
                   <div>
                     <div className="text-sm font-bold text-slate-700">{r.invitee_name}</div>
-                    <div className="text-[10px] text-slate-400">{r.created_at ? new Date(r.created_at).toLocaleDateString('zh-CN') : '—'}</div>
+                    <div className="text-[10px] text-slate-400">{r.created_at ? parseUTC(r.created_at).toLocaleDateString('zh-CN') : '—'}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -20460,11 +20687,11 @@ const InviteFriendView = () => {
         <div className="space-y-3 text-sm text-slate-600">
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">1</div>
-            <div><span className="font-bold text-slate-700">基础奖励</span>：每成功邀请 1 位好友注册，您获得 <span className="font-black text-amber-600">{rules.per_invite_reward} Token</span>，好友获得 <span className="font-black text-emerald-600">{rules.new_user_bonus} Token</span></div>
+            <div><span className="font-bold text-slate-700">基础奖励</span>：每成功邀请 1 位好友注册，您获得 <span className="font-black text-amber-600">{rules.per_invite_reward?.toLocaleString()} Token</span>，好友获得 <span className="font-black text-emerald-600">{rules.new_user_bonus?.toLocaleString()} Token</span></div>
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">2</div>
-            <div><span className="font-bold text-slate-700">里程碑奖励</span>：累计邀请达到 5 / 10 / 20 人时，额外获得 <span className="font-black text-amber-600">{rules.milestone_5} / {rules.milestone_10} / {rules.milestone_20} Token</span></div>
+            <div><span className="font-bold text-slate-700">里程碑奖励</span>：累计邀请达到 5 / 10 / 20 人时，额外获得 <span className="font-black text-amber-600">{rules.milestone_5?.toLocaleString()} / {rules.milestone_10?.toLocaleString()} / {rules.milestone_20?.toLocaleString()} Token</span></div>
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">3</div>
@@ -21199,18 +21426,17 @@ const TalentPoolView = () => {
 const PrivacyPolicyView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
         </button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">隐私政策</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
-        </div>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">隐私政策</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
-        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
+        <p className="text-[15px] text-slate-500 !leading-[2.1] mb-10 pb-8 border-b border-slate-100">
           杭州势行网络科技有限公司（以下简称"我们"）非常重视用户的隐私保护。本隐私政策适用于 Devnors 得若平台（包括网页端、移动端及相关服务，以下简称"本平台"）提供的所有产品和服务。请您在使用我们的服务前，仔细阅读并充分理解本政策全部内容。<strong>如您不同意本政策中的任何条款，请停止使用本平台服务。</strong>
         </p>
 
@@ -21379,18 +21605,17 @@ const PrivacyPolicyView = () => {
 const TermsOfServiceView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
         </button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">服务条款</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
-        </div>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">服务条款</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日 · 生效日期：2026 年 1 月 22 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
-        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
+        <p className="text-[15px] text-slate-500 !leading-[2.1] mb-10 pb-8 border-b border-slate-100">
           欢迎使用 Devnors 得若平台（包括网页端、移动端及相关服务，以下简称"本平台"）。本用户服务协议（以下简称"本协议"）是您与杭州势行网络科技有限公司（以下简称"我们"或"平台方"）之间就注册、登录和使用本平台服务所订立的协议，具有合同效力。<strong>请您在注册或使用本平台前，仔细阅读并充分理解本协议全部条款。点击"注册"或以其他方式使用本平台，即视为您已阅读、理解并同意接受本协议约束。</strong>
         </p>
 
@@ -21590,17 +21815,16 @@ const TermsOfServiceView = () => {
 const CopyrightView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
         </button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">版权声明</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
-        </div>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">版权声明</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
 
         <h2>一、版权归属</h2>
         <p>Devnors 得若平台（包括但不限于网站、移动应用、API 接口及相关服务）的全部内容和技术，其知识产权归杭州势行网络科技有限公司所有，受中华人民共和国著作权法及相关法律法规保护。</p>
@@ -21715,16 +21939,17 @@ const CopyrightView = () => {
 const AlgorithmDisclosureView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">算法说明与 AI 使用规则</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
-        </div>
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
+        </button>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">算法说明与 AI 使用规则</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
-        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
+        <p className="text-[15px] text-slate-500 !leading-[2.1] mb-10 pb-8 border-b border-slate-100">
           根据《互联网信息服务算法推荐管理规定》《生成式人工智能服务管理暂行办法》《互联网信息服务深度合成管理规定》及相关法律法规，杭州势行网络科技有限公司（以下简称"我们"）就 Devnors 得若平台（以下简称"本平台"）使用的算法推荐和人工智能技术向用户做如下披露说明。
         </p>
 
@@ -21851,16 +22076,17 @@ const AlgorithmDisclosureView = () => {
 const PersonalInfoProtectionView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">个人信息保护指引</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
-        </div>
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
+        </button>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">个人信息保护指引</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
-        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
+        <p className="text-[15px] text-slate-500 !leading-[2.1] mb-10 pb-8 border-b border-slate-100">
           本指引依据《中华人民共和国个人信息保护法》《中华人民共和国数据安全法》《中华人民共和国网络安全法》及相关法规制定，旨在帮助您详细了解 Devnors 得若平台（以下简称"本平台"）如何收集、使用、存储和保护您的个人信息，以及您依法享有的各项权利。本指引是《隐私政策》的补充细则。
         </p>
 
@@ -22019,16 +22245,17 @@ const PersonalInfoProtectionView = () => {
 const MinorProtectionView = () => {
   const navigate = useNavigate();
   return (
-    <div className="pt-32 pb-20 px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      <div className="flex items-start gap-4 mb-8 rounded-lg border border-slate-200 bg-white p-5 md:p-6 shadow-sm">
-        <button onClick={() => navigate(-1)} className="mt-0.5 p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all"><ChevronLeft size={20} className="text-slate-600" /></button>
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">未成年人保护声明</h1>
-          <p className="text-slate-500 text-sm">更新日期：2026 年 1 月 15 日</p>
-        </div>
+    <div className="pt-32 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+      <div className="mb-10">
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors mb-8 group">
+          <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" /> 返回
+        </button>
+        <h1 className="text-3xl md:text-[40px] font-bold text-slate-900 tracking-tight leading-tight mb-3">未成年人保护声明</h1>
+        <p className="text-slate-400 text-sm font-medium tracking-wide">更新日期：2026 年 1 月 15 日</p>
+        <div className="mt-8 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
       </div>
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-8 md:p-12 prose prose-slate max-w-none prose-headings:font-black prose-headings:tracking-tight prose-h2:text-xl prose-h2:mt-10 prose-h2:mb-3 prose-h2:border-l-4 prose-h2:border-indigo-200 prose-h2:pl-3 prose-h3:text-base prose-h3:mt-6 prose-h3:mb-2 prose-p:text-sm prose-p:leading-7 prose-p:text-slate-600 prose-li:text-sm prose-li:leading-7 prose-li:text-slate-600 prose-ul:my-4 prose-li:marker:text-indigo-400">
-        <p className="text-sm text-slate-600 bg-slate-50 rounded-lg p-4 border border-slate-100 mb-8">
+      <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-[17px] prose-h2:mt-10 prose-h2:mb-5 prose-h2:pt-6 prose-h2:border-t prose-h2:border-slate-100 prose-h3:text-[15px] prose-h3:font-semibold prose-h3:mt-7 prose-h3:mb-3.5 prose-p:mb-5 prose-p:text-slate-500 prose-li:my-2 prose-li:text-slate-500 prose-ul:my-4 prose-ol:my-4 prose-li:marker:text-slate-300 prose-strong:text-slate-700 [&_p]:text-[15px] [&_p]:!leading-[2.1] [&_li]:text-[15px] [&_li]:!leading-[2.1]">
+        <p className="text-[15px] text-slate-500 !leading-[2.1] mb-10 pb-8 border-b border-slate-100">
           杭州势行网络科技有限公司（以下简称"我们"）高度重视未成年人保护。本声明依据《中华人民共和国未成年人保护法》《中华人民共和国预防未成年人犯罪法》《儿童个人信息网络保护规定》及相关法律法规制定，适用于 Devnors 得若平台（以下简称"本平台"）提供的所有产品和服务。
         </p>
 
@@ -22488,9 +22715,13 @@ const HelpCenterView = () => {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
+  // 聊天消息变化时，在聊天容器内部滚到底部（不影响页面滚动）
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatMessages.length > 0 && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
   }, [chatMessages, chatLoading]);
 
   const quickQuestions = [
@@ -22543,7 +22774,7 @@ const HelpCenterView = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* 左侧：常见问题速查 */}
         <div className="lg:col-span-5">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -22592,10 +22823,10 @@ const HelpCenterView = () => {
         </div>
 
         {/* 右侧：AI 智能问答 */}
-        <div className="lg:col-span-7">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col" style={{ height: '680px' }}>
+        <div className="lg:col-span-7 sticky top-28">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col" style={{ height: 'calc(100dvh - 160px)' }}>
             {/* 标题栏 */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
               <h2 className="font-black text-slate-900 flex items-center gap-2">
                 <Sparkles size={18} className="text-indigo-500" /> AI 智能问答
               </h2>
@@ -22603,7 +22834,7 @@ const HelpCenterView = () => {
             </div>
 
             {/* 聊天区域 */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
               {chatMessages.length === 0 && !chatLoading && (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
@@ -22654,7 +22885,7 @@ const HelpCenterView = () => {
             </div>
 
             {/* 输入区域 */}
-            <div className="p-4 border-t border-slate-100">
+            <div className="p-4 border-t border-slate-100 flex-shrink-0">
               {chatMessages.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {quickQuestions.filter(qq => !chatMessages.some(m => m.role === 'user' && m.content === qq)).slice(0, 3).map((qq, i) => (
@@ -22951,7 +23182,7 @@ const FeedbackView = () => {
                           <h3 className="font-bold text-slate-900 text-sm truncate">{t.title}</h3>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${st.color}`}>{st.label}</span>
                         </div>
-                        <p className="text-xs text-slate-400">#{t.id} · {t.created_at ? new Date(t.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p>
+                        <p className="text-xs text-slate-400">#{t.id} · {t.created_at ? parseUTC(t.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</p>
                       </div>
                       <ChevronDown size={16} className={`text-slate-300 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
                     </div>
@@ -22972,7 +23203,7 @@ const FeedbackView = () => {
                           <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
                             <p className="text-xs font-bold text-emerald-700 mb-1 flex items-center gap-1"><MessageSquare size={12} /> 官方回复</p>
                             <p className="text-sm text-emerald-800 whitespace-pre-wrap">{t.reply}</p>
-                            {t.replied_at && <p className="text-[10px] text-emerald-500 mt-2">{new Date(t.replied_at).toLocaleString('zh-CN')}</p>}
+                            {t.replied_at && <p className="text-[10px] text-emerald-500 mt-2">{parseUTC(t.replied_at).toLocaleString('zh-CN')}</p>}
                           </div>
                         ) : (
                           <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
@@ -23200,7 +23431,7 @@ const AppContent = () => {
               </div>
             </div>
             <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-xs text-slate-400">© 2024 Devnors 得若智能体. All rights reserved.</p>
+              <p className="text-xs text-slate-400">© 2026 Devnors 得若智能体. All rights reserved.</p>
               <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Devnors Multi-Agent Synergy</p>
             </div>
           </div>

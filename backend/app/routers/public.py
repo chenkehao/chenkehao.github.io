@@ -7316,11 +7316,11 @@ async def get_invite_stats(
         "token_balance": token_balance,
         "records": invite_records,
         "rules": {
-            "per_invite_reward": 500,
-            "new_user_bonus": 200,
-            "milestone_5": 1000,
-            "milestone_10": 3000,
-            "milestone_20": 8000,
+            "per_invite_reward": 50000,
+            "new_user_bonus": 20000,
+            "milestone_5": 100000,
+            "milestone_10": 300000,
+            "milestone_20": 800000,
         },
     }
 
