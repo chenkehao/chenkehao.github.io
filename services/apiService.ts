@@ -1208,10 +1208,20 @@ export const createAIConfig = async (data: {
   task: string;
   model_name: string;
   provider: string;
+  api_key?: string;
 }, userId: number = 1): Promise<any> => {
   return request(`/settings/ai-configs?user_id=${userId}`, {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+};
+
+/**
+ * 删除AI引擎配置
+ */
+export const deleteAIConfig = async (configId: number, userId: number = 1): Promise<any> => {
+  return request(`/settings/ai-configs/${configId}?user_id=${userId}`, {
+    method: 'DELETE',
   });
 };
 

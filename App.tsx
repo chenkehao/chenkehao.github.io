@@ -38,6 +38,8 @@ import {
   transferAdmin,
   approveMember,
   getAIConfigs,
+  createAIConfig,
+  deleteAIConfig,
   getAPIKeys,
   createAPIKey,
   deleteAPIKey,
@@ -539,6 +541,53 @@ const MOCK_TALENTS: TalentInfo[] = [
 // --- 业务组件 ---
 
 /**
+ * ThinkingBlock — AI 思考过程折叠组件
+ * 参考 ChatGPT thinking 样式，默认折叠，点击可展开查看完整思考过程
+ */
+const ThinkingBlock = ({ content }: { content: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  return (
+    <div className="my-2 rounded-lg border border-slate-200/80 overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-slate-50/80 hover:bg-slate-100/80 transition-colors text-left group"
+      >
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <Sparkle size={13} className="text-slate-400 flex-shrink-0" />
+          <span className="text-xs font-medium text-slate-500">深度分析过程</span>
+        </div>
+        <ChevronDown
+          size={14}
+          className={`text-slate-400 transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {isExpanded && (
+        <div className="px-3 py-2.5 text-xs leading-relaxed text-slate-600 bg-white border-t border-slate-100">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({node, ...props}) => <p className="my-1 leading-relaxed" {...props} />,
+              strong: ({node, ...props}) => <strong className="font-bold text-slate-700" {...props} />,
+              ul: ({node, ...props}) => <ul className="my-1 ml-3 list-disc space-y-0.5" {...props} />,
+              ol: ({node, ...props}) => <ol className="my-1 ml-3 list-decimal space-y-0.5" {...props} />,
+              li: ({node, ...props}) => <li className="leading-relaxed" {...props} />,
+              hr: ({node, ...props}) => <hr className="my-2 border-slate-100" {...props} />,
+              h3: ({node, ...props}) => <h5 className="text-xs font-bold text-slate-700 mt-2 mb-1" {...props} />,
+              a: ({node, ...props}) => (
+                <a href={props.href || '#'} className="text-indigo-500 hover:underline">{props.children}</a>
+              ),
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
  * StreamingMessage — 实时打字机效果组件
  * 模拟 AI 逐字输出的体验，当 targetText 变化时只打出新增部分
  */
@@ -831,21 +880,22 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
               </button>
               
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50">
-                  <div className="px-4 py-3 border-b border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <div className="font-bold text-slate-900">{user?.name}</div>
+                <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  {/* 用户信息头 */}
+                  <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-bold text-sm text-slate-900">{user?.name}</div>
                       <span className="text-[10px] text-slate-400 font-mono">#{user?.id}</span>
                     </div>
                     <Link
                       to="/pricing"
                       onClick={() => setShowUserMenu(false)}
-                      className={`mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${
                         user?.account_tier === 'ULTRA'
-                          ? 'bg-gradient-to-r from-rose-50 to-amber-50 text-rose-600 border border-rose-100'
+                          ? 'bg-gradient-to-r from-rose-50 to-amber-50 text-rose-600 border-rose-200'
                           : user?.account_tier === 'PRO'
-                          ? 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-600 border border-indigo-100'
-                          : 'bg-slate-50 text-slate-600 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
+                          ? 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-600 border-indigo-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-indigo-200 hover:text-indigo-600'
                       }`}
                     >
                       <Cpu size={12} className="flex-shrink-0" />
@@ -855,40 +905,58 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                       {user?.account_tier !== 'ULTRA' && <Zap size={10} className="text-amber-500 flex-shrink-0" />}
                     </Link>
                   </div>
-                  <Link 
-                    to="/settings" 
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <Settings size={16} /> 系统设置
-                  </Link>
-                  {userRole === 'candidate' && (
+                  {/* 导航链接 */}
+                  <div>
                     <Link 
-                      to="/candidate/profile" 
+                      to="/settings" 
                       onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      className="flex items-center gap-3 px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
                     >
-                      <UserIcon size={16} /> 个人主页
+                      <Settings size={16} className="flex-shrink-0" /> 系统设置
                     </Link>
-                  )}
-                  {userRole === 'employer' && (
+                    {userRole === 'candidate' && (
+                      <Link 
+                        to="/candidate/profile" 
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+                      >
+                        <UserIcon size={16} className="flex-shrink-0" /> 个人主页
+                      </Link>
+                    )}
+                    {userRole === 'employer' && (
+                      <Link 
+                        to="/employer/home" 
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-3 px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+                      >
+                        <Building2 size={16} className="flex-shrink-0" /> 企业主页
+                      </Link>
+                    )}
                     <Link 
-                      to="/employer/home" 
+                      to="/feedback" 
                       onClick={() => setShowUserMenu(false)}
-                      className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      className="flex items-center gap-3 px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
                     >
-                      <Building2 size={16} /> 企业主页
+                      <MessageSquare size={16} className="flex-shrink-0" /> 反馈工单
                     </Link>
-                  )}
-                  <Link 
-                    to="/feedback" 
-                    onClick={() => setShowUserMenu(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <MessageSquare size={16} /> 反馈工单
-                  </Link>
+                  </div>
+                  {/* 深色模式 */}
+                  <div className="border-t border-slate-200">
+                    <button
+                      onClick={() => { toggleDarkMode(); }}
+                      className="w-full flex items-center justify-between px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {isDarkMode ? <Moon size={16} className="flex-shrink-0" /> : <Sun size={16} className="flex-shrink-0" />}
+                        <span>{isDarkMode ? '深色模式' : '浅色模式'}</span>
+                      </div>
+                      <div className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all shadow-sm ${isDarkMode ? 'right-0.5 bg-white' : 'left-0.5 bg-white'}`}></div>
+                      </div>
+                    </button>
+                  </div>
                   {/* 切换身份 */}
-                  <div className="border-t border-slate-100 mt-2 pt-2">
+                  <div className="border-t border-slate-200">
                     <button 
                       disabled={isSwitching}
                       onClick={async () => {
@@ -897,24 +965,25 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                         await setUserRole(newRole);
                         setIsSwitching(false);
                         setShowUserMenu(false);
-                        navigate(newRole === 'candidate' ? '/candidate' : '/employer');
+                        navigate('/ai-assistant');
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                      className="w-full flex items-center gap-3 px-4 h-10 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50"
                     >
                       {isSwitching ? (
-                        <Loader2 size={16} className="animate-spin" />
+                        <Loader2 size={16} className="animate-spin flex-shrink-0" />
                       ) : (
-                        <RotateCcw size={16} />
+                        <RotateCcw size={16} className="flex-shrink-0" />
                       )}
                       {isSwitching ? '切换中...' : `切换为${userRole === 'candidate' ? '企业方' : '求职者'}`}
                     </button>
                   </div>
-                  <div className="border-t border-slate-100">
+                  {/* 退出登录 */}
+                  <div className="border-t border-slate-200">
                     <button 
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 h-10 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
                     >
-                      <ArrowRight size={16} /> 退出登录
+                      <ArrowRight size={16} className="flex-shrink-0" /> 退出登录
                     </button>
                   </div>
                 </div>
@@ -1301,7 +1370,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   const userId = user?.id || 0;
   const isEmployer = userRole === 'employer' || userRole === 'recruiter' || userRole === 'admin';
   
-  const [activeTab, setActiveTab] = useState<'General' | 'AccountInfo' | 'Verification' | 'PersonalVerification' | 'Account' | 'AIEngine' | 'API' | 'Team' | 'Audit'>('AccountInfo');
+  const [activeTab, setActiveTab] = useState<'General' | 'AccountInfo' | 'Verification' | 'PersonalVerification' | 'AIEngine' | 'API' | 'Team' | 'Audit'>('AccountInfo');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -1335,7 +1404,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['General', 'AccountInfo', 'Verification', 'PersonalVerification', 'Account', 'AIEngine', 'API', 'Team', 'Audit'].includes(tabParam)) {
+    if (tabParam && ['General', 'AccountInfo', 'Verification', 'PersonalVerification', 'AIEngine', 'API', 'Team', 'Audit'].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [location.search]);
@@ -1352,6 +1421,10 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferTargetId, setTransferTargetId] = useState<number | null>(null);
   const [llmConfigs, setLlmConfigs] = useState<any[]>([]);
+  const [showLLMConnectModal, setShowLLMConnectModal] = useState(false);
+  const [connectingModel, setConnectingModel] = useState<{name: string; provider: string} | null>(null);
+  const [llmConnectForm, setLlmConnectForm] = useState({ apiKey: '', baseUrl: '' });
+  const [llmConnecting, setLlmConnecting] = useState(false);
   const [apiKeys, setApiKeys] = useState<any[]>([]);
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [apiKeyUsage, setApiKeyUsage] = useState<any>({ today: 0, week: 0 });
@@ -1567,8 +1640,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
     ...(isEmployer ? [{ id: 'General', label: '企业基础信息', icon: UserCircle2 }] : []),
     ...(isEmployer ? [{ id: 'Verification', label: '企业认证信息', icon: ShieldCheck }] : []),
     ...(isCandidate ? [{ id: 'PersonalVerification', label: '个人认证信息', icon: Fingerprint }] : []),
-    { id: 'Account', label: '账户等级', icon: Award },
-    { id: 'AIEngine', label: 'AI 引擎配置', icon: Cpu },
+    { id: 'AIEngine', label: '自定义大模型', icon: Cpu },
     { id: 'API', label: 'API 与集成', icon: Key },
     ...(isEmployer ? [{ id: 'Team', label: '人员与权限', icon: Users2 }] : []),
     { id: 'Audit', label: '系统安全日志', icon: Laptop },
@@ -2495,24 +2567,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
               </div>
             </div>
 
-            {/* 偏好设置 */}
-            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
-              <h4 className="text-sm font-bold text-slate-700 mb-4">偏好设置</h4>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <div>
-                    <h5 className="text-sm font-medium text-slate-800">深色模式</h5>
-                    <p className="text-xs text-slate-500">切换深色主题减少眼睛疲劳</p>
-                  </div>
-                  <button 
-                    onClick={toggleDarkMode}
-                    className={`w-11 h-6 rounded-full relative transition-colors ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
-                  </button>
-                </div>
-              </div>
-            </div>
+
 
             {/* 邮箱输入弹窗 */}
             {showEmailInput && (
@@ -2637,78 +2692,177 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           </div>
         );
       }
-      case 'Account':
-        return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">账户等级与特权</h3>
-            <div className="bg-white rounded p-10 border border-slate-100 shadow-sm">
-              <div className="flex flex-col md:flex-row items-center gap-10">
-                <div className="w-full md:w-1/3 bg-indigo-600 rounded p-8 text-white relative overflow-hidden">
-                  <Zap className="absolute -right-6 -bottom-6 w-32 h-32 opacity-10" />
-                  <div className="text-xs font-black uppercase text-indigo-200 mb-4">当前方案</div>
-                  <div className="text-4xl font-black mb-2">{accountTierInfo.tierName}</div>
-                  <p className="text-slate-400 text-xs font-medium mb-8">
-                    {accountTierInfo.tier === 'ultra' ? '企业旗舰版，尊享所有高级功能' : 
-                     accountTierInfo.tier === 'pro' ? '适用于中型以上规模的 AI 驱动团队' : 
-                     '基础版，可升级解锁更多功能'}
-                  </p>
-                  <button className="w-full py-3 bg-white/10 hover:bg-white/20 text-white rounded text-xs font-black transition-all">续费当前套餐</button>
-                </div>
-                <div className="flex-1 space-y-6">
-                  <h4 className="text-lg font-black text-slate-900">包含的核心特权</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(accountTierInfo.privileges || []).map((p: string, i: number) => (
-                      <div key={i} className="flex items-center gap-3 text-sm font-bold text-slate-600">
-                        <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0" /> {p}
-                      </div>
-                    ))}
-                  </div>
-                  {accountTierInfo.tier !== 'ultra' && (
-                    <div className="pt-6">
-                      <button 
-                        onClick={() => navigate('/pricing')}
-                        className="bg-indigo-600 text-white px-8 py-4 rounded font-black text-sm shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-                      >
-                        升级到 Devnors 1.0 Ultra 旗舰版 <ArrowUpRight size={18} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
       case 'AIEngine':
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
-            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">AI 任务引擎自定义</h3>
-            <p className="text-slate-500 font-medium -mt-4">根据不同招聘任务的复杂度和成本，灵活配置底层大语言模型驱动。</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {llmConfigs.length === 0 ? (
-                <div className="col-span-2 text-center py-8 text-slate-400">
-                  <Bot size={32} className="mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">暂无 AI 引擎配置</p>
-                </div>
-              ) : llmConfigs.map((config: any, i: number) => (
-                <div key={i} className="p-8 bg-white rounded border border-slate-100 shadow-sm hover:border-indigo-200 transition-all group">
-                   <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <div className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{config.task}</div>
-                        <div className="text-xl font-black text-slate-900">{config.modelName}</div>
-                      </div>
-                      <div className="p-2 bg-indigo-50 rounded text-indigo-600"><Bot size={20} /></div>
-                   </div>
-                   <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                      <span className="text-xs font-black text-slate-400 uppercase">Provider: <span className="text-indigo-600 ml-1">{config.provider}</span></span>
-                      <button className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"><Edit3 size={16} /></button>
-                   </div>
-                </div>
-              ))}
-              <button className="border-2 border-dashed border-slate-200 rounded p-8 flex flex-col items-center justify-center gap-4 hover:bg-white hover:border-indigo-200 transition-all group">
-                 <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all"><Plus size={24} /></div>
-                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest">添加自定义任务映射</span>
-              </button>
+            {/* ===== 自定义大模型接入（Ultra 专属） ===== */}
+            <div className="flex items-center gap-3">
+              <h3 className="text-2xl font-black text-slate-900">自定义大模型接入</h3>
+              <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-gradient-to-r from-rose-500 to-amber-500 text-white rounded">Ultra 专属</span>
             </div>
+            <p className="text-slate-500 font-medium -mt-4">接入您自有的第三方大模型 API，用于驱动平台中的 AI 任务引擎。平台仅收取模型服务方 Token 费用的 <span className="text-indigo-600 font-black">20%</span> 作为通道服务费。</p>
+
+            {accountTierInfo.tier === 'ultra' ? (
+              <>
+                <div className="bg-white rounded-lg border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-100">
+                  {[
+                    { name: 'GPT-4o', provider: 'OpenAI', desc: '旗舰多模态模型，128K 上下文', color: 'bg-emerald-500', letter: 'G' },
+                    { name: 'GPT-o3', provider: 'OpenAI', desc: '最强推理模型，复杂逻辑与代码', color: 'bg-emerald-600', letter: 'O' },
+                    { name: 'Claude 4 Opus', provider: 'Anthropic', desc: '超长上下文，深度分析与写作', color: 'bg-amber-500', letter: 'C' },
+                    { name: 'Gemini 2.5 Pro', provider: 'Google', desc: '百万级上下文，原生多模态', color: 'bg-blue-500', letter: 'G' },
+                    { name: 'DeepSeek R1', provider: 'DeepSeek', desc: '顶级推理，中文场景优化', color: 'bg-indigo-500', letter: 'D' },
+                    { name: 'Qwen 3', provider: 'Alibaba', desc: '中文能力出色，企业级稳定', color: 'bg-violet-500', letter: 'Q' },
+                    { name: 'Grok 3', provider: 'xAI', desc: '实时信息接入，创意与分析', color: 'bg-slate-700', letter: 'X' },
+                  ].map((model, i) => {
+                    const connectedConfig = llmConfigs.find((c: any) => c.modelName === model.name || (c.model_name === model.name));
+                    const connected = !!connectedConfig;
+                    return (
+                      <div key={i} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors">
+                        <div className={`w-9 h-9 ${model.color} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                          <span className="text-white text-xs font-black">{model.letter}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-slate-900">{model.name}</span>
+                            <span className="text-[10px] font-bold text-slate-400">{model.provider}</span>
+                          </div>
+                          <p className="text-xs text-slate-400 truncate">{model.desc}</p>
+                        </div>
+                        {connected ? (
+                          <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" /> 已接入
+                            </span>
+                            <button 
+                              onClick={async () => {
+                                if (!confirm(`确认断开 ${model.name} 的接入？`)) return;
+                                try {
+                                  await deleteAIConfig(connectedConfig.id || connectedConfig.config_id, userId);
+                                  setLlmConfigs(await getAIConfigs(userId));
+                                  showToast(`${model.name} 已断开`, 'success');
+                                } catch { showToast('操作失败', 'error'); }
+                              }}
+                              className="text-[10px] font-bold text-slate-400 hover:text-rose-500 transition-colors"
+                              title="断开接入"
+                            >
+                              断开
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => {
+                              setConnectingModel({ name: model.name, provider: model.provider });
+                              setLlmConnectForm({ apiKey: '', baseUrl: '' });
+                              setShowLLMConnectModal(true);
+                            }}
+                            className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                          >
+                            接入
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 接入模型模态框 */}
+                {showLLMConnectModal && connectingModel && (
+                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowLLMConnectModal(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+                      <div className="px-6 py-5 border-b border-slate-100">
+                        <h4 className="text-lg font-black text-slate-900">接入 {connectingModel.name}</h4>
+                        <p className="text-xs text-slate-400 mt-1">配置 {connectingModel.provider} 的 API 密钥以启用模型调用</p>
+                      </div>
+                      <div className="px-6 py-5 space-y-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1.5">API Key <span className="text-rose-500">*</span></label>
+                          <input
+                            type="password"
+                            value={llmConnectForm.apiKey}
+                            onChange={e => setLlmConnectForm({ ...llmConnectForm, apiKey: e.target.value })}
+                            placeholder={`输入 ${connectingModel.provider} API Key`}
+                            className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1">密钥将加密存储，仅用于平台代理调用</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1.5">自定义 Base URL <span className="text-slate-400 font-normal">(可选)</span></label>
+                          <input
+                            type="text"
+                            value={llmConnectForm.baseUrl}
+                            onChange={e => setLlmConnectForm({ ...llmConnectForm, baseUrl: e.target.value })}
+                            placeholder="https://api.openai.com/v1"
+                            className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                          />
+                          <p className="text-[10px] text-slate-400 mt-1">如使用代理或自建服务，可填写自定义端点地址</p>
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                          <div className="flex items-start gap-2">
+                            <Info size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                            <p className="text-[11px] text-amber-700">接入后，该模型将出现在 AI 助手的模型选择列表中。调用费用 = 服务商原始 Token 费用 × 1.2</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+                        <button 
+                          onClick={() => setShowLLMConnectModal(false)} 
+                          className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                        >
+                          取消
+                        </button>
+                        <button 
+                          disabled={!llmConnectForm.apiKey.trim() || llmConnecting}
+                          onClick={async () => {
+                            setLlmConnecting(true);
+                            try {
+                              await createAIConfig({
+                                task: 'custom',
+                                model_name: connectingModel.name,
+                                provider: connectingModel.provider,
+                                api_key: llmConnectForm.apiKey.trim(),
+                              }, userId);
+                              setLlmConfigs(await getAIConfigs(userId));
+                              setShowLLMConnectModal(false);
+                              showToast(`${connectingModel.name} 接入成功`, 'success');
+                            } catch {
+                              showToast('接入失败，请检查 API Key 是否正确', 'error');
+                            } finally {
+                              setLlmConnecting(false);
+                            }
+                          }}
+                          className="px-5 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                        >
+                          {llmConnecting ? <><Loader2 size={14} className="animate-spin" /> 验证中...</> : '确认接入'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                  <div className="flex items-start gap-3">
+                    <Info size={16} className="text-slate-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p className="font-bold text-slate-600">费率说明</p>
+                      <p>自定义模型调用费用 = 模型服务商原始 Token 费用 × 1.2（即加收 20% 通道服务费）。平台默认模型不另收通道费，已包含在方案套餐中。</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl border border-slate-200 p-10 text-center">
+                <div className="w-16 h-16 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center mx-auto mb-5">
+                  <Cpu size={28} className="text-indigo-400" />
+                </div>
+                <h4 className="text-lg font-black text-slate-900 mb-2">升级 Ultra 旗舰版解锁</h4>
+                <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">Ultra 用户可接入 OpenAI、Claude、Gemini、DeepSeek 等自有大模型 API，灵活驱动平台 AI 任务引擎。通道服务费仅为模型 Token 费用的 20%。</p>
+                <button 
+                  onClick={() => navigate('/pricing')}
+                  className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-lg font-black text-sm shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+                >
+                  查看 Ultra 方案 <ArrowUpRight size={16} />
+                </button>
+              </div>
+            )}
           </div>
         );
       case 'API':
@@ -2829,7 +2983,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
 
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
-            {/* 标题 + 统计 */}
+            {/* ===== API 与 Webhooks 集成 ===== */}
             <div className="flex justify-between items-end">
               <div>
                 <h3 className="text-2xl font-black text-slate-900">API 与 Webhooks 集成</h3>
@@ -6052,7 +6206,9 @@ const PricingView = () => {
         { name: '高级推理能力', value: '-', included: false },
         { name: '专属技术支持', value: '-', included: false },
         { name: '高阶对接算法', value: '-', included: false },
+        { name: '自定义大模型接入', value: '-', included: false },
         { name: '求职云端轮巡周期', value: '1 天', included: true },
+        { name: '同时进行的招聘任务', value: '1 个', included: true },
         { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '免费使用',
@@ -6077,7 +6233,9 @@ const PricingView = () => {
         { name: '高级推理能力', value: '✓', included: true },
         { name: '专属技术支持', value: '工单', included: true },
         { name: '高阶对接算法', value: '-', included: false },
+        { name: '自定义大模型接入', value: '-', included: false },
         { name: '求职云端轮巡周期', value: '7 天', included: true },
+        { name: '同时进行的招聘任务', value: '3 个', included: true },
         { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '立即升级',
@@ -6102,7 +6260,9 @@ const PricingView = () => {
         { name: '专属技术支持', value: '1v1 专属', included: true },
         { name: '高阶对接算法', value: '✓', included: true },
         { name: '定制化微调', value: '✓', included: true },
+        { name: '自定义大模型接入', value: 'Token +20%', included: true },
         { name: '求职云端轮巡周期', value: '30 天', included: true },
+        { name: '同时进行的招聘任务', value: '10 个', included: true },
         { name: '邀请好友奖励', value: '50,000 tokens/人', included: true },
       ],
       cta: '立即升级',
@@ -6299,7 +6459,7 @@ const PricingView = () => {
             { q: '超出免费额度怎么办？', a: '超出免费额度后可以购买充值套餐继续使用，也可以邀请好友获得免费 Token 奖励。' },
             { q: '充值的 Token 会过期吗？', a: '充值购买的 Token 永不过期。每月免费额度在月底重置，不累积到下月。' },
             { q: '¥1 能做什么？', a: '¥1 = 10,000 tokens，约可进行 12 次 AI 对话，或 2 次简历解析，或 5 次职位匹配，或 1 次完整的市场薪资分析。' },
-            { q: '邀请奖励有上限吗？', a: '没有上限！每邀请一位好友成功注册，您获得 50,000 tokens（≈62次对话），好友获得 20,000 tokens（≈25次对话），邀请越多奖励越多。' },
+            { q: '邀请奖励有上限吗？', a: '没有上限！每邀请一位好友成功注册，您获得 50,000 tokens，好友获得 20,000 tokens，邀请越多奖励越多。' },
             { q: '支持私有化部署吗？', a: '暂不支持私有部署，Ultra 版本支持模型定制化微调，满足企业个性化需求。' },
           ].map((faq, i) => (
             <div key={i} className="bg-white rounded-lg p-6 border border-slate-100">
@@ -11354,7 +11514,7 @@ const AIAssistantView = () => {
   // 企业认证是否已实际完成（基于认证数据，而非仅任务状态）
   const [enterpriseCertDone, setEnterpriseCertDone] = useState(false);
   useEffect(() => {
-    if (userRole !== 'employer') return;
+    if (userRole !== 'employer' && userRole !== 'recruiter') return;
     let cancelled = false;
     (async () => {
       try {
@@ -11410,37 +11570,29 @@ const AIAssistantView = () => {
     }
     
     if (userRole === 'employer' || userRole === 'recruiter') {
-      // 企业/招聘方：根据任务完成状态动态引导
-      const certTask = taskList.find((t: any) => {
-        const title = t.title || t.task || '';
-        const type = (t.todo_type || t.type || '').toLowerCase();
-        return type === 'enterprise_verification' || title === '完成企业认证' || 
-          (title.includes('企业') && title.includes('认证'));
-      });
-      const profileTask = taskList.find((t: any) => {
-        const title = t.title || t.task || '';
-        const type = (t.todo_type || t.type || '').toLowerCase();
-        return type === 'enterprise_profile' || title === '完善企业资料' || 
-          (title.includes('企业') && title.includes('资料'));
-      });
-      
-      const certCompleted = certTask?.status?.toLowerCase() === 'completed' || enterpriseCertDone;
-      const profileCompleted = profileTask?.status?.toLowerCase() === 'completed';
+      // 企业/招聘方：基于实际数据状态动态引导（而非仅依赖任务列表）
+      // recruitReady = 企业认证 + 企业资料都已完善（基于后端实际数据判断）
+      if (recruitReady) {
+        // 企业认证和资料都已完善，引导招聘找人
+        return `👋 **${userName}，欢迎回来！**\n\n您的企业资料已完善，现在可以开始招聘啦：\n\n[[TASK:开始招聘:post_job:🚀]]\n\n或直接告诉我您的招聘需求~`;
+      }
       
       // 收集未完成的任务引导卡片
       const pendingGuides: string[] = [];
-      if (!certCompleted) {
+      if (!enterpriseCertDone) {
         pendingGuides.push('[[TASK:完成企业认证:enterprise_verification:🏢]]');
       }
-      if (!profileCompleted && profileTask) {
+      // recruitReady 为 false 且 enterpriseCertDone 为 true → 说明企业资料未完善
+      if (enterpriseCertDone && !recruitReady) {
+        pendingGuides.push('[[TASK:完善企业资料:enterprise_profile:📋]]');
+      }
+      // 如果都还没加载完（enterpriseCertDone 初始为 false），至少显示认证和资料两项
+      if (pendingGuides.length === 0) {
+        pendingGuides.push('[[TASK:完成企业认证:enterprise_verification:🏢]]');
         pendingGuides.push('[[TASK:完善企业资料:enterprise_profile:📋]]');
       }
       
-      if (pendingGuides.length > 0) {
-        return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 招聘助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的招聘需求~`;
-      }
-      
-      return `${userName}您好！我是您的 AI 招聘助手 🏢\n\n我可以帮您：\n• 搜索筛选候选人\n• 分析人才市场\n• 优化职位描述\n• 制定招聘策略\n\n有什么招聘需求？`;
+      return `👋 **${userName}，欢迎使用 Devnors！**\n\n我是您的 AI 招聘助手，建议您先完成以下任务：\n\n${pendingGuides.join('\n\n')}\n\n或直接告诉我您的招聘需求~`;
     } else {
       // 求职者：根据任务完成状态动态引导
       const resumeTask = taskList.find((t: any) => {
@@ -11624,11 +11776,16 @@ const AIAssistantView = () => {
     setChatHistoryLoaded(false);
     
     const savedMessages = loadSavedMessages();
-    // 如果没有保存的对话（只有一条默认欢迎消息），则显示新的欢迎消息
+    // 始终用当前身份生成的欢迎消息替换第一条，防止身份切换后显示旧身份的内容
+    const freshWelcome = getWelcomeMessage();
     if (savedMessages.length <= 1) {
-      setGeneralMessages([{role: 'assistant', content: getWelcomeMessage()}]);
+      setGeneralMessages([{role: 'assistant', content: freshWelcome}]);
     } else {
-      setGeneralMessages(savedMessages);
+      const updated = [...savedMessages];
+      if (updated[0]?.role === 'assistant') {
+        updated[0] = {role: 'assistant', content: freshWelcome};
+      }
+      setGeneralMessages(updated);
     }
     setTaskMessages(loadSavedTaskMessages());
   }, [userId, isLoggedIn, userRole]);
@@ -11670,7 +11827,7 @@ const AIAssistantView = () => {
         return prev;
       });
     }
-  }, [profileLoading, isNewUser, isLoggedIn, tasksLoading, tasks, enterpriseCertDone]);
+  }, [profileLoading, isNewUser, isLoggedIn, tasksLoading, tasks, enterpriseCertDone, recruitReady, userRole]);
   
   // 按角色过滤的任务列表（用于统计）
   const roleFilteredTasks = useMemo(() => {
@@ -12113,31 +12270,60 @@ const AIAssistantView = () => {
             return;
           }
           
-          // 前置条件满足，创建招聘任务并开启引导
-          // 创建招聘任务（如果不存在）
+          // 前置条件满足 — 检查未完成招聘任务数量是否超过方案限制
+          const pendingRecruitTasks = tasks.filter((t: any) => 
+            (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
+            t.status?.toUpperCase() !== 'COMPLETED' && t.status?.toUpperCase() !== 'CANCELLED'
+          );
+          const tierLimits: Record<string, number> = { FREE: 1, PRO: 3, ULTRA: 10 };
+          const userTier = user?.account_tier || 'FREE';
+          const maxRecruitTasks = tierLimits[userTier] || 1;
+          
+          if (pendingRecruitTasks.length >= maxRecruitTasks) {
+            // 超过限制，提示用户完成已有任务
+            const taskNames = pendingRecruitTasks.map((t: any) => `• **${t.title}**`).join('\n');
+            const tierName = userTier === 'ULTRA' ? '旗舰版' : userTier === 'PRO' ? '专业版' : '基础版';
+            setGeneralMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `⚠️ **招聘任务数量已达上限**\n\n您当前的${tierName}方案最多同时进行 **${maxRecruitTasks}** 个招聘任务，目前已有 ${pendingRecruitTasks.length} 个未完成：\n\n${taskNames}\n\n请先完成或取消已有的招聘任务后，再创建新的招聘任务。${userTier !== 'ULTRA' ? `\n\n💡 升级方案可解锁更多并行招聘任务数量。\n\n[[LINK:升级方案:/pricing:⚡]]` : ''}`
+            }]);
+            navigate('/ai-assistant', { replace: true });
+            return;
+          }
+          
+          // 创建新的招聘任务
+          let newTask: any = null;
           try {
             const { createTodo } = await import('./services/apiService');
-            const existingRecruitTask = tasks.find((t: any) => 
-              (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
-              (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING' || t.status?.toUpperCase() === 'IN_PROGRESS')
-            );
-            if (!existingRecruitTask) {
-              const taskShortId = `RC${Date.now().toString().slice(-6)}`;
-              await createTodo({
-                title: `智能招聘 #${taskShortId}`,
-                description: 'AI 智能招聘助手 — 从需求到人才对接的全流程招聘',
-                priority: 'HIGH',
-                source: 'AGENT',
-                todo_type: 'RECRUIT',
-                ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成岗位、匹配候选人、筛选评估直到双方建立联系。',
-                steps: [
-                  { step: 1, title: '描述招聘需求', status: 'pending' },
-                  { step: 2, title: 'AI 生成岗位', status: 'pending' },
-                  { step: 3, title: '确认并发布', status: 'pending' },
-                  { step: 4, title: '智能邀请投递', status: 'pending' },
-                  { step: 5, title: '智能筛选评估', status: 'pending' },
-                ],
-              }, userId);
+            const taskShortId = `RC${Date.now().toString().slice(-6)}`;
+            newTask = await createTodo({
+              title: `智能招聘 #${taskShortId}`,
+              description: 'AI 智能招聘助手 — 从需求到人才对接的全流程招聘',
+              priority: 'HIGH',
+              source: 'AGENT',
+              todo_type: 'RECRUIT',
+              ai_advice: '告诉 AI 助手您的招聘需求，AI 将为您自动生成岗位、匹配候选人、筛选评估直到双方建立联系。',
+              steps: [
+                { step: 1, title: '描述招聘需求', status: 'pending' },
+                { step: 2, title: 'AI 生成岗位', status: 'pending' },
+                { step: 3, title: '确认并发布', status: 'pending' },
+                { step: 4, title: '智能邀请投递', status: 'pending' },
+                { step: 5, title: '智能筛选评估', status: 'pending' },
+              ],
+            }, userId);
+            
+            // 刷新任务列表
+            if (typeof refetchTasks === 'function') await refetchTasks();
+            
+            // 如果 createTodo 没有返回完整任务对象，重新获取
+            if (!newTask?.id) {
+              const updatedTasks = await getTasks(userId);
+              newTask = updatedTasks.find((t: any) => 
+                t.title?.includes(taskShortId)
+              ) || updatedTasks.find((t: any) => 
+                t.todo_type?.toUpperCase() === 'RECRUIT' && 
+                (t.status?.toUpperCase() === 'PENDING' || t.status?.toUpperCase() === 'RUNNING')
+              );
             }
           } catch (e) {
             console.error('创建招聘任务失败:', e);
@@ -12151,8 +12337,19 @@ const AIAssistantView = () => {
           });
           
           const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
-          const postMessage = `🏢 **${companyName}，欢迎使用 AI 智能招聘助手！**\n\n✅ 企业认证已通过 · ✅ 企业资料已完善\n📋 已创建「智能招聘」任务，可在任务中心查看进度\n\n---\n\n**第一步：描述您的招聘需求**\n\n请告诉我您想招什么人，支持以下方式：\n\n**简单描述**\n> "招3个前端，2个后端，薪资20-40K"\n\n**详细描述**\n> "招聘高级前端工程师，需要3年以上React经验，负责核心产品开发"\n\n**批量描述**\n> "技术团队扩招，需要前端、后端、产品经理各1人"\n\n**第二步：** AI 自动生成专业岗位描述\n**第三步：** 确认后一键发布，开始智能匹配\n\n💡 描述越详细，生成的岗位越精准！`;
-          setGeneralMessages([{role: 'assistant', content: postMessage}]);
+          const postMessage = `🏢 **${companyName}，欢迎使用 AI 智能招聘助手！**\n\n✅ 企业认证已通过 · ✅ 企业资料已完善\n\n---\n\n**第一步：描述您的招聘需求**\n\n请告诉我您想招什么人，支持以下方式：\n\n**简单描述**\n> "招3个前端，2个后端，薪资20-40K"\n\n**详细描述**\n> "招聘高级前端工程师，需要3年以上React经验，负责核心产品开发"\n\n**批量描述**\n> "技术团队扩招，需要前端、后端、产品经理各1人"\n\n**第二步：** AI 自动生成专业岗位描述\n**第三步：** 确认后一键发布，开始智能匹配\n\n💡 描述越详细，生成的岗位越精准！`;
+          
+          // 选中新创建的任务，在任务对话中展示招聘流程
+          if (newTask?.id) {
+            setSelectedTask(newTask);
+            setTaskMessages(prev => ({
+              ...prev,
+              [newTask.id]: [{ role: 'assistant', content: postMessage }]
+            }));
+          } else {
+            // 降级：如果任务创建失败，仍在通用对话中展示
+            setGeneralMessages([{role: 'assistant', content: postMessage}]);
+          }
         } catch (e) {
           console.error('检查招聘前置条件失败:', e);
           setGeneralMessages([{role: 'assistant', content: '⚠️ 检查招聘资质时出现异常，请稍后重试。'}]);
@@ -12751,23 +12948,31 @@ ${memCtx}
               let reportSections = '';
               
               if (bothPass.length > 0) {
-                const passCards = bothPass.map((c: any, i: number) => 
-                  `✅ **${i+1}. ${c.name}** — 匹配 ${c.match_score || 0}%\n   🏢 企业审核：${c.employer_score || 0}分 | ${c.employer_analysis || ''}\n   👤 投递意愿：${c.candidate_interest || 0}% — ${c.response_type || ''}\n   ✅ 优势：${(c.strengths || []).join(' · ')}\n   ⚠️ 关注：${(c.concerns || []).join(' · ')}`
-                ).join('\n\n');
+                const passCards = bothPass.map((c: any, i: number) => {
+                  const thinkContent = [
+                    `🏢 **企业审核**：${c.employer_score || 0}分 — ${c.employer_analysis || '暂无分析'}`,
+                    `👤 **投递意愿**：${c.candidate_interest || 0}% — ${c.response_type || '未知'}`,
+                    (c.strengths?.length ? `✅ **优势**：${c.strengths.join(' · ')}` : ''),
+                    (c.concerns?.length ? `⚠️ **关注点**：${c.concerns.join(' · ')}` : ''),
+                  ].filter(Boolean).join('\n\n');
+                  return `✅ **${i+1}. ${c.name}** — 匹配 ${c.match_score || 0}%\n\n<think>${thinkContent}</think>`;
+                }).join('\n\n');
                 reportSections += `### ✅ 筛选通过（${bothPass.length} 人）\n\n${passCards}\n\n`;
               }
               
               if (employerOnly.length > 0) {
-                const eoCards = employerOnly.map((c: any) =>
-                  `🏢 **${c.name}** — 企业通过 (${c.employer_score || 0}分)，候选人${c.response_type || '未响应'}\n   ${c.candidate_analysis || ''}`
-                ).join('\n');
+                const eoCards = employerOnly.map((c: any) => {
+                  const thinkContent = c.candidate_analysis || '暂无详细分析';
+                  return `🏢 **${c.name}** — 企业通过 (${c.employer_score || 0}分)，候选人${c.response_type || '未响应'}\n\n<think>${thinkContent}</think>`;
+                }).join('\n\n');
                 reportSections += `### 🏢 待候选人确认（${employerOnly.length} 人）\n\n${eoCards}\n\n`;
               }
               
               if (candidateOnly.length > 0) {
-                const coCards = candidateOnly.map((c: any) =>
-                  `👤 **${c.name}** — 候选人有意向 (${c.candidate_interest || 0}%)，企业方未通过\n   ${c.employer_analysis || ''}`
-                ).join('\n');
+                const coCards = candidateOnly.map((c: any) => {
+                  const thinkContent = c.employer_analysis || '暂无详细分析';
+                  return `👤 **${c.name}** — 候选人有意向 (${c.candidate_interest || 0}%)，企业方未通过\n\n<think>${thinkContent}</think>`;
+                }).join('\n\n');
                 reportSections += `### 👤 仅候选人意向（${candidateOnly.length} 人）\n\n${coCards}\n\n`;
               }
               
@@ -14992,22 +15197,33 @@ ${recentContext}
             return;
           }
           
-          // 前置条件满足，创建招聘任务并自动跳转到该任务
+          // 前置条件满足 — 检查招聘任务数量限制
+          const pendingRecruits = tasks.filter((t: any) => 
+            (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
+            t.status?.toUpperCase() !== 'COMPLETED' && t.status?.toUpperCase() !== 'CANCELLED'
+          );
+          const recruitLimits: Record<string, number> = { FREE: 1, PRO: 3, ULTRA: 10 };
+          const curTier = user?.account_tier || 'FREE';
+          const maxTasks = recruitLimits[curTier] || 1;
+          
+          if (pendingRecruits.length >= maxTasks) {
+            const taskNames = pendingRecruits.map((t: any) => `• **${t.title}**`).join('\n');
+            const tierLabel = curTier === 'ULTRA' ? '旗舰版' : curTier === 'PRO' ? '专业版' : '基础版';
+            setGeneralMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `⚠️ **招聘任务数量已达上限**\n\n您当前的${tierLabel}方案最多同时进行 **${maxTasks}** 个招聘任务，目前已有 ${pendingRecruits.length} 个未完成：\n\n${taskNames}\n\n请先完成或取消已有的招聘任务后，再创建新的招聘任务。${curTier !== 'ULTRA' ? `\n\n💡 升级方案可解锁更多并行招聘任务数量。\n\n[[LINK:升级方案:/pricing:⚡]]` : ''}`
+            }]);
+            setIsTyping(false);
+            return;
+          }
+          
+          // 创建招聘任务并自动跳转到该任务
           const companyName = settingsData.display_name || settingsData.short_name || user?.company_name || '贵公司';
           
-          // 创建或获取招聘任务，然后自动选中跳转
           try {
             const { createTodo } = await import('./services/apiService');
-            // 查找未完成的招聘任务（兼容大小写状态值）
-            const isActiveStatus = (s: string) => {
-              const up = (s || '').toUpperCase();
-              return up === 'PENDING' || up === 'RUNNING' || up === 'IN_PROGRESS';
-            };
-            let recruitTask = tasks.find((t: any) => 
-              (t.todo_type?.toUpperCase() === 'RECRUIT' || t.title?.includes('智能招聘')) &&
-              isActiveStatus(t.status)
-            );
-            if (!recruitTask) {
+            let recruitTask: any = null;
+            {
               const taskShortId = `RC${Date.now().toString().slice(-6)}`;
               recruitTask = await createTodo({
                 title: `智能招聘 #${taskShortId}`,
@@ -17761,29 +17977,71 @@ ${recentContext}
     return 'unknown';
   };
 
+  // 确认弹窗状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, title: '', message: '', onConfirm: () => {} });
+
   const handleResetChat = () => {
-    // 重置完善简历模式
-    setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
-    
-    if (selectedTask) {
-      const taskTitle = selectedTask.title || selectedTask.task || '';
-      const taskType = selectedTask.todo_type || selectedTask.type || '';
-      const isProfileTask = taskType === 'profile_complete' || 
-        taskTitle === '完善简历资料';
-      
-      setTaskMessages(prev => ({
-        ...prev,
-        [selectedTask.id]: [{
-          role: 'assistant',
-          content: isProfileTask 
-            ? `👋 您好！我来帮您完成「${taskTitle}」任务。\n\n输入 "开始填写简历" 开始引导流程。`
-            : `你好！我是 Devnors 任务执行助手。关于"${taskTitle}"这项任务，我已经准备好协助您。`
-        }]
-      }));
-    } else {
-      // 重置为欢迎消息
-      setGeneralMessages([{role: 'assistant', content: getWelcomeMessage()}]);
-    }
+    setConfirmDialog({
+      show: true,
+      title: '清除聊天记录',
+      message: selectedTask 
+        ? `确定要清除「${selectedTask.title || selectedTask.task || ''}」的聊天记录吗？此操作不可恢复。`
+        : '确定要清空所有聊天记录吗？此操作不可恢复。',
+      onConfirm: () => {
+        if (selectedTask) {
+          const taskId = selectedTask.id;
+          const taskTitle = selectedTask.title || selectedTask.task || '';
+          const taskType = selectedTask.todo_type || selectedTask.type || '';
+          const isProfileTask = taskType === 'profile_complete' || taskTitle === '完善简历资料';
+          
+          // 重置任务对话为初始消息
+          setTaskMessages(prev => ({
+            ...prev,
+            [taskId]: [{
+              role: 'assistant',
+              content: isProfileTask
+                ? `👋 您好！我来帮您完成「${taskTitle}」任务。\n\n输入 "开始填写简历" 开始引导流程。`
+                : `你好！我是 Devnors 任务执行助手。关于"${taskTitle}"这项任务，我已经准备好协助您。`
+            }]
+          }));
+          
+          // 重置相关模式
+          setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+          setPostMode({ active: false, step: 'requirement', jobDescription: '', generatedResult: null });
+          
+          // 后台清除聊天记录
+          (async () => {
+            try {
+              await fetch(`/api/v1/public/chat-messages?user_id=${userId}&todo_id=${taskId}`, { method: 'DELETE' });
+            } catch { /* ignore */ }
+          })();
+        } else {
+          // 通用助手：重置为欢迎消息
+          setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+          setGeneralMessages([{role: 'assistant', content: getWelcomeMessage()}]);
+          
+          // 后台清除聊天记录
+          (async () => {
+            try {
+              await fetch(`/api/v1/public/chat-messages?user_id=${userId}`, { method: 'DELETE' });
+            } catch { /* ignore */ }
+          })();
+        }
+        
+        // 清除 localStorage
+        try {
+          localStorage.removeItem(GENERAL_MESSAGES_KEY);
+          localStorage.removeItem(TASK_MESSAGES_KEY);
+        } catch { /* ignore */ }
+        
+        setConfirmDialog(prev => ({ ...prev, show: false }));
+      }
+    });
   };
 
   const TaskIcon = selectedTask ? getIconComponent(selectedTask.icon) : Calendar;
@@ -17967,7 +18225,7 @@ ${recentContext}
               <button 
                 onClick={handleResetChat} 
                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all" 
-                title="重置对话"
+                title="清除聊天记录"
               >
                 <RotateCcw size={14} />
               </button>
@@ -18110,11 +18368,44 @@ ${recentContext}
                   </div>
                 </div>
                 <button 
-                  onClick={() => setSelectedTask(null)}
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all flex-shrink-0"
-                  title="退出任务"
+                  onClick={() => {
+                    const task = selectedTask;
+                    if (!task) return;
+                    setConfirmDialog({
+                      show: true,
+                      title: '删除任务',
+                      message: `确定要删除任务「${task.title || task.task || ''}」及其聊天记录吗？此操作不可恢复。`,
+                      onConfirm: () => {
+                        const taskId = task.id;
+                        setTaskMessages(prev => {
+                          const updated = { ...prev };
+                          delete updated[taskId];
+                          return updated;
+                        });
+                        setSelectedTask(null);
+                        setProfileCompleteMode({ active: false, missingFields: [], currentFieldIndex: -1 });
+                        setPostMode({ active: false, step: 'requirement', jobDescription: '', generatedResult: null });
+                        (async () => {
+                          try {
+                            const { deleteTodo } = await import('./services/apiService');
+                            await deleteTodo(taskId);
+                            if (typeof refetchTasks === 'function') refetchTasks();
+                          } catch (e) { console.error('[Task] 删除任务失败:', e); }
+                          try {
+                            await fetch(`/api/v1/public/chat-messages?user_id=${userId}&todo_id=${taskId}`, { method: 'DELETE' });
+                          } catch { /* ignore */ }
+                        })();
+                        try {
+                          localStorage.removeItem(TASK_MESSAGES_KEY);
+                        } catch { /* ignore */ }
+                        setConfirmDialog(prev => ({ ...prev, show: false }));
+                      }
+                    });
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
+                  title="删除任务"
                 >
-                  <X size={14} />
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>
@@ -18148,22 +18439,30 @@ ${recentContext}
                       </div>
                     ) : (
                       <div className="markdown-content">
-                        {/* 渲染消息内容，支持任务卡片和链接卡片 */}
+                        {/* 渲染消息内容，支持任务卡片、链接卡片和思考过程折叠 */}
                         {(() => {
-                          // 解析卡片语法: [[TASK:...]], [[LINK:...]], [[ACTION:按钮文字:发送内容:样式]]
-                          const cardRegex = /\[\[(TASK|LINK|ACTION):([^:]+):([^:]+):([^\]]+)\]\]/g;
-                          const parts: (string | { type: 'task'; title: string; taskType: string; icon: string } | { type: 'link'; title: string; path: string; icon: string } | { type: 'action'; label: string; message: string; style: string })[] = [];
+                          // 统一解析: [[TASK:...]], [[LINK:...]], [[ACTION:...]], <think>...</think>
+                          const combinedRegex = /\[\[(TASK|LINK|ACTION):([^:]+):([^:]+):([^\]]+)\]\]|<think>([\s\S]*?)<\/think>/g;
+                          type PartType = string 
+                            | { type: 'task'; title: string; taskType: string; icon: string } 
+                            | { type: 'link'; title: string; path: string; icon: string } 
+                            | { type: 'action'; label: string; message: string; style: string }
+                            | { type: 'thinking'; content: string };
+                          const parts: PartType[] = [];
                           let lastIndex = 0;
                           let match;
                           const content = msg.content;
                           
-                          while ((match = cardRegex.exec(content)) !== null) {
-                            // 添加卡片之前的文本
+                          while ((match = combinedRegex.exec(content)) !== null) {
+                            // 添加匹配之前的文本
                             if (match.index > lastIndex) {
                               parts.push(content.slice(lastIndex, match.index));
                             }
-                            // 根据类型添加卡片
-                            if (match[1] === 'TASK') {
+                            
+                            if (match[5] !== undefined) {
+                              // <think>...</think> 匹配
+                              parts.push({ type: 'thinking', content: match[5].trim() });
+                            } else if (match[1] === 'TASK') {
                               parts.push({
                                 type: 'task',
                                 title: match[2],
@@ -18292,6 +18591,17 @@ ${recentContext}
                               // 渲染任务卡片
                               const handleTaskClick = async () => {
                                 try {
+                                  // 特殊操作类型：直接执行动作而非创建/选中任务
+                                  if (part.taskType === 'post_job') {
+                                    navigate('/ai-assistant?taskType=post');
+                                    return;
+                                  }
+                                  if (part.taskType === 'search_candidates') {
+                                    setSelectedTask(null);
+                                    handleSend('我想搜索筛选候选人，请帮我开始智能人才搜索');
+                                    return;
+                                  }
+                                  
                                   const { createTodo, getTasks } = await import('./services/apiService');
                                   
                                   // 先获取最新的任务列表
@@ -18480,6 +18790,9 @@ ${recentContext}
                                   ))}
                                 </div>
                               );
+                            } else if (part.type === 'thinking') {
+                              // 渲染思考过程折叠块
+                              return <ThinkingBlock key={partIdx} content={part.content} />;
                             } else {
                               return null;
                             }
@@ -18782,7 +19095,7 @@ ${recentContext}
                   return [];
                 }
                 
-                // 招聘流程各阶段底部按钮
+                // 招聘流程各阶段底部按钮（postMode 激活时优先）
                 if (postMode.active) {
                   if (postMode.step === 'optimize') {
                     return [
@@ -18807,19 +19120,22 @@ ${recentContext}
                       { label: "☁️ 开始智能筛选", prompt: "开始智能筛选", autoSend: true },
                     ];
                   }
-                  // exchange 阶段已合并到筛选中
+                  if (postMode.step === 'complete') {
+                    return [
+                      { label: "🚀 继续招聘其他岗位", prompt: "继续招聘", autoSend: true },
+                    ];
+                  }
                 }
                 
-                // 非完善简历模式
+                // 非任务模式 — 通用 AI 助手
                 if (!selectedTask) {
-                  // 通用 AI 助手 - 显示找工作等快捷入口
                   if (userRole === 'candidate') {
                     return [
                       { label: "🚀 找工作", prompt: "找工作", autoSend: true },
                       { label: "✏️ 修改偏好", prompt: "修改偏好", autoSend: true },
                     ];
                   }
-                  if (userRole === 'employer' && recruitReady) {
+                  if ((userRole === 'employer' || userRole === 'recruiter') && recruitReady) {
                     return [
                       { label: "🚀 开始招聘", prompt: "开始招聘", autoSend: true },
                     ];
@@ -18827,44 +19143,66 @@ ${recentContext}
                   return [];
                 }
                 
-                // 任务模式 - 根据任务类型返回相关提示
+                // ========== 任务模式 — 根据任务类型 + 进度状态动态变化 ==========
                 const taskTitle = selectedTask.title || selectedTask.task || '';
-                const taskType = selectedTask.todo_type || selectedTask.type || '';
+                const taskType = (selectedTask.todo_type || selectedTask.type || '').toUpperCase();
+                const taskStatus = (selectedTask.status || '').toUpperCase();
+                const isCompleted = taskStatus === 'COMPLETED';
                 
-                // 完善简历任务（但还没开始引导）
-                if (taskType === 'profile_complete' || taskTitle === '完善简历资料') {
+                // 已完成的任务
+                if (isCompleted) {
+                  return [];
+                }
+                
+                // === 招聘任务（RECRUIT）===
+                if (taskType === 'RECRUIT' || taskTitle.includes('智能招聘')) {
+                  // 从 metadata 获取后端保存的阶段
+                  const stepsMetadata = selectedTask.steps?.metadata || {};
+                  const savedStep = stepsMetadata.current_step || '';
+                  
+                  // postMode 未激活时，根据后端保存的阶段推断
+                  if (!postMode.active) {
+                    if (savedStep === 'complete') {
+                      return [{ label: "🚀 继续招聘其他岗位", prompt: "继续招聘", autoSend: true }];
+                    }
+                    if (savedStep === 'screen') {
+                      return [{ label: "☁️ 开始智能筛选", prompt: "开始智能筛选", autoSend: true }];
+                    }
+                    if (savedStep === 'invite') {
+                      return [
+                        { label: "☁️ 开始智能邀请", prompt: "开始智能邀请", autoSend: true },
+                        { label: "⏭️ 跳到筛选", prompt: "开始智能筛选", autoSend: true },
+                      ];
+                    }
+                    if (savedStep === 'optimize') {
+                      return [{ label: "✅ 确认发布", prompt: "确认发布", autoSend: true }];
+                    }
+                    // 默认：还未开始或在需求阶段
+                    return [
+                      { label: "💡 招前端", prompt: "招一个前端工程师", autoSend: true },
+                      { label: "💡 招后端", prompt: "招一个后端工程师", autoSend: true },
+                      { label: "💡 招产品经理", prompt: "招一个产品经理", autoSend: true },
+                    ];
+                  }
+                  return [];
+                }
+                
+                // === 完善简历任务 ===
+                if (taskType === 'PROFILE_COMPLETE' || taskType === 'CANDIDATE' && taskTitle === '完善简历资料' || taskTitle === '完善简历资料') {
                   return [
-                    { label: "开始填写简历", prompt: "开始填写简历", autoSend: true },
+                    { label: "📝 开始填写简历", prompt: "开始填写简历", autoSend: true },
                   ];
                 }
                 
-                // 面试准备任务
-                if (taskTitle.includes('面试')) {
+                // === 完善企业资料任务 ===
+                if (taskType === 'ENTERPRISE_PROFILE' || taskTitle === '完善企业资料') {
                   return [
-                    { label: "常见问题", prompt: "列举这个职位的常见面试问题" },
-                    { label: "自我介绍", prompt: "帮我准备自我介绍" },
-                    { label: "模拟面试", prompt: "开始模拟面试" },
+                    { label: "📋 开始完善", prompt: "开始完善企业资料", autoSend: true },
                   ];
                 }
                 
-                // 职位推荐任务
-                if (taskTitle.includes('职位') || taskTitle.includes('推荐')) {
-                  return [
-                    { label: "查看推荐", prompt: "查看为我推荐的职位" },
-                    { label: "调整偏好", prompt: "我想调整职位偏好" },
-                  ];
-                }
-                
-                // 人才筛选任务
-                if (taskTitle.includes('候选人') || taskTitle.includes('筛选') || taskTitle.includes('人才')) {
-                  return [
-                    { label: "查看候选人", prompt: "查看匹配的候选人" },
-                    { label: "调整条件", prompt: "调整筛选条件" },
-                  ];
-                }
-                
-                // 完善个人认证信息任务（但还没开始认证流程）
-                if (taskType === 'personal_verification' || 
+                // === 个人认证任务 ===
+                if (taskType === 'PERSONAL_VERIFICATION' || 
                     taskTitle === '完善个人认证信息' ||
                     (taskTitle.includes('认证') && taskTitle.includes('信息') && !taskTitle.includes('企业'))) {
                   return [
@@ -18872,9 +19210,9 @@ ${recentContext}
                   ];
                 }
                 
-                // 企业认证任务
-                if (taskType === 'enterprise_verification' || 
-                    taskType?.toUpperCase() === 'EMPLOYER' ||
+                // === 企业认证任务 ===
+                if (taskType === 'ENTERPRISE_VERIFICATION' || 
+                    taskType === 'EMPLOYER' ||
                     taskTitle === '完成企业认证' ||
                     (taskTitle.includes('企业') && taskTitle.includes('认证'))) {
                   if (enterpriseVerificationMode.active) {
@@ -18891,6 +19229,39 @@ ${recentContext}
                   }
                   return [
                     { label: "🚀 开始认证", prompt: "开始认证", autoSend: true },
+                  ];
+                }
+                
+                // === 云端求职轮巡任务 ===
+                if (taskType === 'CANDIDATE' && taskTitle.includes('云端求职轮巡')) {
+                  return [
+                    { label: "📋 查看投递", prompt: "查看投递进度", autoSend: true },
+                    { label: "⏸️ 暂停轮巡", prompt: "暂停轮巡", autoSend: true },
+                  ];
+                }
+                
+                // === 面试准备任务 ===
+                if (taskTitle.includes('面试')) {
+                  return [
+                    { label: "❓ 常见问题", prompt: "列举这个职位的常见面试问题", autoSend: true },
+                    { label: "👋 自我介绍", prompt: "帮我准备自我介绍", autoSend: true },
+                    { label: "🎤 模拟面试", prompt: "开始模拟面试", autoSend: true },
+                  ];
+                }
+                
+                // === 职位推荐任务 ===
+                if (taskTitle.includes('职位') || taskTitle.includes('推荐')) {
+                  return [
+                    { label: "📋 查看推荐", prompt: "查看为我推荐的职位", autoSend: true },
+                    { label: "✏️ 调整偏好", prompt: "我想调整职位偏好", autoSend: true },
+                  ];
+                }
+                
+                // === 人才筛选任务 ===
+                if (taskTitle.includes('候选人') || taskTitle.includes('筛选') || taskTitle.includes('人才')) {
+                  return [
+                    { label: "👤 查看候选人", prompt: "查看匹配的候选人", autoSend: true },
+                    { label: "🔧 调整条件", prompt: "调整筛选条件", autoSend: true },
                   ];
                 }
                 
@@ -18927,6 +19298,36 @@ ${recentContext}
           </div>
         </div>
       </div>
+      
+      {/* 确认弹窗 */}
+      {confirmDialog.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDialog(prev => ({ ...prev, show: false }))} />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} className="text-red-500" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">{confirmDialog.title}</h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-6">{confirmDialog.message}</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setConfirmDialog(prev => ({ ...prev, show: false }))}
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              >
+                确认清除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -21554,7 +21955,7 @@ const PersonalInfoProtectionView = () => {
           <li>传输全程使用 HTTPS/TLS 加密</li>
           <li>境外接收方不会长期存储或二次使用您的数据</li>
           <li>按照《个人信息保护法》第三章相关规定，对跨境传输进行个人信息保护影响评估</li>
-          <li>您可在「系统设置 → AI 引擎配置」中选择仅使用境内模型，避免跨境传输</li>
+          <li>您可在「系统设置 → 自定义大模型」中选择仅使用境内模型，避免跨境传输</li>
         </ul>
 
         <h2>六、个人信息存储与删除</h2>

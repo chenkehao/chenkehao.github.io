@@ -32,161 +32,131 @@
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
       }
       html.dark body {
-        background-color: #0a0a0a;
-        color: #f5f5f5;
+        background-color: #080808;
+        color: #e8eaed;
       }
       html.dark .glass {
-        background: rgba(18, 18, 18, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(14, 14, 14, 0.96);
+        border-color: rgba(255, 255, 255, 0.06);
       }
       html.dark .card-shadow {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
       }
       html.dark .card-shadow:hover {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -2px rgba(0, 0, 0, 0.5);
       }
-      /* 深色模式 - 背景层次：最深 #0a0a0a -> 卡片 #141414 -> 次级 #1a1a1a -> 悬浮 #222222 */
-      html.dark .bg-slate-50 { background-color: #0a0a0a !important; }
-      html.dark .bg-white { background-color: #141414 !important; }
-      html.dark .bg-slate-100 { background-color: #1a1a1a !important; }
-      html.dark .text-slate-900 { color: #f5f5f5 !important; }
-      html.dark .text-slate-800 { color: #e5e5e5 !important; }
-      html.dark .text-slate-700 { color: #d4d4d4 !important; }
-      html.dark .text-slate-600 { color: #a3a3a3 !important; }
-      html.dark .text-slate-500 { color: #737373 !important; }
-      html.dark .text-slate-400 { color: #525252 !important; }
-      html.dark .text-slate-300 { color: #404040 !important; }
-      /* 深色模式 - 边框层次：细微 #262626 -> 普通 #333333 -> 明显 #404040 */
-      html.dark .border-slate-200 { border-color: #333333 !important; }
-      html.dark .border-slate-100 { border-color: #262626 !important; }
-      html.dark .border-slate-300 { border-color: #404040 !important; }
-      html.dark .border-slate-50 { border-color: #262626 !important; }
-      html.dark .ring-slate-200 { --tw-ring-color: #333333 !important; }
-      html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #333333 !important; }
-      html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #262626 !important; }
-      html.dark .shadow-slate-200 { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important; }
-      html.dark ::placeholder { color: #525252 !important; }
-      html.dark .bg-slate-200 { background-color: #262626 !important; }
-      html.dark .bg-slate-300 { background-color: #333333 !important; }
-      html.dark .bg-slate-800 { background-color: #141414 !important; }
-      html.dark .bg-slate-900 { background-color: #0a0a0a !important; }
-      /* 深色模式 - 彩色背景 */
-      html.dark .bg-indigo-50 { background-color: #1a1625 !important; }
-      html.dark .bg-indigo-100 { background-color: #252040 !important; }
-      html.dark .bg-emerald-50 { background-color: #0f1f1a !important; }
-      html.dark .bg-emerald-100 { background-color: #142f25 !important; }
-      html.dark .bg-amber-50 { background-color: #1f1a0f !important; }
-      html.dark .bg-amber-100 { background-color: #2f2514 !important; }
-      html.dark .bg-rose-50 { background-color: #1f0f14 !important; }
-      html.dark .bg-rose-100 { background-color: #2f141f !important; }
-      html.dark .bg-purple-50 { background-color: #1a1425 !important; }
-      html.dark .bg-purple-100 { background-color: #251a35 !important; }
-      html.dark .bg-blue-50 { background-color: #0f1520 !important; }
-      html.dark .bg-blue-100 { background-color: #141f30 !important; }
-      html.dark .bg-orange-50 { background-color: #1f150f !important; }
-      html.dark .bg-orange-100 { background-color: #2f2014 !important; }
-      html.dark .bg-cyan-50 { background-color: #0f1a1f !important; }
-      html.dark .bg-cyan-100 { background-color: #14252f !important; }
-      html.dark .bg-violet-50 { background-color: #181420 !important; }
-      html.dark .bg-violet-100 { background-color: #221a30 !important; }
-      html.dark .bg-teal-50 { background-color: #0f1a18 !important; }
-      html.dark .bg-teal-100 { background-color: #142522 !important; }
-      html.dark .bg-gradient-to-br { background-image: none !important; }
-      html.dark .bg-gradient-to-r { background-image: none !important; }
-      html.dark .bg-gradient-to-b { background-image: none !important; }
-      html.dark .from-slate-50 { background-color: #0a0a0a !important; }
-      html.dark .to-white { background-color: #0a0a0a !important; }
+      /* 深色模式 - 背景层次（参考 Google AI Studio）：
+         页面底 #080808 -> 卡片 #0f0f0f -> 表面 #151515 -> 浮层 #1a1a1a -> 控件 #222 */
+      html.dark .bg-slate-50 { background-color: #080808 !important; }
+      html.dark .bg-white { background-color: #0f0f0f !important; }
+      html.dark .bg-slate-100 { background-color: #151515 !important; }
+      /* 文字层次 */
+      html.dark .text-slate-900 { color: #e8eaed !important; }
+      html.dark .text-slate-800 { color: #dadce0 !important; }
+      html.dark .text-slate-700 { color: #bdc1c6 !important; }
+      html.dark .text-slate-600 { color: #9aa0a6 !important; }
+      html.dark .text-slate-500 { color: #71767b !important; }
+      html.dark .text-slate-400 { color: #5f6368 !important; }
+      html.dark .text-slate-300 { color: #3c4043 !important; }
+      /* 边框层次：极细 #1c1c1c -> 微弱 #252525 -> 可见 #303030 */
+      html.dark .border-slate-200 { border-color: #252525 !important; }
+      html.dark .border-slate-100 { border-color: #1c1c1c !important; }
+      html.dark .border-slate-300 { border-color: #303030 !important; }
+      html.dark .border-slate-50 { border-color: #1c1c1c !important; }
+      html.dark .ring-slate-200 { --tw-ring-color: #252525 !important; }
+      html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #252525 !important; }
+      html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1c1c1c !important; }
+      html.dark .shadow-slate-200 { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.6) !important; }
+      html.dark ::placeholder { color: #5f6368 !important; }
+      html.dark .bg-slate-200 { background-color: #1e1e1e !important; }
+      html.dark .bg-slate-300 { background-color: #282828 !important; }
+      html.dark .bg-slate-800 { background-color: #0f0f0f !important; }
+      html.dark .bg-slate-900 { background-color: #080808 !important; }
+      /* 彩色背景 - 更深更沉 */
+      html.dark .bg-indigo-50 { background-color: #12101c !important; }
+      html.dark .bg-indigo-100 { background-color: #1a1530 !important; }
+      html.dark .bg-emerald-50 { background-color: #0a1510 !important; }
+      html.dark .bg-emerald-100 { background-color: #0f2018 !important; }
+      html.dark .bg-amber-50 { background-color: #15120a !important; }
+      html.dark .bg-amber-100 { background-color: #201a0f !important; }
+      html.dark .bg-rose-50 { background-color: #150a0e !important; }
+      html.dark .bg-rose-100 { background-color: #200f16 !important; }
+      html.dark .bg-purple-50 { background-color: #13101c !important; }
+      html.dark .bg-purple-100 { background-color: #1c1528 !important; }
+      html.dark .bg-blue-50 { background-color: #0a1018 !important; }
+      html.dark .bg-blue-100 { background-color: #0f1822 !important; }
+      html.dark .bg-orange-50 { background-color: #15100a !important; }
+      html.dark .bg-orange-100 { background-color: #201810 !important; }
+      html.dark .bg-cyan-50 { background-color: #0a1315 !important; }
+      html.dark .bg-cyan-100 { background-color: #0f1c20 !important; }
+      html.dark .bg-violet-50 { background-color: #110f18 !important; }
+      html.dark .bg-violet-100 { background-color: #1a1525 !important; }
+      html.dark .bg-teal-50 { background-color: #0a1312 !important; }
+      html.dark .bg-teal-100 { background-color: #0f1c1a !important; }
+      /* 渐变端点 */
+      html.dark .from-slate-50 { --tw-gradient-from: #080808 !important; }
+      html.dark .from-white { --tw-gradient-from: #0f0f0f !important; }
+      html.dark .from-indigo-50 { --tw-gradient-from: #12101c !important; }
+      html.dark .from-rose-50 { --tw-gradient-from: #150a0e !important; }
+      html.dark .from-emerald-50 { --tw-gradient-from: #0a1510 !important; }
+      html.dark .from-amber-50 { --tw-gradient-from: #15120a !important; }
+      html.dark .from-purple-50 { --tw-gradient-from: #13101c !important; }
+      html.dark .from-blue-50 { --tw-gradient-from: #0a1018 !important; }
+      html.dark .to-white { --tw-gradient-to: #0f0f0f !important; }
+      html.dark .to-slate-50 { --tw-gradient-to: #080808 !important; }
+      html.dark .to-indigo-50 { --tw-gradient-to: #12101c !important; }
+      html.dark .to-purple-50 { --tw-gradient-to: #13101c !important; }
+      html.dark .to-amber-50 { --tw-gradient-to: #15120a !important; }
+      html.dark .to-rose-50 { --tw-gradient-to: #150a0e !important; }
+      html.dark .to-blue-50 { --tw-gradient-to: #0a1018 !important; }
       
-      /* 深色模式下移除按钮和图标的白色阴影 */
-      html.dark button:not(:hover) {
-        box-shadow: none !important;
-      }
-      html.dark button:not(:hover)[class*="shadow-indigo"],
-      html.dark button:not(:hover)[class*="shadow-emerald"],
-      html.dark button:not(:hover)[class*="shadow-purple"],
-      html.dark button:not(:hover)[class*="shadow-rose"],
-      html.dark button:not(:hover)[class*="shadow-amber"] {
-        box-shadow: none !important;
-      }
-      html.dark [class*="shadow-indigo-100"]:not(:hover),
-      html.dark [class*="shadow-indigo-200"]:not(:hover),
-      html.dark [class*="shadow-emerald-100"]:not(:hover),
-      html.dark [class*="shadow-emerald-200"]:not(:hover),
-      html.dark [class*="shadow-purple-200"]:not(:hover),
-      html.dark [class*="shadow-rose-200"]:not(:hover),
-      html.dark [class*="shadow-amber-200"]:not(:hover) {
-        box-shadow: none !important;
-      }
-      
-      /* 深色模式下图标容器移除白色阴影 */
-      html.dark svg:not(:hover) {
-        box-shadow: none !important;
-      }
-      html.dark div[class*="rounded"]:not(:hover) > svg {
-        box-shadow: none !important;
-      }
-      html.dark .rounded-xl:not(:hover) svg,
-      html.dark .rounded-lg:not(:hover) svg,
-      html.dark .rounded-full:not(:hover) svg {
-        box-shadow: none !important;
+      /* 深色模式下移除装饰性彩色阴影（仅针对特定彩色 shadow class） */
+      html.dark [class*="shadow-indigo-100"],
+      html.dark [class*="shadow-indigo-200"],
+      html.dark [class*="shadow-emerald-100"],
+      html.dark [class*="shadow-emerald-200"],
+      html.dark [class*="shadow-purple-200"],
+      html.dark [class*="shadow-rose-200"],
+      html.dark [class*="shadow-amber-200"] {
+        --tw-shadow: 0 0 #0000 !important;
+        --tw-shadow-colored: 0 0 #0000 !important;
       }
       
       /* 深色模式下移除 ring-indigo-50 效果 */
-      html.dark [class*="ring-indigo-50"]:not(:hover) {
+      html.dark [class*="ring-indigo-50"] {
         --tw-ring-color: transparent !important;
-        box-shadow: none !important;
       }
       
-      /* 深色模式下优化文字颜色对比度 */
-      html.dark .text-indigo-600 {
-        color: #818cf8 !important;
-      }
-      html.dark .text-indigo-500 {
-        color: #a5b4fc !important;
-      }
-      html.dark .text-indigo-700 {
-        color: #a5b4fc !important;
-      }
-      html.dark .text-rose-600 {
-        color: #fb7185 !important;
-      }
-      html.dark .text-amber-600 {
-        color: #fbbf24 !important;
-      }
-      html.dark .text-emerald-600 {
-        color: #34d399 !important;
-      }
-      html.dark .text-purple-600 {
-        color: #a78bfa !important;
-      }
-      html.dark .text-blue-600 {
-        color: #60a5fa !important;
-      }
-      html.dark .text-cyan-600 {
-        color: #22d3ee !important;
-      }
-      html.dark .text-orange-600 {
-        color: #fb923c !important;
-      }
+      /* 深色模式下彩色文字 - 柔和不刺眼 */
+      html.dark .text-indigo-600 { color: #8ab4f8 !important; }
+      html.dark .text-indigo-500 { color: #aecbfa !important; }
+      html.dark .text-indigo-700 { color: #8ab4f8 !important; }
+      html.dark .text-rose-600 { color: #f28b82 !important; }
+      html.dark .text-amber-600 { color: #fdd663 !important; }
+      html.dark .text-emerald-600 { color: #81c995 !important; }
+      html.dark .text-purple-600 { color: #c58af9 !important; }
+      html.dark .text-blue-600 { color: #8ab4f8 !important; }
+      html.dark .text-cyan-600 { color: #78d9ec !important; }
+      html.dark .text-orange-600 { color: #fcad70 !important; }
       
       /* 深色模式下透明度背景 */
       html.dark .bg-slate-50\/50 {
-        background-color: rgba(20, 20, 20, 0.8) !important;
+        background-color: rgba(15, 15, 15, 0.8) !important;
       }
       html.dark .bg-slate-50\/30 {
-        background-color: rgba(20, 20, 20, 0.6) !important;
+        background-color: rgba(15, 15, 15, 0.6) !important;
       }
       html.dark .bg-white\/95 {
-        background-color: rgba(20, 20, 20, 0.95) !important;
+        background-color: rgba(15, 15, 15, 0.95) !important;
       }
       html.dark .bg-white\/90 {
-        background-color: rgba(20, 20, 20, 0.9) !important;
+        background-color: rgba(15, 15, 15, 0.9) !important;
       }
       html.dark .bg-white\/80 {
-        background-color: rgba(20, 20, 20, 0.8) !important;
+        background-color: rgba(15, 15, 15, 0.8) !important;
       }
       html.dark .bg-white\/50 {
-        background-color: rgba(20, 20, 20, 0.5) !important;
+        background-color: rgba(15, 15, 15, 0.5) !important;
       }
       html.dark .bg-white\/30 {
         background-color: rgba(20, 20, 20, 0.3) !important;
@@ -201,153 +171,236 @@
         background-color: rgba(20, 20, 20, 0.05) !important;
       }
       
-      /* 深色模式下 indigo 边框颜色 */
-      html.dark .border-indigo-100 {
-        border-color: #2d2850 !important;
-      }
-      html.dark .border-indigo-200 {
-        border-color: #3d3570 !important;
-      }
-      html.dark .border-indigo-500 {
-        border-color: #6366f1 !important;
-      }
-      html.dark .text-indigo-900 {
-        color: #c7d2fe !important;
-      }
-      html.dark .text-indigo-700\/70 {
-        color: #a5b4fc !important;
-      }
+      /* 深色模式下 indigo 边框 */
+      html.dark .border-indigo-100 { border-color: #1e1a30 !important; }
+      html.dark .border-indigo-200 { border-color: #2a2550 !important; }
+      html.dark .border-indigo-500 { border-color: #6366f1 !important; }
+      html.dark .text-indigo-900 { color: #aecbfa !important; }
+      html.dark .text-indigo-700\/70 { color: #8ab4f8 !important; }
       
-      /* 深色模式下优化带透明度的背景色 */
-      html.dark .bg-indigo-50\/80 {
-        background-color: rgba(26, 22, 37, 0.8) !important;
-      }
-      html.dark .bg-indigo-50\/60 {
-        background-color: rgba(26, 22, 37, 0.6) !important;
-      }
-      html.dark .bg-indigo-50\/40 {
-        background-color: rgba(26, 22, 37, 0.4) !important;
-      }
-      html.dark .bg-indigo-50\/20 {
-        background-color: rgba(26, 22, 37, 0.2) !important;
-      }
-      html.dark .bg-indigo-600\/5 {
-        background-color: rgba(99, 102, 241, 0.1) !important;
-      }
-      html.dark .bg-indigo-500\/5 {
-        background-color: rgba(99, 102, 241, 0.1) !important;
-      }
+      /* 深色模式下透明度背景 - indigo */
+      html.dark .bg-indigo-50\/80 { background-color: rgba(18, 16, 28, 0.8) !important; }
+      html.dark .bg-indigo-50\/60 { background-color: rgba(18, 16, 28, 0.6) !important; }
+      html.dark .bg-indigo-50\/40 { background-color: rgba(18, 16, 28, 0.4) !important; }
+      html.dark .bg-indigo-50\/20 { background-color: rgba(18, 16, 28, 0.2) !important; }
+      html.dark .bg-indigo-600\/5 { background-color: rgba(99, 102, 241, 0.08) !important; }
+      html.dark .bg-indigo-500\/5 { background-color: rgba(99, 102, 241, 0.08) !important; }
+      
+      /* ===== 透明度变体 - 背景（补全） ===== */
+      html.dark .bg-slate-50\/80 { background-color: rgba(8, 8, 8, 0.8) !important; }
+      html.dark .bg-slate-100\/80 { background-color: rgba(21, 21, 21, 0.8) !important; }
+      html.dark .bg-slate-800\/30 { background-color: rgba(15, 15, 15, 0.3) !important; }
+      html.dark .bg-slate-800\/50 { background-color: rgba(15, 15, 15, 0.5) !important; }
+      html.dark .bg-indigo-50\/50 { background-color: rgba(18, 16, 28, 0.5) !important; }
+      html.dark .bg-indigo-50\/30 { background-color: rgba(18, 16, 28, 0.3) !important; }
+      html.dark .bg-indigo-500\/10 { background-color: rgba(99, 102, 241, 0.08) !important; }
+      html.dark .bg-indigo-500\/20 { background-color: rgba(99, 102, 241, 0.12) !important; }
+      html.dark .bg-emerald-50\/50 { background-color: rgba(10, 21, 16, 0.5) !important; }
+      html.dark .bg-emerald-50\/80 { background-color: rgba(10, 21, 16, 0.8) !important; }
+      html.dark .bg-emerald-100\/80 { background-color: rgba(15, 32, 24, 0.8) !important; }
+      html.dark .bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.08) !important; }
+      html.dark .bg-emerald-500\/20 { background-color: rgba(16, 185, 129, 0.12) !important; }
+      html.dark .bg-amber-50\/50 { background-color: rgba(21, 18, 10, 0.5) !important; }
+      html.dark .bg-amber-50\/80 { background-color: rgba(21, 18, 10, 0.8) !important; }
+      html.dark .bg-amber-100\/80 { background-color: rgba(32, 26, 15, 0.8) !important; }
+      html.dark .bg-amber-500\/10 { background-color: rgba(245, 158, 11, 0.08) !important; }
+      html.dark .bg-blue-50\/50 { background-color: rgba(10, 16, 24, 0.5) !important; }
+      html.dark .bg-blue-50\/80 { background-color: rgba(10, 16, 24, 0.8) !important; }
+      html.dark .bg-rose-50\/30 { background-color: rgba(21, 10, 14, 0.3) !important; }
+      html.dark .bg-rose-500\/10 { background-color: rgba(244, 63, 94, 0.08) !important; }
+      html.dark .bg-red-50\/60 { background-color: rgba(21, 10, 12, 0.6) !important; }
+      html.dark .bg-red-50\/80 { background-color: rgba(21, 10, 12, 0.8) !important; }
+      html.dark .bg-red-100\/80 { background-color: rgba(32, 15, 20, 0.8) !important; }
+      html.dark .bg-violet-50\/50 { background-color: rgba(17, 15, 24, 0.5) !important; }
+      html.dark .bg-violet-300\/20 { background-color: rgba(196, 181, 253, 0.08) !important; }
+      
+      /* ===== 透明度变体 - 边框（补全） ===== */
+      html.dark .border-slate-200\/80 { border-color: rgba(37, 37, 37, 0.8) !important; }
+      html.dark .border-slate-100\/80 { border-color: rgba(28, 28, 28, 0.8) !important; }
+      html.dark .border-indigo-100\/80 { border-color: rgba(30, 26, 48, 0.8) !important; }
+      html.dark .border-indigo-100\/50 { border-color: rgba(30, 26, 48, 0.5) !important; }
+      html.dark .border-indigo-50\/50 { border-color: rgba(18, 16, 28, 0.5) !important; }
+      html.dark .border-indigo-500\/20 { border-color: rgba(99, 102, 241, 0.2) !important; }
+      html.dark .border-emerald-100\/80 { border-color: rgba(15, 32, 24, 0.8) !important; }
+      html.dark .border-emerald-100\/50 { border-color: rgba(15, 32, 24, 0.5) !important; }
+      html.dark .border-emerald-400\/20 { border-color: rgba(52, 211, 153, 0.15) !important; }
+      html.dark .border-emerald-500\/20 { border-color: rgba(16, 185, 129, 0.15) !important; }
+      html.dark .border-amber-100\/80 { border-color: rgba(32, 26, 15, 0.8) !important; }
+      html.dark .border-amber-500\/20 { border-color: rgba(245, 158, 11, 0.15) !important; }
+      html.dark .border-blue-100\/80 { border-color: rgba(15, 24, 34, 0.8) !important; }
+      html.dark .border-red-100\/80 { border-color: rgba(32, 15, 20, 0.8) !important; }
+      html.dark .border-rose-500\/20 { border-color: rgba(244, 63, 94, 0.15) !important; }
+      
+      /* ===== 透明度变体 - 渐变端点 ===== */
+      html.dark .from-slate-50\/50 { --tw-gradient-from: rgba(8, 8, 8, 0.5) !important; }
+      html.dark .to-indigo-50\/30 { --tw-gradient-to: rgba(18, 16, 28, 0.3) !important; }
+      
+      /* ===== 透明度变体 - 文字 ===== */
+      html.dark .text-emerald-200\/30 { color: rgba(129, 201, 149, 0.3) !important; }
+      html.dark .text-indigo-200\/30 { color: rgba(138, 180, 248, 0.3) !important; }
+      html.dark .text-indigo-200\/70 { color: rgba(138, 180, 248, 0.7) !important; }
+      html.dark .text-indigo-300\/70 { color: rgba(174, 203, 250, 0.7) !important; }
+      html.dark .text-indigo-500\/80 { color: rgba(138, 180, 248, 0.8) !important; }
+      html.dark .text-indigo-600\/5 { color: rgba(138, 180, 248, 0.05) !important; }
       
       /* 深色模式下导航栏 */
       html.dark nav {
-        background-color: rgba(10, 10, 10, 0.95) !important;
-        border-color: #262626 !important;
-        backdrop-filter: blur(12px);
+        background-color: #080808 !important;
+        border-color: #1c1c1c !important;
       }
       
       /* 深色模式下输入框 */
-      html.dark input,
-      html.dark textarea,
+      html.dark input:not(.bg-transparent),
+      html.dark textarea:not(.bg-transparent),
       html.dark select {
-        background-color: #1a1a1a !important;
-        border-color: #333333 !important;
-        color: #f5f5f5 !important;
+        background-color: #151515 !important;
+        border-color: #252525 !important;
+        color: #e8eaed !important;
+      }
+      /* 透明背景输入框保持透明 */
+      html.dark input.bg-transparent,
+      html.dark textarea.bg-transparent {
+        background-color: transparent !important;
+        color: #e8eaed !important;
+      }
+      html.dark input.border-none,
+      html.dark textarea.border-none {
+        border: none !important;
       }
       html.dark input:focus,
       html.dark textarea:focus,
       html.dark select:focus {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+        border-color: #8ab4f8 !important;
+        box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.12) !important;
+      }
+      /* 透明背景输入框 focus 时不加额外边框 */
+      html.dark input.bg-transparent:focus,
+      html.dark textarea.bg-transparent:focus {
+        border-color: transparent !important;
+        box-shadow: none !important;
       }
       
-      /* 深色模式下滚动条 */
-      html.dark ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      html.dark ::-webkit-scrollbar-track {
-        background: #141414;
-      }
-      html.dark ::-webkit-scrollbar-thumb {
-        background: #404040;
-        border-radius: 4px;
-      }
-      html.dark ::-webkit-scrollbar-thumb:hover {
-        background: #525252;
+      /* 深色模式下让系统自动适配滚动条/原生控件的深色外观，不自定义宽度避免偏移 */
+      html.dark {
+        color-scheme: dark;
       }
       
-      /* 深色模式下 shadow 优化 - 使用微光边框效果 */
+      /* 深色模式下 shadow - 更深沉 */
       html.dark .shadow-sm {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.4) !important;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.5) !important;
       }
       html.dark .shadow {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5) !important;
       }
       html.dark .shadow-md {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 4px 8px rgba(0, 0, 0, 0.4) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -2px rgba(0, 0, 0, 0.5) !important;
       }
       html.dark .shadow-lg {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 16px rgba(0, 0, 0, 0.5) !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7), 0 4px 6px -4px rgba(0, 0, 0, 0.6) !important;
       }
       html.dark .shadow-xl {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 32px rgba(0, 0, 0, 0.5) !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
       }
       html.dark .shadow-2xl {
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 24px 48px rgba(0, 0, 0, 0.6) !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
       }
       
       /* 深色模式下弹出菜单 */
       html.dark [class*="dropdown"],
       html.dark [class*="menu"],
       html.dark [class*="popup"] {
-        background-color: #1a1a1a !important;
-        border-color: #333333 !important;
+        background-color: #151515 !important;
+        border-color: #252525 !important;
       }
       
       /* 深色模式下 hover 状态 */
-      html.dark .hover\:bg-slate-50:hover {
-        background-color: #1a1a1a !important;
+      html.dark .hover\:bg-slate-50:hover { background-color: #151515 !important; }
+      html.dark .hover\:bg-slate-100:hover { background-color: #1a1a1a !important; }
+      html.dark .hover\:bg-white:hover { background-color: #151515 !important; }
+      html.dark .hover\:bg-indigo-50:hover { background-color: #181530 !important; }
+      html.dark .hover\:bg-slate-200:hover { background-color: #252525 !important; }
+      html.dark .hover\:bg-rose-50:hover { background-color: #180a0e !important; }
+      html.dark .hover\:bg-emerald-50:hover { background-color: #0f201a !important; }
+      html.dark .hover\:bg-emerald-100:hover { background-color: #152a20 !important; }
+      html.dark .hover\:bg-amber-50:hover { background-color: #1a180f !important; }
+      html.dark .hover\:bg-amber-100:hover { background-color: #252015 !important; }
+      html.dark .hover\:bg-indigo-100:hover { background-color: #1e1a35 !important; }
+      html.dark .hover\:bg-indigo-200:hover { background-color: #282240 !important; }
+      html.dark .hover\:bg-red-50:hover { background-color: #180a0c !important; }
+      html.dark .hover\:bg-red-100:hover { background-color: #201015 !important; }
+      html.dark .hover\:bg-rose-100:hover { background-color: #201015 !important; }
+      html.dark .hover\:bg-rose-200:hover { background-color: #2a1520 !important; }
+      html.dark .hover\:bg-violet-100:hover { background-color: #1e1828 !important; }
+      html.dark .hover\:bg-blue-50:hover { background-color: #0f1820 !important; }
+      html.dark .hover\:bg-slate-800:hover { background-color: #151515 !important; }
+      html.dark .hover\:bg-slate-900:hover { background-color: #0a0a0a !important; }
+      
+      /* hover 文字颜色 */
+      html.dark .hover\:text-slate-500:hover { color: #71767b !important; }
+      html.dark .hover\:text-slate-600:hover { color: #9aa0a6 !important; }
+      html.dark .hover\:text-slate-700:hover { color: #bdc1c6 !important; }
+      html.dark .hover\:text-slate-800:hover { color: #dadce0 !important; }
+      html.dark .hover\:text-indigo-600:hover { color: #8ab4f8 !important; }
+      html.dark .hover\:text-indigo-700:hover { color: #8ab4f8 !important; }
+      html.dark .hover\:text-indigo-900:hover { color: #aecbfa !important; }
+      html.dark .hover\:text-emerald-500:hover { color: #81c995 !important; }
+      html.dark .hover\:text-emerald-600:hover { color: #81c995 !important; }
+      html.dark .hover\:text-emerald-700:hover { color: #a8dab5 !important; }
+      html.dark .hover\:text-amber-600:hover { color: #fdd663 !important; }
+      html.dark .hover\:text-red-500:hover { color: #f28b82 !important; }
+      html.dark .hover\:text-red-600:hover { color: #f28b82 !important; }
+      html.dark .hover\:text-rose-500:hover { color: #f28b82 !important; }
+      html.dark .hover\:text-rose-600:hover { color: #f28b82 !important; }
+      
+      /* hover 边框颜色 */
+      html.dark .hover\:border-indigo-200:hover { border-color: #2a2550 !important; }
+      html.dark .hover\:border-indigo-300:hover { border-color: #352e60 !important; }
+      html.dark .hover\:border-indigo-400:hover { border-color: #4040a0 !important; }
+      html.dark .hover\:border-amber-200:hover { border-color: #302515 !important; }
+      html.dark .hover\:border-amber-400:hover { border-color: #504020 !important; }
+      html.dark .hover\:border-emerald-200:hover { border-color: #153025 !important; }
+      html.dark .hover\:border-emerald-300:hover { border-color: #1a3a2d !important; }
+      html.dark .hover\:border-red-200:hover { border-color: #301520 !important; }
+      html.dark .hover\:border-slate-200:hover { border-color: #303030 !important; }
+      html.dark .hover\:border-slate-300:hover { border-color: #3a3a3a !important; }
+      
+      html.dark .hover\:shadow-lg:hover {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6) !important;
       }
-      html.dark .hover\:bg-slate-100:hover {
-        background-color: #222222 !important;
-      }
-      html.dark .hover\:bg-white:hover {
-        background-color: #1a1a1a !important;
-      }
-      html.dark .hover\:bg-indigo-50:hover {
-        background-color: #252040 !important;
-      }
-      html.dark .hover\:bg-slate-200:hover {
-        background-color: #333333 !important;
+      html.dark .hover\:shadow-md:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5) !important;
       }
       
-      /* 深色模式下其他颜色边框 */
-      html.dark .border-emerald-100 { border-color: #1a3d30 !important; }
-      html.dark .border-emerald-200 { border-color: #255040 !important; }
-      html.dark .border-amber-100 { border-color: #3d3020 !important; }
-      html.dark .border-amber-200 { border-color: #504025 !important; }
-      html.dark .border-rose-100 { border-color: #3d2030 !important; }
-      html.dark .border-rose-200 { border-color: #502540 !important; }
-      html.dark .border-purple-100 { border-color: #302050 !important; }
-      html.dark .border-purple-200 { border-color: #402560 !important; }
-      html.dark .border-blue-100 { border-color: #1a2540 !important; }
-      html.dark .border-blue-200 { border-color: #253050 !important; }
+      /* 深色模式下其他颜色边框 - 更暗更微妙 */
+      html.dark .border-emerald-100 { border-color: #0f2018 !important; }
+      html.dark .border-emerald-200 { border-color: #153025 !important; }
+      html.dark .border-amber-100 { border-color: #201a0f !important; }
+      html.dark .border-amber-200 { border-color: #302515 !important; }
+      html.dark .border-rose-100 { border-color: #200f16 !important; }
+      html.dark .border-rose-200 { border-color: #301520 !important; }
+      html.dark .border-purple-100 { border-color: #1c1528 !important; }
+      html.dark .border-purple-200 { border-color: #281e3a !important; }
+      html.dark .border-blue-100 { border-color: #0f1822 !important; }
+      html.dark .border-blue-200 { border-color: #152030 !important; }
       
       /* 深色模式下 ring 颜色 */
-      html.dark .ring-indigo-100 { --tw-ring-color: #2d2850 !important; }
-      html.dark .focus\:ring-indigo-100:focus { --tw-ring-color: rgba(99, 102, 241, 0.2) !important; }
-      html.dark .focus\:ring-indigo-200:focus { --tw-ring-color: rgba(99, 102, 241, 0.3) !important; }
-      
-      /* 深色模式下禁用状态 */
-      html.dark button:disabled,
-      html.dark input:disabled,
-      html.dark select:disabled,
-      html.dark textarea:disabled {
-        background-color: #1a1a1a !important;
-        border-color: #262626 !important;
-        color: #525252 !important;
-        opacity: 0.7;
-      }
+      html.dark .ring-indigo-100 { --tw-ring-color: #1e1a30 !important; }
+      html.dark .focus\:ring-indigo-100:focus { --tw-ring-color: rgba(138, 180, 248, 0.15) !important; }
+      html.dark .focus\:ring-indigo-200:focus { --tw-ring-color: rgba(138, 180, 248, 0.2) !important; }
+      html.dark .focus\:ring-indigo-300:focus { --tw-ring-color: rgba(138, 180, 248, 0.25) !important; }
+      html.dark .focus\:ring-indigo-500:focus { --tw-ring-color: rgba(99, 102, 241, 0.35) !important; }
+      html.dark .focus\:ring-emerald-500:focus { --tw-ring-color: rgba(16, 185, 129, 0.3) !important; }
+      html.dark .ring-emerald-500\/10 { --tw-ring-color: rgba(16, 185, 129, 0.1) !important; }
+      html.dark .ring-emerald-500\/30 { --tw-ring-color: rgba(16, 185, 129, 0.25) !important; }
+      html.dark .ring-indigo-500\/10 { --tw-ring-color: rgba(99, 102, 241, 0.1) !important; }
+      html.dark .ring-indigo-500\/20 { --tw-ring-color: rgba(99, 102, 241, 0.2) !important; }
+      html.dark .ring-indigo-500\/30 { --tw-ring-color: rgba(99, 102, 241, 0.25) !important; }
+      html.dark .ring-indigo-500\/50 { --tw-ring-color: rgba(99, 102, 241, 0.4) !important; }
+      /* focus 边框 */
+      html.dark .focus\:border-indigo-300:focus { border-color: #4040a0 !important; }
+      html.dark .focus\:border-indigo-400:focus { border-color: #5555bb !important; }
+      html.dark .focus\:border-indigo-500:focus { border-color: #6366f1 !important; }
+      html.dark .focus\:border-emerald-300:focus { border-color: #1a5040 !important; }
       
       /* Markdown 内容样式 */
       .markdown-content {
@@ -367,164 +420,200 @@
       html.dark .markdown-content h4,
       html.dark .markdown-content h5,
       html.dark .markdown-content h6 {
-        color: #f5f5f5 !important;
+        color: #e8eaed !important;
       }
       html.dark .markdown-content strong {
-        color: #f5f5f5 !important;
+        color: #e8eaed !important;
       }
       html.dark .markdown-content code:not(pre code) {
-        background-color: #262626 !important;
-        color: #a5b4fc !important;
-        border: 1px solid #333333;
-        padding: 2px 6px;
-        border-radius: 4px;
+        background-color: #1e1e1e !important;
+        color: #8ab4f8 !important;
       }
       html.dark .markdown-content pre {
-        background-color: #141414 !important;
-        border: 1px solid #333333 !important;
+        background-color: #0f0f0f !important;
       }
       html.dark .markdown-content blockquote {
-        background-color: #141414 !important;
-        border-left: 3px solid #6366f1 !important;
-        color: #a3a3a3 !important;
+        background-color: #0f0f0f !important;
+        border-left-color: #8ab4f8 !important;
+        color: #9aa0a6 !important;
       }
       html.dark .markdown-content hr {
-        border-color: #333333 !important;
+        border-color: #252525 !important;
       }
       html.dark .markdown-content table {
-        border-color: #333333 !important;
+        border-color: #252525 !important;
       }
       html.dark .markdown-content th {
-        background-color: #1a1a1a !important;
-        border-color: #333333 !important;
-        color: #f5f5f5 !important;
+        background-color: #151515 !important;
+        border-color: #252525 !important;
+        color: #e8eaed !important;
       }
       html.dark .markdown-content td {
-        border-color: #333333 !important;
+        border-color: #252525 !important;
       }
       html.dark .markdown-content a {
-        color: #818cf8 !important;
+        color: #8ab4f8 !important;
       }
       html.dark .markdown-content a:hover {
-        color: #a5b4fc !important;
+        color: #aecbfa !important;
       }
       
-      /* 深色模式下卡片和容器边框优化 - 增加可见度 */
-      html.dark .rounded-2xl[class*="border"],
-      html.dark .rounded-xl[class*="border"],
-      html.dark .rounded-lg[class*="border"] {
-        border-color: #333333 !important;
-      }
-      
-      /* 深色模式下分割线 - 更明显 */
+      /* 深色模式下分割线 */
       html.dark hr {
-        border-color: #333333 !important;
+        border-color: #252525 !important;
       }
       html.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
-        border-color: #333333 !important;
+        border-color: #252525 !important;
       }
       
       /* 深色模式下表格 */
-      html.dark table {
-        border-color: #333333 !important;
-      }
+      html.dark table { border-color: #252525 !important; }
       html.dark th {
-        background-color: #1a1a1a !important;
-        border-color: #333333 !important;
+        background-color: #151515 !important;
+        border-color: #252525 !important;
       }
-      html.dark td {
-        border-color: #333333 !important;
-      }
-      html.dark tr:hover {
-        background-color: #1a1a1a !important;
-      }
+      html.dark td { border-color: #252525 !important; }
+      html.dark tr:hover { background-color: #151515 !important; }
       
-      /* 深色模式下模态框遮罩 */
-      html.dark .bg-black\/50 {
-        background-color: rgba(0, 0, 0, 0.75) !important;
-      }
-      html.dark .bg-black\/40 {
-        background-color: rgba(0, 0, 0, 0.65) !important;
-      }
-      html.dark .bg-black\/30 {
-        background-color: rgba(0, 0, 0, 0.55) !important;
-      }
+      /* 深色模式下模态框遮罩 - 更深 */
+      html.dark .bg-black\/50 { background-color: rgba(0, 0, 0, 0.80) !important; }
+      html.dark .bg-black\/40 { background-color: rgba(0, 0, 0, 0.70) !important; }
+      html.dark .bg-black\/30 { background-color: rgba(0, 0, 0, 0.60) !important; }
       
       /* 深色模式下标签和徽章 */
-      html.dark .bg-green-50 { background-color: #0f1f1a !important; }
-      html.dark .bg-green-100 { background-color: #142f25 !important; }
-      html.dark .text-green-600 { color: #4ade80 !important; }
-      html.dark .text-green-700 { color: #86efac !important; }
-      html.dark .border-green-200 { border-color: #1a4030 !important; }
+      html.dark .bg-green-50 { background-color: #0a1510 !important; }
+      html.dark .bg-green-100 { background-color: #0f2018 !important; }
+      html.dark .text-green-600 { color: #81c995 !important; }
+      html.dark .text-green-700 { color: #a8dab5 !important; }
+      html.dark .border-green-200 { border-color: #102a1c !important; }
       
-      html.dark .bg-red-50 { background-color: #1f1214 !important; }
-      html.dark .bg-red-100 { background-color: #2f1a1f !important; }
-      html.dark .text-red-600 { color: #f87171 !important; }
-      html.dark .text-red-700 { color: #fca5a5 !important; }
-      html.dark .border-red-200 { border-color: #502530 !important; }
+      html.dark .bg-red-50 { background-color: #150a0c !important; }
+      html.dark .bg-red-100 { background-color: #200f14 !important; }
+      html.dark .text-red-600 { color: #f28b82 !important; }
+      html.dark .text-red-700 { color: #f6aca6 !important; }
+      html.dark .border-red-200 { border-color: #301520 !important; }
       
-      html.dark .bg-yellow-50 { background-color: #1f1a0f !important; }
-      html.dark .bg-yellow-100 { background-color: #2f2514 !important; }
-      html.dark .text-yellow-600 { color: #facc15 !important; }
-      html.dark .text-yellow-700 { color: #fde047 !important; }
-      html.dark .border-yellow-200 { border-color: #504020 !important; }
+      html.dark .bg-yellow-50 { background-color: #15120a !important; }
+      html.dark .bg-yellow-100 { background-color: #201a0f !important; }
+      html.dark .text-yellow-600 { color: #fdd663 !important; }
+      html.dark .text-yellow-700 { color: #fee28a !important; }
+      html.dark .border-yellow-200 { border-color: #302510 !important; }
       
-      html.dark .bg-gray-50 { background-color: #141414 !important; }
-      html.dark .bg-gray-100 { background-color: #1a1a1a !important; }
-      html.dark .bg-gray-200 { background-color: #262626 !important; }
-      html.dark .text-gray-600 { color: #a3a3a3 !important; }
-      html.dark .text-gray-700 { color: #d4d4d4 !important; }
-      html.dark .border-gray-200 { border-color: #333333 !important; }
-      html.dark .border-gray-300 { border-color: #404040 !important; }
+      html.dark .bg-gray-50 { background-color: #0f0f0f !important; }
+      html.dark .bg-gray-100 { background-color: #151515 !important; }
+      html.dark .bg-gray-200 { background-color: #1e1e1e !important; }
+      html.dark .text-gray-600 { color: #9aa0a6 !important; }
+      html.dark .text-gray-700 { color: #bdc1c6 !important; }
+      html.dark .border-gray-200 { border-color: #252525 !important; }
+      html.dark .border-gray-300 { border-color: #303030 !important; }
       
-      /* 深色模式下特殊组件优化 */
-      html.dark .border-b {
-        border-bottom-color: #333333 !important;
-      }
-      html.dark .border-t {
-        border-top-color: #333333 !important;
-      }
-      html.dark .border-l {
-        border-left-color: #333333 !important;
-      }
-      html.dark .border-r {
-        border-right-color: #333333 !important;
-      }
+      /* 深色模式下方向性边框 */
+      html.dark .border-b { border-bottom-color: #252525 !important; }
+      html.dark .border-t { border-top-color: #252525 !important; }
+      html.dark .border-l { border-left-color: #252525 !important; }
+      html.dark .border-r { border-right-color: #252525 !important; }
       
       /* 深色模式下列表项分隔 */
-      html.dark [class*="border-slate-50"] {
-        border-color: #262626 !important;
-      }
-      
-      /* 深色模式下按钮悬浮效果 */
-      html.dark button:hover:not(:disabled) {
-        filter: brightness(1.1);
-      }
+      html.dark [class*="border-slate-50"] { border-color: #1c1c1c !important; }
       
       /* 深色模式下链接颜色 */
-      html.dark a:not([class*="text-"]):not([class*="bg-"]) {
-        color: #818cf8;
-      }
-      html.dark a:hover:not([class*="text-"]):not([class*="bg-"]) {
-        color: #a5b4fc;
-      }
+      html.dark a:not([class*="text-"]):not([class*="bg-"]) { color: #8ab4f8; }
+      html.dark a:hover:not([class*="text-"]):not([class*="bg-"]) { color: #aecbfa; }
       
       /* 深色模式下代码块 */
       html.dark code:not(pre code) {
-        background-color: #262626 !important;
-        color: #a5b4fc !important;
-        border: 1px solid #333333;
+        background-color: #1e1e1e !important;
+        color: #8ab4f8 !important;
       }
       html.dark pre {
-        background-color: #141414 !important;
-        border: 1px solid #333333 !important;
+        background-color: #0f0f0f !important;
       }
       
       /* 深色模式下选中状态 */
       html.dark ::selection {
-        background-color: rgba(99, 102, 241, 0.3);
-        color: #f5f5f5;
+        background-color: rgba(138, 180, 248, 0.25);
+        color: #e8eaed;
       }
+      
+      /* 深色模式下禁用状态 */
+      html.dark button:disabled,
+      html.dark input:disabled,
+      html.dark select:disabled,
+      html.dark textarea:disabled {
+        background-color: #111111 !important;
+        border-color: #1c1c1c !important;
+        color: #5f6368 !important;
+        opacity: 0.7;
+      }
+      
+      /* ===== 补全缺失的文字颜色覆盖 ===== */
+      html.dark .text-slate-100 { color: #f0f0f0 !important; }
+      html.dark .text-slate-200 { color: #dadce0 !important; }
+      html.dark .text-indigo-100 { color: rgba(138, 180, 248, 0.4) !important; }
+      html.dark .text-indigo-400 { color: #8ab4f8 !important; }
+      html.dark .text-indigo-800 { color: #aecbfa !important; }
+      html.dark .text-emerald-100 { color: rgba(129, 201, 149, 0.4) !important; }
+      html.dark .text-emerald-300 { color: #81c995 !important; }
+      html.dark .text-emerald-400 { color: #81c995 !important; }
+      html.dark .text-emerald-500 { color: #81c995 !important; }
+      html.dark .text-emerald-700 { color: #a8dab5 !important; }
+      html.dark .text-emerald-800 { color: #c8ecd1 !important; }
+      html.dark .text-amber-400 { color: #fdd663 !important; }
+      html.dark .text-amber-500 { color: #fdd663 !important; }
+      html.dark .text-amber-700 { color: #fee28a !important; }
+      html.dark .text-amber-800 { color: #fef0b5 !important; }
+      html.dark .text-rose-400 { color: #f28b82 !important; }
+      html.dark .text-rose-500 { color: #f28b82 !important; }
+      html.dark .text-rose-700 { color: #f6aca6 !important; }
+      html.dark .text-red-400 { color: #f28b82 !important; }
+      html.dark .text-red-500 { color: #f28b82 !important; }
+      html.dark .text-blue-500 { color: #8ab4f8 !important; }
+      html.dark .text-blue-700 { color: #aecbfa !important; }
+      html.dark .text-purple-500 { color: #c58af9 !important; }
+      html.dark .text-purple-700 { color: #d4a8fc !important; }
+      html.dark .text-violet-500 { color: #c58af9 !important; }
+      html.dark .text-violet-600 { color: #c58af9 !important; }
+      html.dark .text-violet-700 { color: #d4a8fc !important; }
+      html.dark .text-cyan-500 { color: #78d9ec !important; }
+      html.dark .text-sky-500 { color: #78d9ec !important; }
+      html.dark .text-sky-600 { color: #78d9ec !important; }
+      html.dark .text-teal-600 { color: #78d9ec !important; }
+      html.dark .text-fuchsia-500 { color: #e879f9 !important; }
+      html.dark .text-green-500 { color: #81c995 !important; }
+      html.dark .text-orange-500 { color: #fcad70 !important; }
+      html.dark .text-orange-700 { color: #fcc89b !important; }
+      html.dark .text-pink-600 { color: #f28b82 !important; }
+      
+      /* ===== 补全缺失的背景颜色覆盖 - 浅色调 ===== */
+      html.dark .bg-indigo-200 { background-color: #1a1530 !important; }
+      html.dark .bg-indigo-300 { background-color: #222050 !important; }
+      html.dark .bg-indigo-400 { background-color: #2a2570 !important; }
+      html.dark .bg-amber-200 { background-color: #201a0f !important; }
+      html.dark .bg-amber-400 { background-color: #302510 !important; }
+      html.dark .bg-emerald-300 { background-color: #0f2a1e !important; }
+      html.dark .bg-emerald-400 { background-color: #15352a !important; }
+      html.dark .bg-rose-200 { background-color: #200f16 !important; }
+      html.dark .bg-slate-400 { background-color: #303030 !important; }
+      html.dark .bg-slate-700 { background-color: #1a1a1a !important; }
+      html.dark .bg-sky-50 { background-color: #0a1218 !important; }
+      html.dark .bg-sky-100 { background-color: #0f1820 !important; }
+      html.dark .bg-pink-100 { background-color: #200f18 !important; }
+      html.dark .bg-violet-300 { background-color: #1e1530 !important; }
+      
+      /* ===== group-hover 状态 ===== */
+      html.dark .group:hover .group-hover\:bg-indigo-50 { background-color: #12101c !important; }
+      html.dark .group:hover .group-hover\:bg-indigo-200 { background-color: #1a1530 !important; }
+      html.dark .group:hover .group-hover\:bg-amber-200 { background-color: #201a0f !important; }
+      html.dark .group:hover .group-hover\:bg-rose-200 { background-color: #200f16 !important; }
+      html.dark .group:hover .group-hover\:text-indigo-600 { color: #8ab4f8 !important; }
+      html.dark .group:hover .group-hover\:text-indigo-700 { color: #8ab4f8 !important; }
+      html.dark .group:hover .group-hover\:text-emerald-600 { color: #81c995 !important; }
+      html.dark .group:hover .group-hover\:text-emerald-700 { color: #a8dab5 !important; }
+      html.dark .group:hover .group-hover\:text-slate-500 { color: #71767b !important; }
+      
+      /* ===== disabled Tailwind 类 ===== */
+      html.dark .disabled\:bg-slate-50:disabled { background-color: #0a0a0a !important; }
+      html.dark .disabled\:text-slate-400:disabled { color: #5f6368 !important; }
     </style>
 </head>
   <body>
