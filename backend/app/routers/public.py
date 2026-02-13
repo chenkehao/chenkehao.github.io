@@ -7403,4 +7403,58 @@ async def get_changelog(db: AsyncSession = Depends(get_db)):
             "desc": r.description,
         })
 
-    return list(versions_map.values())
+    # 按版本号数值排序（v1.0.10 > v1.0.9）
+    def version_key(item):
+        parts = item["version"].lstrip("v").split(".")
+        return tuple(int(p) for p in parts)
+    
+    return sorted(versions_map.values(), key=version_key, reverse=True)
+
+
+# ============ APP 移动端专用接口 ============
+
+@router.post("/devices/register")
+async def register_device(
+    user_id: int = Query(...),
+    push_token: str = Body(..., embed=True),
+    platform: str = Body("ios", embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """注册设备推送 Token (Expo Push Token)"""
+    from app.models.user import User
+    # 检查用户
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 存储到用户扩展字段 (简单方案: 存到用户 JSON 字段)
+    # 生产环境建议创建独立 Device 表
+    if not hasattr(user, 'extra_data') or user.extra_data is None:
+        user.extra_data = '{}'
+    
+    try:
+        extra = json.loads(user.extra_data) if isinstance(user.extra_data, str) else (user.extra_data or {})
+    except (json.JSONDecodeError, TypeError):
+        extra = {}
+    
+    extra['push_token'] = push_token
+    extra['push_platform'] = platform
+    extra['push_registered_at'] = datetime.utcnow().isoformat()
+    user.extra_data = json.dumps(extra)
+    
+    await db.commit()
+    return {"success": True, "message": "设备 Token 已注册"}
+
+
+@router.get("/app/version")
+async def get_app_version():
+    """获取 APP 最新版本信息 (用于强制/提示更新)"""
+    return {
+        "latest_version": "1.0.0",
+        "min_version": "1.0.0",
+        "force_update": False,
+        "update_url_ios": "https://apps.apple.com/app/devnors/id000000",
+        "update_url_android": "https://play.google.com/store/apps/details?id=com.devnors.app",
+        "changelog": "首个正式版本发布",
+    }

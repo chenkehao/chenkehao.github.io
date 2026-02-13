@@ -56,6 +56,16 @@ class UserUpdate(BaseModel):
     company_logo: Optional[str] = None
 
 
+class AdminRoleBrief(BaseModel):
+    """管理员角色简要信息"""
+    id: int
+    name: str
+    display_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class UserResponse(UserBase):
     """User response schema"""
     id: int
@@ -69,6 +79,7 @@ class UserResponse(UserBase):
     created_at: datetime
     last_login: Optional[datetime] = None
     invite_code: Optional[str] = None
+    admin_role: Optional[AdminRoleBrief] = None
 
     class Config:
         from_attributes = True

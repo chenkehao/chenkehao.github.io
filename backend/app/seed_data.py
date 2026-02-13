@@ -23,6 +23,8 @@ from app.models.settings import (
     AuditLog,
     CertificationStatus
 )
+from app.models.order import Order, OrderType, OrderStatus, PaymentMethod
+from app.models.admin_role import AdminRole, PRESET_ROLES
 from app.utils.security import get_password_hash
 
 
@@ -95,7 +97,26 @@ async def seed_database():
         admin_user = users[0]
         hr_user = users[1]
         candidate_user = users[2]
-        
+
+        # 1.5 创建管理员角色
+        import json as _json
+        admin_roles = {}
+        for role_name, role_info in PRESET_ROLES.items():
+            role = AdminRole(
+                name=role_name,
+                display_name=role_info["display_name"],
+                description=role_info["description"],
+                permissions_json=_json.dumps(role_info["permissions"], ensure_ascii=False),
+                is_system=True,
+            )
+            db.add(role)
+            admin_roles[role_name] = role
+        await db.flush()
+
+        # 将超级管理员角色关联到 admin 用户
+        admin_user.admin_role_id = admin_roles["super_admin"].id
+        await db.flush()
+
         # 2. 创建职位标签
         tags_data = ["Python", "React", "TypeScript", "Node.js", "AI/ML", "FastAPI", 
                      "全栈", "远程", "大模型", "云原生", "Kubernetes", "Go", "Rust"]
@@ -889,22 +910,100 @@ async def seed_database():
             Changelog(version='v1.0.8', date='2026-02-10', item_type='优化', item_color=OC, description='页脚社交图标更换为微信/抖音/小红书/轻识，法律链接改为 React Router 跳转', sort_order=12),
             Changelog(version='v1.0.8', date='2026-02-10', item_type='优化', item_color=OC, description='前端 App.tsx 功能整合（4746 行变更），后端 API 大幅扩展（6367 行新增）', sort_order=13),
             # v1.0.9 - 2026-02-12
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='自定义大模型接入功能上线（Ultra 专属）：支持接入 GPT-4o、GPT-o3、Claude 4 Opus、Gemini 2.5 Pro、DeepSeek R1、Qwen 3、Grok 3 等 7 款顶级大模型', sort_order=1),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='大模型接入/断开功能：通过 API Key 一键接入自有大模型，已接入模型支持一键断开', sort_order=2),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='AI 思考过程折叠组件（ThinkingBlock）：参考 ChatGPT thinking 样式，支持展开查看完整深度分析过程', sort_order=3),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='深色模式切换移至 Navbar 用户菜单，操作更便捷，附带开关动画', sort_order=4),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='AI 助手快捷提示动态化：底部快捷操作随任务类型及进度状态智能变化', sort_order=5),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='新增 deleteAIConfig API 接口，支持删除已接入的 AI 引擎配置', sort_order=6),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='深色模式全站彻底优化：参考 Google AI Studio 深色主题，颜色更深更沉，层次分明（791 行 CSS 重写）', sort_order=7),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='深色模式新增 400+ 条 CSS 覆盖规则：透明度变体、渐变端点、Hover/Focus/Disabled 状态全覆盖', sort_order=8),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='Navbar 用户下拉菜单 UI 全面优化：统一间距、分隔线、hover 样式，图标对齐', sort_order=9),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='设置页面结构重组："账户等级 + AI 引擎配置" 合并为 "自定义大模型"，"API 与集成" 独立 Tab', sort_order=10),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='切换身份后统一跳转至 AI 助手页面，提升用户体验一致性', sort_order=11),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='定价方案页面新增自定义大模型接入功能说明，Ultra 方案标记 Token +20% 通道服务费', sort_order=12),
-            Changelog(version='v1.0.9', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='前端 App.tsx 大规模重构（939 行变更），index.html 深色模式全量重写（791 行变更）', sort_order=13),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='自定义大模型接入功能上线（Ultra 专属）：支持接入 GPT-4o、GPT-o3、Claude 4 Opus、Gemini 2.5 Pro、DeepSeek R1、Qwen 3、Grok 3 等 7 款顶级大模型', sort_order=1),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='大模型接入/断开功能：通过 API Key 一键接入自有大模型，已接入模型支持一键断开', sort_order=2),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='AI 思考过程折叠组件（ThinkingBlock）：参考 ChatGPT thinking 样式，支持展开查看完整深度分析过程', sort_order=3),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='深色模式切换移至 Navbar 用户菜单，操作更便捷，附带开关动画', sort_order=4),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='AI 助手快捷提示动态化：底部快捷操作随任务类型及进度状态智能变化', sort_order=5),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='新功能', item_color=NC, description='新增 deleteAIConfig API 接口，支持删除已接入的 AI 引擎配置', sort_order=6),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='深色模式全站彻底优化：参考 Google AI Studio 深色主题，颜色更深更沉，层次分明（791 行 CSS 重写）', sort_order=7),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='深色模式新增 400+ 条 CSS 覆盖规则：透明度变体、渐变端点、Hover/Focus/Disabled 状态全覆盖', sort_order=8),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='Navbar 用户下拉菜单 UI 全面优化：统一间距、分隔线、hover 样式，图标对齐', sort_order=9),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='设置页面结构重组："账户等级 + AI 引擎配置" 合并为 "自定义大模型"，"API 与集成" 独立 Tab', sort_order=10),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='切换身份后统一跳转至 AI 助手页面，提升用户体验一致性', sort_order=11),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='定价方案页面新增自定义大模型接入功能说明，Ultra 方案标记 Token +20% 通道服务费', sort_order=12),
+            Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='前端 App.tsx 大规模重构（939 行变更），index.html 深色模式全量重写（791 行变更）', sort_order=13),
+            # v1.0.10 - 2026-02-12
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='法律页面全面重构为 Apple 官网风格：大标题、无卡片边框、渐变分隔线、优化行高与段间距', sort_order=1),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Navbar Token 余额数字滚动动画：数据变化时从旧值平滑过渡至新值，easeOutCubic 缓动 + 颜色高亮', sort_order=2),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='帮助中心布局优化：左侧 FAQ 自然展开、右侧 AI 问答 sticky 固定在视口，聊天区域内部自动滚到最新消息', sort_order=3),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Token 管理页邀请区域主色调统一为 indigo-purple 渐变，与邀请页面视觉风格一致', sort_order=4),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复全站 UTC+8 时区偏差：新增 parseUTC 辅助函数，16 处时间显示全部修正为本地时间', sort_order=5),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复 Token 管理页复制按钮无反馈：增加 Clipboard API + execCommand fallback 双保险，复制成功显示 ✓ 已复制', sort_order=6),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复帮助中心进入后自动滚动到底部的问题', sort_order=7),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='全站 mock 数据日期从 2024 统一更新为 2026，版权年份同步更新', sort_order=8),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='招聘流程薪资图标从 Coins 改为 CircleDollarSign 货币符号，语义更准确', sort_order=9),
+            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='6 个法律页面（隐私政策/服务条款/版权声明/算法说明/个人信息保护/未成年人保护）正文行高、段间距、章节间距全面优化', sort_order=10),
         ]
         for cl in changelog_records:
             db.add(cl)
+
+        # ── 订单/交易记录 ─────────────────────────────────────────────
+        import random, string
+        now = datetime.utcnow()
+
+        order_templates = [
+            # 用户购买套餐
+            {"uid": 1000001, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 9.9, "orig": 9.9, "pm": PaymentMethod.WECHAT, "title": "Starter 套餐", "pkg": "starter", "days_ago": 30},
+            {"uid": 1000002, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 9.9, "orig": 9.9, "pm": PaymentMethod.ALIPAY, "title": "Starter 套餐", "pkg": "starter", "days_ago": 28},
+            {"uid": 1000003, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 29.9, "orig": 29.9, "pm": PaymentMethod.WECHAT, "title": "Pro 套餐", "pkg": "pro", "days_ago": 25},
+            {"uid": 1000001, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 29.9, "orig": 39.9, "pm": PaymentMethod.ALIPAY, "title": "Pro 套餐（老用户优惠）", "pkg": "pro", "disc": 10, "days_ago": 20},
+            {"uid": 1000004, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 9.9, "orig": 9.9, "pm": PaymentMethod.CREDIT_CARD, "title": "Starter 套餐", "pkg": "starter", "days_ago": 18},
+            {"uid": 1000005, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 99.9, "orig": 99.9, "pm": PaymentMethod.BANK_TRANSFER, "title": "Enterprise 套餐", "pkg": "enterprise", "days_ago": 15},
+            {"uid": 1000002, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 29.9, "orig": 29.9, "pm": PaymentMethod.WECHAT, "title": "Pro 套餐", "pkg": "pro", "days_ago": 12},
+            {"uid": 1000006, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 9.9, "orig": 9.9, "pm": PaymentMethod.ALIPAY, "title": "Starter 套餐", "pkg": "starter", "days_ago": 10},
+            {"uid": 1000003, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 99.9, "orig": 129.9, "pm": PaymentMethod.WECHAT, "title": "Enterprise 套餐（促销价）", "pkg": "enterprise", "disc": 30, "days_ago": 8},
+            {"uid": 1000007, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 29.9, "orig": 29.9, "pm": PaymentMethod.ALIPAY, "title": "Pro 套餐", "pkg": "pro", "days_ago": 7},
+            {"uid": 1000004, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 29.9, "orig": 29.9, "pm": PaymentMethod.WECHAT, "title": "Pro 套餐", "pkg": "pro", "days_ago": 5},
+            {"uid": 1000008, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.PENDING, "amount": 9.9, "orig": 9.9, "pm": PaymentMethod.ALIPAY, "title": "Starter 套餐", "pkg": "starter", "days_ago": 3},
+            {"uid": 1000005, "type": OrderType.SUBSCRIPTION, "status": OrderStatus.COMPLETED, "amount": 99.9, "orig": 99.9, "pm": PaymentMethod.BANK_TRANSFER, "title": "Enterprise 套餐续费", "pkg": "enterprise", "days_ago": 2},
+            {"uid": 1000001, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.COMPLETED, "amount": 99.9, "orig": 99.9, "pm": PaymentMethod.CREDIT_CARD, "title": "Enterprise 套餐", "pkg": "enterprise", "days_ago": 1},
+            {"uid": 1000009, "type": OrderType.PACKAGE_PURCHASE, "status": OrderStatus.FAILED, "amount": 29.9, "orig": 29.9, "pm": PaymentMethod.WECHAT, "title": "Pro 套餐（支付失败）", "pkg": "pro", "days_ago": 1},
+            # 退款
+            {"uid": 1000006, "type": OrderType.REFUND, "status": OrderStatus.COMPLETED, "amount": -9.9, "orig": 9.9, "pm": PaymentMethod.SYSTEM, "title": "退款 - Starter 套餐", "desc": "用户申请全额退款", "days_ago": 6},
+            # 平台支出
+            {"uid": None, "type": OrderType.PLATFORM_EXPENSE, "status": OrderStatus.COMPLETED, "amount": -156.80, "orig": 156.80, "pm": PaymentMethod.SYSTEM, "title": "MiniMax API 调用费", "desc": "2026年1月 MiniMax 大模型API调用成本", "days_ago": 14},
+            {"uid": None, "type": OrderType.PLATFORM_EXPENSE, "status": OrderStatus.COMPLETED, "amount": -89.50, "orig": 89.50, "pm": PaymentMethod.SYSTEM, "title": "Gemini API 调用费", "desc": "2026年1月 Gemini API 调用成本", "days_ago": 14},
+            {"uid": None, "type": OrderType.PLATFORM_EXPENSE, "status": OrderStatus.COMPLETED, "amount": -45.00, "orig": 45.00, "pm": PaymentMethod.SYSTEM, "title": "阿里云 OSS 存储费", "desc": "2026年1月对象存储服务费用", "days_ago": 13},
+            {"uid": None, "type": OrderType.PLATFORM_EXPENSE, "status": OrderStatus.COMPLETED, "amount": -200.00, "orig": 200.00, "pm": PaymentMethod.BANK_TRANSFER, "title": "服务器托管费", "desc": "2026年2月腾讯云服务器费用", "days_ago": 4},
+            {"uid": None, "type": OrderType.PLATFORM_EXPENSE, "status": OrderStatus.COMPLETED, "amount": -68.00, "orig": 68.00, "pm": PaymentMethod.SYSTEM, "title": "域名 & SSL 证书", "desc": "年度域名续费+SSL证书", "days_ago": 2},
+            # 平台其他收入
+            {"uid": None, "type": OrderType.PLATFORM_INCOME, "status": OrderStatus.COMPLETED, "amount": 500.00, "orig": 500.00, "pm": PaymentMethod.BANK_TRANSFER, "title": "广告位收入", "desc": "首页 Banner 广告位 - 2月", "days_ago": 11},
+            {"uid": None, "type": OrderType.PLATFORM_INCOME, "status": OrderStatus.COMPLETED, "amount": 200.00, "orig": 200.00, "pm": PaymentMethod.BANK_TRANSFER, "title": "企业定制服务", "desc": "某企业定制数据分析报告", "days_ago": 9},
+            # 调账
+            {"uid": None, "type": OrderType.ADJUSTMENT, "status": OrderStatus.COMPLETED, "amount": -15.00, "orig": 15.00, "pm": PaymentMethod.SYSTEM, "title": "手动调账", "desc": "补偿用户重复扣费问题", "days_ago": 16},
+        ]
+
+        for i, t in enumerate(order_templates):
+            dt = now - timedelta(days=t["days_ago"], hours=random.randint(0, 12), minutes=random.randint(0, 59))
+            ono = f"ORD-{dt.strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=4))}"
+            if t["type"] == OrderType.REFUND:
+                ono = f"REF-{dt.strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=4))}"
+            elif t["type"] == OrderType.PLATFORM_EXPENSE:
+                ono = f"EXP-{dt.strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=4))}"
+            elif t["type"] == OrderType.PLATFORM_INCOME:
+                ono = f"INC-{dt.strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=4))}"
+            elif t["type"] == OrderType.ADJUSTMENT:
+                ono = f"ADJ-{dt.strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=4))}"
+
+            order = Order(
+                order_no=ono,
+                user_id=t.get("uid"),
+                order_type=t["type"],
+                status=t["status"],
+                amount=t["amount"],
+                original_amount=t.get("orig", abs(t["amount"])),
+                discount=t.get("disc", 0),
+                payment_method=t.get("pm"),
+                title=t["title"],
+                description=t.get("desc"),
+                package_type=t.get("pkg"),
+                created_at=dt,
+                updated_at=dt,
+                paid_at=dt if t["status"] in (OrderStatus.COMPLETED, OrderStatus.PAID) else None,
+                refunded_at=dt if t["type"] == OrderType.REFUND else None,
+            )
+            db.add(order)
 
         await db.commit()
         print("Database seeded successfully!")

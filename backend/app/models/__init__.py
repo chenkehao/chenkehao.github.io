@@ -2,6 +2,7 @@
 Database Models
 """
 
+from app.models.admin_role import AdminRole, PERMISSION_MODULES, ACTION_LABELS, PRESET_ROLES
 from app.models.user import User, TeamMember, UserRole, AccountTier
 from app.models.candidate import Candidate, CandidateProfile, Skill, CareerPath, SkillGap
 from app.models.job import Job, JobTag, JobLog, JobLogAction
@@ -23,8 +24,14 @@ from app.models.profile import UserProfile, ProfileType
 from app.models.notification import Notification, NotificationType, NotificationImportance
 from app.models.ticket import Ticket
 from app.models.changelog import Changelog
+from app.models.order import Order, OrderType, OrderStatus, PaymentMethod
 
 __all__ = [
+    # Admin Role
+    "AdminRole",
+    "PERMISSION_MODULES",
+    "ACTION_LABELS",
+    "PRESET_ROLES",
     # User
     "User",
     "TeamMember", 
@@ -83,4 +90,9 @@ __all__ = [
     "Ticket",
     # Changelog
     "Changelog",
+    # Order
+    "Order",
+    "OrderType",
+    "OrderStatus",
+    "PaymentMethod",
 ]

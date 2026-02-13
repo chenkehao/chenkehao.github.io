@@ -44,6 +44,7 @@ class User(Base):
     # Role & Permissions
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.CANDIDATE)
     account_tier: Mapped[AccountTier] = mapped_column(Enum(AccountTier), default=AccountTier.FREE)
+    admin_role_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admin_roles.id"), nullable=True, index=True)
     
     # Enterprise info (for recruiters)
     company_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
@@ -59,6 +60,12 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Relationships
+    admin_role: Mapped[Optional["AdminRole"]] = relationship(
+        "AdminRole",
+        back_populates="users",
+        foreign_keys=[admin_role_id],
+        lazy="joined",
+    )
     team_members: Mapped[List["TeamMember"]] = relationship(
         "TeamMember", 
         back_populates="owner",

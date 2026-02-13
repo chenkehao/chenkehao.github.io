@@ -467,3 +467,16 @@ async def upload_avatar(
     await db.refresh(current_user)
     
     return current_user
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(
+    current_user: User = Depends(get_current_user),
+):
+    """刷新 JWT Token (APP 端使用 - 用旧 Token 换新 Token)"""
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": str(current_user.id)},
+        expires_delta=access_token_expires,
+    )
+    return Token(access_token=access_token, token_type="bearer")
