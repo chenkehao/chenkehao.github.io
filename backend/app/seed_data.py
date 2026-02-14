@@ -24,6 +24,7 @@ from app.models.settings import (
     CertificationStatus
 )
 from app.models.order import Order, OrderType, OrderStatus, PaymentMethod
+from app.models.token import TokenUsage, TokenPackage, TokenAction, PackageType
 from app.models.admin_role import AdminRole, PRESET_ROLES
 from app.utils.security import get_password_hash
 
@@ -924,16 +925,36 @@ async def seed_database():
             Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='定价方案页面新增自定义大模型接入功能说明，Ultra 方案标记 Token +20% 通道服务费', sort_order=12),
             Changelog(version='v1.0.9', date='2026-02-12', item_type='优化', item_color=OC, description='前端 App.tsx 大规模重构（939 行变更），index.html 深色模式全量重写（791 行变更）', sort_order=13),
             # v1.0.10 - 2026-02-12
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='法律页面全面重构为 Apple 官网风格：大标题、无卡片边框、渐变分隔线、优化行高与段间距', sort_order=1),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Navbar Token 余额数字滚动动画：数据变化时从旧值平滑过渡至新值，easeOutCubic 缓动 + 颜色高亮', sort_order=2),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='帮助中心布局优化：左侧 FAQ 自然展开、右侧 AI 问答 sticky 固定在视口，聊天区域内部自动滚到最新消息', sort_order=3),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='Token 管理页邀请区域主色调统一为 indigo-purple 渐变，与邀请页面视觉风格一致', sort_order=4),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复全站 UTC+8 时区偏差：新增 parseUTC 辅助函数，16 处时间显示全部修正为本地时间', sort_order=5),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复 Token 管理页复制按钮无反馈：增加 Clipboard API + execCommand fallback 双保险，复制成功显示 ✓ 已复制', sort_order=6),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复帮助中心进入后自动滚动到底部的问题', sort_order=7),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='全站 mock 数据日期从 2024 统一更新为 2026，版权年份同步更新', sort_order=8),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='招聘流程薪资图标从 Coins 改为 CircleDollarSign 货币符号，语义更准确', sort_order=9),
-            Changelog(version='v1.0.10', date='2026-02-12', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='6 个法律页面（隐私政策/服务条款/版权声明/算法说明/个人信息保护/未成年人保护）正文行高、段间距、章节间距全面优化', sort_order=10),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='新功能', item_color=NC, description='法律页面全面重构为 Apple 官网风格：大标题、无卡片边框、渐变分隔线、优化行高与段间距', sort_order=1),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='新功能', item_color=NC, description='Navbar Token 余额数字滚动动画：数据变化时从旧值平滑过渡至新值，easeOutCubic 缓动 + 颜色高亮', sort_order=2),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='新功能', item_color=NC, description='帮助中心布局优化：左侧 FAQ 自然展开、右侧 AI 问答 sticky 固定在视口，聊天区域内部自动滚到最新消息', sort_order=3),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='新功能', item_color=NC, description='Token 管理页邀请区域主色调统一为 indigo-purple 渐变，与邀请页面视觉风格一致', sort_order=4),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='修复', item_color=FC, description='修复全站 UTC+8 时区偏差：新增 parseUTC 辅助函数，16 处时间显示全部修正为本地时间', sort_order=5),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='修复', item_color=FC, description='修复 Token 管理页复制按钮无反馈：增加 Clipboard API + execCommand fallback 双保险，复制成功显示 ✓ 已复制', sort_order=6),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='修复', item_color=FC, description='修复帮助中心进入后自动滚动到底部的问题', sort_order=7),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='优化', item_color=OC, description='全站 mock 数据日期从 2024 统一更新为 2026，版权年份同步更新', sort_order=8),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='优化', item_color=OC, description='招聘流程薪资图标从 Coins 改为 CircleDollarSign 货币符号，语义更准确', sort_order=9),
+            Changelog(version='v1.0.10', date='2026-02-12', item_type='优化', item_color=OC, description='6 个法律页面（隐私政策/服务条款/版权声明/算法说明/个人信息保护/未成年人保护）正文行高、段间距、章节间距全面优化', sort_order=10),
+            # v1.0.11 - 2026-02-13
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='新功能', item_color=NC, description='管理后台系统上线（admin）：独立前端应用，支持用户管理、订单管理、工单管理、数据看板', sort_order=1),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='新功能', item_color=NC, description='超级管理员登录功能：通过 admin_roles 表管理管理员账号，JWT 鉴权', sort_order=2),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='新功能', item_color=NC, description='后端新增管理员角色模型（AdminRole）和订单模型（Order），支持完整的后台数据管理', sort_order=3),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='新功能', item_color=NC, description='后端管理后台 API 路由（/api/v1/admin）：Dashboard 统计、用户 CRUD、订单查询、工单处理', sort_order=4),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='新功能', item_color=NC, description='版本更新页面新增 Web/APP/Agent 三分类 Tab，更新记录按平台分类展示', sort_order=5),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='优化', item_color=OC, description='CORS 配置扩展，新增 localhost:3001 管理后台端口支持', sort_order=6),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='优化', item_color=OC, description='移除 backend/.env 和 backend/devnors.db 的 Git 追踪，加强安全管理', sort_order=7),
+            Changelog(version='v1.0.11', date='2026-02-13', item_type='优化', item_color=OC, description='种子数据大幅扩展：新增管理员账号、订单交易记录、Token 套餐包等初始化数据', sort_order=8),
+
+            # v1.0.12 - 2026-02-14
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='首页核心数据改为真实动态统计：新增 /platform-stats API，实时展示候选人、企业、匹配数', sort_order=1),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='深色/浅色模式切换增加平滑过渡动画：全局颜色 400ms 渐变 + 切换图标旋转弹跳效果', sort_order=2),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复智能邀约匹配（smart_invite）任务不消耗 Token 的 bug', sort_order=3),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复简历智能解析自动填充资料（auto_fill_profile）不记录 Token 的 bug', sort_order=4),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复候选人简历 AI 分析（candidates/analyze）不扣减 Token 的 bug', sort_order=5),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='个人记忆与企业记忆卡片样式统一：边框统一为 slate 色，标签按类型显示彩色背景区分', sort_order=6),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='量化效率标杆数据增加方向标识：+578% 效率提升、+82% 匹配精度、-70% 人力成本', sort_order=7),
+            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='Token 管理页与定价页邀请卡片配色统一为 indigo/purple 渐变风格', sort_order=8),
+
         ]
         for cl in changelog_records:
             db.add(cl)
@@ -1004,6 +1025,107 @@ async def seed_database():
                 refunded_at=dt if t["type"] == OrderType.REFUND else None,
             )
             db.add(order)
+
+        # ── Token 套餐 (TokenPackage) ──────────────────────────────────
+        token_packages_data = [
+            # 用户 1000001 (李招聘) — 3 个套餐
+            {"uid": 1000001, "type": PackageType.FREE,       "total": 100000, "used": 23500, "price": 0,    "days_ago": 60},
+            {"uid": 1000001, "type": PackageType.STARTER,    "total": 500000, "used": 187000, "price": 9.9, "days_ago": 30},
+            {"uid": 1000001, "type": PackageType.PRO,        "total": 2000000, "used": 452000, "price": 29.9, "days_ago": 20},
+            # 用户 1000002 (张三) — 2 个套餐
+            {"uid": 1000002, "type": PackageType.FREE,       "total": 100000, "used": 56000, "price": 0,    "days_ago": 55},
+            {"uid": 1000002, "type": PackageType.STARTER,    "total": 500000, "used": 91000, "price": 9.9,  "days_ago": 28},
+            # 用户 1000003 (测试用户) — 3 个套餐
+            {"uid": 1000003, "type": PackageType.FREE,       "total": 100000, "used": 100000, "price": 0,   "days_ago": 50},
+            {"uid": 1000003, "type": PackageType.PRO,        "total": 2000000, "used": 680000, "price": 29.9, "days_ago": 25},
+            {"uid": 1000003, "type": PackageType.ENTERPRISE, "total": 5000000, "used": 1230000, "price": 99.9, "days_ago": 8},
+            # 用户 1000004 (新用户) — 1 个套餐
+            {"uid": 1000004, "type": PackageType.FREE,       "total": 100000, "used": 8500, "price": 0,     "days_ago": 18},
+        ]
+        for tp in token_packages_data:
+            dt = now - timedelta(days=tp["days_ago"])
+            pkg = TokenPackage(
+                user_id=tp["uid"],
+                package_type=tp["type"],
+                total_tokens=tp["total"],
+                used_tokens=tp["used"],
+                remaining_tokens=tp["total"] - tp["used"],
+                is_active=True,
+                purchased_at=dt,
+                expires_at=dt + timedelta(days=365) if tp["type"] != PackageType.FREE else None,
+                price=tp["price"],
+            )
+            db.add(pkg)
+
+        # ── Token 使用记录 (TokenUsage) ──────────────────────────────
+        token_usage_data = [
+            # ---- 用户 1000001 (李招聘) ----
+            {"uid": 1000001, "action": TokenAction.RESUME_PARSE,    "tokens": 5200,  "model": "gemini-2.0-flash",      "desc": "解析候选人 张三 简历",          "days_ago": 29},
+            {"uid": 1000001, "action": TokenAction.PROFILE_BUILD,   "tokens": 3800,  "model": "gemini-2.0-flash",      "desc": "构建候选人 张三 多维画像",      "days_ago": 29},
+            {"uid": 1000001, "action": TokenAction.JOB_MATCH,       "tokens": 4500,  "model": "gemini-2.0-flash",      "desc": "匹配分析：张三 ↔ 高级AI工程师", "days_ago": 28},
+            {"uid": 1000001, "action": TokenAction.INTERVIEW,       "tokens": 12500, "model": "gemini-2.5-pro",        "desc": "AI 模拟面试：张三 · 技术面",    "days_ago": 27},
+            {"uid": 1000001, "action": TokenAction.CHAT,            "tokens": 1240,  "model": "abab6.5s-chat",         "desc": "智能助手对话",                  "days_ago": 26},
+            {"uid": 1000001, "action": TokenAction.MARKET_ANALYSIS, "tokens": 6200,  "model": "gemini-2.0-flash",      "desc": "市场薪资对标分析：AI工程师",     "days_ago": 25},
+            {"uid": 1000001, "action": TokenAction.ROUTE_DISPATCH,  "tokens": 2100,  "model": "abab6.5s-chat",         "desc": "路由调度：进入初试阶段",        "days_ago": 24},
+            {"uid": 1000001, "action": TokenAction.INTERVIEW,       "tokens": 18500, "model": "gemini-2.5-pro",        "desc": "AI 深度面试：张三 · 复试",      "days_ago": 22},
+            {"uid": 1000001, "action": TokenAction.RESUME_PARSE,    "tokens": 4800,  "model": "gemini-2.0-flash",      "desc": "解析候选人 李四 简历",          "days_ago": 20},
+            {"uid": 1000001, "action": TokenAction.CHAT,            "tokens": 856,   "model": "abab6.5s-chat",         "desc": "AI 招聘助手对话",               "days_ago": 19},
+            {"uid": 1000001, "action": TokenAction.JOB_MATCH,       "tokens": 3900,  "model": "gemini-2.0-flash",      "desc": "匹配分析：李四 ↔ 前端工程师",   "days_ago": 18},
+            {"uid": 1000001, "action": TokenAction.PROFILE_BUILD,   "tokens": 4100,  "model": "gemini-2.0-flash",      "desc": "构建候选人 李四 多维画像",      "days_ago": 17},
+            {"uid": 1000001, "action": TokenAction.CHAT,            "tokens": 2300,  "model": "gemini-2.0-flash",      "desc": "招聘数据分析对话",              "days_ago": 15},
+            {"uid": 1000001, "action": TokenAction.RESUME_PARSE,    "tokens": 5500,  "model": "gemini-2.0-flash",      "desc": "批量解析 3 份简历",             "days_ago": 12},
+            {"uid": 1000001, "action": TokenAction.INTERVIEW,       "tokens": 15200, "model": "gemini-2.5-pro",        "desc": "AI 面试：王五 · 技术面",        "days_ago": 10},
+            {"uid": 1000001, "action": TokenAction.MARKET_ANALYSIS, "tokens": 7500,  "model": "gemini-2.0-flash",      "desc": "行业薪资趋势报告",              "days_ago": 8},
+            {"uid": 1000001, "action": TokenAction.CHAT,            "tokens": 1500,  "model": "abab6.5s-chat",         "desc": "AI 助手日常对话",               "days_ago": 6},
+            {"uid": 1000001, "action": TokenAction.JOB_MATCH,       "tokens": 4200,  "model": "gemini-2.0-flash",      "desc": "批量匹配：3位候选人",           "days_ago": 4},
+            {"uid": 1000001, "action": TokenAction.RESUME_PARSE,    "tokens": 4600,  "model": "gemini-2.0-flash",      "desc": "解析候选人 赵六 简历",          "days_ago": 2},
+            {"uid": 1000001, "action": TokenAction.CHAT,            "tokens": 980,   "model": "abab6.5s-chat",         "desc": "招聘建议对话",                  "days_ago": 1},
+            # 邀请奖励（负数 = 获得）
+            {"uid": 1000001, "action": TokenAction.INVITE_REWARD,   "tokens": -50000,"model": None,                    "desc": "邀请好友奖励 x2",              "days_ago": 15},
+
+            # ---- 用户 1000002 (张三 · 求职者) ----
+            {"uid": 1000002, "action": TokenAction.CHAT,            "tokens": 1800,  "model": "abab6.5s-chat",         "desc": "AI 求职助手对话",               "days_ago": 27},
+            {"uid": 1000002, "action": TokenAction.RESUME_PARSE,    "tokens": 6500,  "model": "gemini-2.0-flash",      "desc": "AI 简历优化分析",               "days_ago": 25},
+            {"uid": 1000002, "action": TokenAction.JOB_MATCH,       "tokens": 3200,  "model": "gemini-2.0-flash",      "desc": "智能岗位匹配推荐",              "days_ago": 22},
+            {"uid": 1000002, "action": TokenAction.PROFILE_BUILD,   "tokens": 4500,  "model": "gemini-2.0-flash",      "desc": "个人能力画像构建",              "days_ago": 20},
+            {"uid": 1000002, "action": TokenAction.CHAT,            "tokens": 2100,  "model": "gemini-2.0-flash",      "desc": "面试准备指导对话",              "days_ago": 17},
+            {"uid": 1000002, "action": TokenAction.JOB_MATCH,       "tokens": 2800,  "model": "gemini-2.0-flash",      "desc": "岗位推荐更新",                  "days_ago": 14},
+            {"uid": 1000002, "action": TokenAction.CHAT,            "tokens": 950,   "model": "abab6.5s-chat",         "desc": "职业规划咨询",                  "days_ago": 10},
+            {"uid": 1000002, "action": TokenAction.RESUME_PARSE,    "tokens": 5800,  "model": "gemini-2.0-flash",      "desc": "简历二次优化",                  "days_ago": 7},
+            {"uid": 1000002, "action": TokenAction.CHAT,            "tokens": 1350,  "model": "abab6.5s-chat",         "desc": "AI 日常助手",                   "days_ago": 3},
+            {"uid": 1000002, "action": TokenAction.INVITE_REWARD,   "tokens": -20000,"model": None,                    "desc": "邀请好友奖励",                  "days_ago": 12},
+
+            # ---- 用户 1000003 (测试用户) ----
+            {"uid": 1000003, "action": TokenAction.RESUME_PARSE,    "tokens": 5600,  "model": "gemini-2.0-flash",      "desc": "解析简历 · 自动提取技能",       "days_ago": 24},
+            {"uid": 1000003, "action": TokenAction.INTERVIEW,       "tokens": 22000, "model": "gemini-2.5-pro",        "desc": "AI 全流程模拟面试",             "days_ago": 22},
+            {"uid": 1000003, "action": TokenAction.MARKET_ANALYSIS, "tokens": 8500,  "model": "gemini-2.0-flash",      "desc": "行业薪资与竞品分析",            "days_ago": 20},
+            {"uid": 1000003, "action": TokenAction.CHAT,            "tokens": 3200,  "model": "gemini-2.0-flash",      "desc": "深度招聘策略对话",              "days_ago": 18},
+            {"uid": 1000003, "action": TokenAction.JOB_MATCH,       "tokens": 5100,  "model": "gemini-2.0-flash",      "desc": "批量岗位匹配 x5",              "days_ago": 16},
+            {"uid": 1000003, "action": TokenAction.PROFILE_BUILD,   "tokens": 4800,  "model": "gemini-2.0-flash",      "desc": "高级人才画像构建",              "days_ago": 14},
+            {"uid": 1000003, "action": TokenAction.RESUME_PARSE,    "tokens": 6200,  "model": "gemini-2.5-flash",      "desc": "批量简历解析 x3",               "days_ago": 11},
+            {"uid": 1000003, "action": TokenAction.INTERVIEW,       "tokens": 19500, "model": "gemini-2.5-pro",        "desc": "AI 复试模拟",                   "days_ago": 9},
+            {"uid": 1000003, "action": TokenAction.ROUTE_DISPATCH,  "tokens": 3500,  "model": "abab6.5s-chat",         "desc": "流程路由调度 x3",               "days_ago": 7},
+            {"uid": 1000003, "action": TokenAction.CHAT,            "tokens": 2800,  "model": "gemini-2.0-flash",      "desc": "团队协作对话",                  "days_ago": 5},
+            {"uid": 1000003, "action": TokenAction.MARKET_ANALYSIS, "tokens": 7200,  "model": "gemini-2.0-flash",      "desc": "2026 Q1 招聘市场报告",          "days_ago": 3},
+            {"uid": 1000003, "action": TokenAction.CHAT,            "tokens": 1600,  "model": "abab6.5s-chat",         "desc": "AI 助手对话",                   "days_ago": 1},
+            {"uid": 1000003, "action": TokenAction.INVITE_REWARD,   "tokens": -80000,"model": None,                    "desc": "邀请好友奖励 x4",              "days_ago": 10},
+
+            # ---- 用户 1000004 (新用户) ----
+            {"uid": 1000004, "action": TokenAction.CHAT,            "tokens": 1200,  "model": "abab6.5s-chat",         "desc": "首次 AI 对话体验",              "days_ago": 17},
+            {"uid": 1000004, "action": TokenAction.RESUME_PARSE,    "tokens": 4800,  "model": "gemini-2.0-flash",      "desc": "上传简历自动解析",              "days_ago": 15},
+            {"uid": 1000004, "action": TokenAction.CHAT,            "tokens": 2500,  "model": "gemini-2.0-flash",      "desc": "求职指导对话",                  "days_ago": 10},
+        ]
+        for tu in token_usage_data:
+            dt = now - timedelta(days=tu["days_ago"], hours=random.randint(0, 12), minutes=random.randint(0, 59))
+            usage = TokenUsage(
+                user_id=tu["uid"],
+                action=tu["action"],
+                tokens_used=tu["tokens"],
+                model_name=tu.get("model"),
+                description=tu.get("desc"),
+                created_at=dt,
+            )
+            db.add(usage)
 
         await db.commit()
         print("Database seeded successfully!")

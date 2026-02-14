@@ -1,25 +1,42 @@
-import { Stack } from 'expo-router';
+/**
+ * Common 页面布局 - 微信风格导航
+ * 完全使用自定义 header 替代原生 header，避免 iOS 系统按钮样式
+ */
+import React from 'react';
+import { Platform } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { COLORS } from '../../constants/config';
+import PageHeader from '../../components/ui/PageHeader';
 
 export default function CommonLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
-        headerTintColor: '#4f46e5',
-        headerTitleStyle: { fontWeight: '600', color: '#0f172a' },
-        headerBackTitle: '返回',
-        headerShadowVisible: false,
-        headerStyle: { backgroundColor: '#f8fafc' },
-        contentStyle: { backgroundColor: '#f8fafc' },
+        // 关闭原生 header，用自定义 header 完全替代
+        headerShown: false,
+        contentStyle: { backgroundColor: COLORS.light.bgSecondary },
+        animation: 'slide_from_right',
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        ...(Platform.OS === 'ios' ? { fullScreenGestureEnabled: true } : {}),
       }}
     >
-      <Stack.Screen name="job/[id]" options={{ title: '职位详情' }} />
-      <Stack.Screen name="candidate/[id]" options={{ title: '人才详情' }} />
-      <Stack.Screen name="flow/[id]" options={{ title: '流程详情' }} />
-      <Stack.Screen name="ai-assistant" options={{ title: 'AI 助手' }} />
-      <Stack.Screen name="settings" options={{ title: '设置' }} />
-      <Stack.Screen name="tokens" options={{ title: 'Token 管理' }} />
-      <Stack.Screen name="notifications" options={{ title: '通知中心' }} />
+      <Stack.Screen name="job/[id]" />
+      <Stack.Screen name="candidate/[id]" />
+      <Stack.Screen name="flow/[id]" />
+      <Stack.Screen name="ai-assistant" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="tokens" />
+      <Stack.Screen name="notifications" />
+      <Stack.Screen name="invite" />
+      <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="settings-account" />
+      <Stack.Screen name="settings-enterprise" />
+      <Stack.Screen name="settings-certification" />
+      <Stack.Screen name="settings-ai-engine" />
+      <Stack.Screen name="settings-api" />
+      <Stack.Screen name="settings-team" />
+      <Stack.Screen name="settings-audit" />
     </Stack>
   );
 }

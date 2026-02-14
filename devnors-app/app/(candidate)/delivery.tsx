@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Alert, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../stores/auth';
@@ -8,6 +7,8 @@ import { getRecommendedJobs } from '../../services/jobs';
 import { quickApply } from '../../services/jobs';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import PageHeader from '../../components/ui/PageHeader';
+import { COLORS } from '../../constants/config';
 import type { Job } from '../../shared/types';
 
 export default function DeliveryScreen() {
@@ -56,17 +57,14 @@ export default function DeliveryScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.light.bgSecondary }}>
+      <PageHeader title="AI 智能投递" showBack />
+
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        {/* Header */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontSize: 24, fontWeight: '700', color: '#0f172a' }}>
-            AI 智能投递
-          </Text>
-          <Text style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>
-            AI 根据你的简历和偏好，自动匹配并投递合适的职位
-          </Text>
-        </View>
+        {/* 说明 */}
+        <Text style={{ fontSize: 14, color: COLORS.light.muted, marginBottom: 16 }}>
+          AI 根据你的简历和偏好，自动匹配并投递合适的职位
+        </Text>
 
         {/* 一键投递 */}
         <Card variant="elevated" style={{ marginBottom: 20 }}>
@@ -76,18 +74,18 @@ export default function DeliveryScreen() {
                 width: 48,
                 height: 48,
                 borderRadius: 14,
-                backgroundColor: '#eef2ff',
+                backgroundColor: COLORS.primaryBg,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Ionicons name="rocket" size={24} color="#4f46e5" />
+              <Ionicons name="rocket" size={24} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#0f172a' }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.light.text }}>
                 一键智能投递
               </Text>
-              <Text style={{ fontSize: 13, color: '#64748b' }}>
+              <Text style={{ fontSize: 13, color: COLORS.light.muted }}>
                 {jobs.length} 个推荐职位待投递
               </Text>
             </View>
@@ -101,12 +99,12 @@ export default function DeliveryScreen() {
         </Card>
 
         {/* 职位列表 */}
-        <Text style={{ fontSize: 16, fontWeight: '600', color: '#0f172a', marginBottom: 12 }}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.light.text, marginBottom: 12 }}>
           推荐职位
         </Text>
         {isLoading ? (
           <Card style={{ alignItems: 'center', padding: 40 }}>
-            <Text style={{ color: '#94a3b8' }}>AI 正在匹配中...</Text>
+            <Text style={{ color: COLORS.light.placeholder }}>AI 正在匹配中...</Text>
           </Card>
         ) : (
           (jobs as unknown as Job[]).map((job) => {
@@ -115,15 +113,15 @@ export default function DeliveryScreen() {
               <Card key={job.id} style={{ marginBottom: 12 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#0f172a' }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.light.text }}>
                       {job.title}
                     </Text>
-                    <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                    <Text style={{ fontSize: 13, color: COLORS.light.muted, marginTop: 4 }}>
                       {job.company} · {job.location}
                     </Text>
                   </View>
                   {job.salary_display && (
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#4f46e5' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.primary }}>
                       {job.salary_display}
                     </Text>
                   )}
@@ -143,6 +141,6 @@ export default function DeliveryScreen() {
           })
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

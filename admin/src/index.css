@@ -236,3 +236,330 @@ select {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   移动端 H5 适配
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 侧边栏抽屉滑入动画 ──────────────────────────────────────── */
+
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.25s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── 移动端全局优化 ──────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* 表格强制横向滚动 */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 表格最小宽度，防止内容挤压 */
+  table.w-full {
+    min-width: 600px;
+  }
+
+  /* 减小卡片内边距 */
+  .p-5 { padding: 0.875rem; }
+  .p-6 { padding: 1rem; }
+
+  /* 统计卡片的大数字缩小 */
+  .text-xl {
+    font-size: 1.125rem;
+  }
+  .text-2xl {
+    font-size: 1.25rem;
+  }
+
+  /* 筛选栏内的 select/input 宽度自适应 */
+  select, input[type="text"], input[type="search"] {
+    max-width: 100%;
+  }
+
+  /* 按钮组换行适配 */
+  .flex.items-center.gap-4.flex-wrap > *,
+  .flex.items-center.gap-3.flex-wrap > * {
+    flex-shrink: 0;
+  }
+
+  /* 登录页适配 */
+  .max-w-\[380px\] {
+    max-width: calc(100% - 2rem);
+  }
+
+  /* mb-7 在移动端减小 */
+  .mb-7 { margin-bottom: 1.25rem; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   深色模式 — CSS 变量覆盖 + 全局样式重写
+   ═══════════════════════════════════════════════════════════════════ */
+
+.dark {
+  --color-bg: #0f1117;
+  --color-surface: #181b24;
+  --color-surface-raised: #1e2130;
+  --color-border: #282c3a;
+  --color-border-light: #21242f;
+  --color-text-primary: #e5e7eb;
+  --color-text-secondary: #9ca3af;
+  --color-text-tertiary: #6b7280;
+  --color-primary-light: rgba(79, 70, 229, 0.12);
+  color-scheme: dark;
+}
+
+/* ── 全局背景 & 文本 ─────────────────────────────────────────── */
+
+.dark body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+/* ── 背景色覆盖 ──────────────────────────────────────────────── */
+
+.dark .bg-white,
+.dark .bg-white\/95 {
+  background-color: var(--color-surface) !important;
+}
+.dark .bg-\[\#f8f9fc\] {
+  background-color: var(--color-bg) !important;
+}
+.dark .bg-slate-50,
+.dark .bg-slate-50\/50 {
+  background-color: var(--color-surface-raised) !important;
+}
+.dark .bg-slate-100 {
+  background-color: #252838 !important;
+}
+.dark .bg-slate-100\/50 {
+  background-color: rgba(37, 40, 56, 0.5) !important;
+}
+/* 浅色徽章背景在暗黑下变深 */
+.dark .bg-indigo-50,
+.dark .bg-indigo-50\/80 {
+  background-color: rgba(79, 70, 229, 0.12) !important;
+}
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.10) !important;
+}
+.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.10) !important;
+}
+.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.10) !important;
+}
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.10) !important;
+}
+.dark .bg-purple-50 {
+  background-color: rgba(168, 85, 247, 0.10) !important;
+}
+.dark .bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.10) !important;
+}
+.dark .bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.10) !important;
+}
+.dark .bg-cyan-50 {
+  background-color: rgba(6, 182, 212, 0.10) !important;
+}
+.dark .bg-pink-50 {
+  background-color: rgba(236, 72, 153, 0.10) !important;
+}
+
+/* ── 文本色覆盖 ──────────────────────────────────────────────── */
+
+.dark .text-slate-900 {
+  color: #f1f5f9 !important;
+}
+.dark .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+.dark .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+.dark .text-slate-600 {
+  color: #94a3b8 !important;
+}
+.dark .text-slate-500 {
+  color: #64748b !important;
+}
+.dark .text-slate-400 {
+  color: #64748b !important;
+}
+.dark .text-slate-300 {
+  color: #475569 !important;
+}
+
+/* ── 边框色覆盖 ──────────────────────────────────────────────── */
+
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-slate-200\/70,
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/50 {
+  border-color: var(--color-border) !important;
+}
+.dark .border-slate-100 {
+  border-color: var(--color-border-light) !important;
+}
+.dark .border-slate-50 {
+  border-color: #1c1f2b !important;
+}
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--color-border-light) !important;
+}
+.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1c1f2b !important;
+}
+
+/* ── 输入框 & 选择框 ─────────────────────────────────────────── */
+
+.dark input[type="text"],
+.dark input[type="email"],
+.dark input[type="password"],
+.dark input[type="search"],
+.dark input[type="number"],
+.dark input[type="url"],
+.dark select,
+.dark textarea {
+  background-color: var(--color-surface-raised) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #4b5563 !important;
+}
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #6366f1 !important;
+  background-color: var(--color-surface) !important;
+}
+.dark .bg-slate-50\/50 {
+  background-color: var(--color-surface-raised) !important;
+}
+
+/* Select 箭头在暗色下换色 */
+.dark select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+}
+
+/* ── Hover 覆盖 ──────────────────────────────────────────────── */
+
+.dark .hover\:bg-slate-50:hover {
+  background-color: var(--color-surface-raised) !important;
+}
+.dark .hover\:bg-slate-100:hover {
+  background-color: #252838 !important;
+}
+.dark .hover\:bg-slate-50\/50:hover {
+  background-color: rgba(30, 33, 48, 0.5) !important;
+}
+.dark .hover\:border-slate-300:hover {
+  border-color: #3b3f4f !important;
+}
+.dark .hover\:bg-rose-50:hover {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+.dark .hover\:bg-indigo-50:hover {
+  background-color: rgba(79, 70, 229, 0.15) !important;
+}
+
+/* ── 阴影 ────────────────────────────────────────────────────── */
+
+.dark .shadow-sm,
+.dark .shadow-\[0_1px_3px_rgba\(0\2c 0\2c 0\2c 0\.04\)\] {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+.dark .shadow-indigo-200,
+.dark .shadow-indigo-200\/50,
+.dark .hover\:shadow-indigo-200\/50:hover {
+  box-shadow: none !important;
+}
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ── Modal 弹窗 ──────────────────────────────────────────────── */
+
+.dark .modal-overlay {
+  background-color: rgba(0, 0, 0, 0.55) !important;
+}
+.dark .modal-content {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ── 表格 ────────────────────────────────────────────────────── */
+
+.dark table thead th {
+  color: #6b7280 !important;
+}
+.dark table tbody tr {
+  border-color: #1c1f2b !important;
+}
+.dark table tbody tr:hover {
+  background-color: rgba(30, 33, 48, 0.5) !important;
+}
+
+/* ── 滚动条 ──────────────────────────────────────────────────── */
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3b3f4f;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5059;
+}
+.dark * {
+  scrollbar-color: #3b3f4f transparent;
+}
+
+/* ── 侧边栏 ──────────────────────────────────────────────────── */
+
+.dark .nav-item-active::before {
+  background: #818cf8;
+}
+
+/* ── 加载器 ──────────────────────────────────────────────────── */
+
+.dark .border-slate-200.border-t-indigo-500 {
+  border-color: #3b3f4f !important;
+  border-top-color: #818cf8 !important;
+}
+
+/* ── 渐变修正（登录/sidebar avatar） ─────────────────────────── */
+
+.dark .from-indigo-600.to-indigo-500 {
+  --tw-gradient-from: #6366f1;
+  --tw-gradient-to: #818cf8;
+}
+
+/* ── Recharts / SVG 图表 ─────────────────────────────────────── */
+.dark .recharts-cartesian-grid line {
+  stroke: #282c3a !important;
+}
+.dark .recharts-text {
+  fill: #6b7280 !important;
+}
+
+/* ── 登录页装饰渐变 ──────────────────────────────────────────── */
+.dark .from-indigo-100\/40 {
+  --tw-gradient-from: rgba(79, 70, 229, 0.06) !important;
+}
+.dark .via-purple-50\/20 {
+  --tw-gradient-via: rgba(168, 85, 247, 0.04) !important;
+}
+
+/* ── focus:bg-white 覆盖 ─────────────────────────────────────── */
+.dark .focus\:bg-white:focus {
+  background-color: var(--color-surface) !important;
+}

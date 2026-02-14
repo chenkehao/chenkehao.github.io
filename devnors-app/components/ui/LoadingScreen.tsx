@@ -1,32 +1,25 @@
 import React from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
+import { COLORS } from '../../constants/config';
 
 interface LoadingScreenProps {
   message?: string;
 }
 
-export default function LoadingScreen({ message }: LoadingScreenProps) {
+export default function LoadingScreen({ message = '加载中...' }: LoadingScreenProps) {
   return (
     <View
       style={{
         flex: 1,
-        alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#f8fafc',
+        alignItems: 'center',
+        backgroundColor: COLORS.light.bgSecondary,
       }}
     >
-      <ActivityIndicator size="large" color="#4f46e5" />
-      {message && (
-        <Text
-          style={{
-            fontSize: 14,
-            color: '#64748b',
-            marginTop: 12,
-          }}
-        >
-          {message}
-        </Text>
-      )}
+      <ActivityIndicator size="large" color={COLORS.primary} />
+      <Text style={{ marginTop: 12, fontSize: 14, color: COLORS.light.muted }}>
+        {message}
+      </Text>
     </View>
   );
 }

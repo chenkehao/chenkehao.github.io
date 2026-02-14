@@ -180,6 +180,37 @@ async def analyze_resume(
     from datetime import datetime
     candidate.last_analysis_at = datetime.utcnow()
     
+    # 记录 Token 消耗
+    try:
+        from app.models.token import TokenUsage, TokenAction, TokenPackage
+        estimated_tokens = max(len(request.resume_text) * 2, 4000)
+        usage = TokenUsage(
+            user_id=current_user.id,
+            action=TokenAction.RESUME_PARSE,
+            tokens_used=estimated_tokens,
+            model_name="gemini",
+            description="简历 AI 分析 - 生成人才画像"
+        )
+        db.add(usage)
+        # 从套餐扣减
+        remaining = estimated_tokens
+        pkgs_result = await db.execute(
+            select(TokenPackage)
+            .where(TokenPackage.user_id == current_user.id)
+            .where(TokenPackage.is_active == True)
+            .where(TokenPackage.remaining_tokens > 0)
+            .order_by(TokenPackage.expires_at.asc().nullslast())
+        )
+        for pkg in pkgs_result.scalars().all():
+            if remaining <= 0:
+                break
+            deduct = min(remaining, pkg.remaining_tokens)
+            pkg.used_tokens += deduct
+            pkg.remaining_tokens = max(0, pkg.remaining_tokens - deduct)
+            remaining -= deduct
+    except Exception as e:
+        print(f"[candidates/analyze] Token deduct error: {e}")
+    
     await db.commit()
     
     return analysis_result

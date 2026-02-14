@@ -1009,14 +1009,16 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                   <div className="border-t border-slate-200">
                     <button
                       onClick={() => { toggleDarkMode(); }}
-                      className="w-full flex items-center justify-between px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
+                      className="w-full flex items-center justify-between px-4 h-10 text-sm text-slate-700 hover:bg-slate-100 transition-colors relative overflow-hidden group/theme"
                     >
                       <div className="flex items-center gap-3">
-                        {isDarkMode ? <Moon size={16} className="flex-shrink-0" /> : <Sun size={16} className="flex-shrink-0" />}
+                        <span className="flex-shrink-0 theme-icon-spin">
+                          {isDarkMode ? <Moon size={16} /> : <Sun size={16} />}
+                        </span>
                         <span>{isDarkMode ? '深色模式' : '浅色模式'}</span>
                       </div>
-                      <div className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                        <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all shadow-sm ${isDarkMode ? 'right-0.5 bg-white' : 'left-0.5 bg-white'}`}></div>
+                      <div className={`w-9 h-5 rounded-full relative transition-colors duration-300 flex-shrink-0 ${isDarkMode ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-300 ${isDarkMode ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
                       </div>
                     </button>
                   </div>
@@ -1198,11 +1200,20 @@ const AnimatedCounter = ({ end, suffix = '', duration = 2000, color = 'text-indi
   );
 };
 
-const LandingPage = () => (
+const LandingPage = () => {
+  const [stats, setStats] = useState<{ candidates: number; enterprises: number; matches: number } | null>(null);
+
+  useEffect(() => {
+    import('./services/apiService').then(({ getPlatformStats }) => {
+      getPlatformStats().then(setStats).catch(() => {});
+    });
+  }, []);
+
+  return (
   <div className="pt-20">
     <Hero />
 
-    {/* 新增：核心社交证明板块 (Market Presence) */}
+    {/* 核心社交证明板块 (Market Presence) */}
     <section className="py-10 px-4 md:py-16 md:px-6 -mt-10 mb-10">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-md p-6 md:p-10 lg:p-16 border border-slate-100 shadow-2xl relative overflow-hidden group">
@@ -1214,21 +1225,21 @@ const LandingPage = () => (
                 <div className="inline-flex p-3 bg-indigo-50 rounded text-indigo-600 mb-6 animate-in zoom-in duration-500">
                   <Users size={32} />
                 </div>
-                <AnimatedCounter end={100} suffix="万" color="text-indigo-600" />
+                <AnimatedCounter end={stats?.candidates || 0} suffix="" color="text-indigo-600" />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">全球储备人才</div>
              </div>
              <div className="text-center md:border-r border-slate-100">
                 <div className="inline-flex p-3 bg-emerald-50 rounded text-emerald-600 mb-6 animate-in zoom-in duration-500 delay-150">
                   <Building2 size={32} />
                 </div>
-                <AnimatedCounter end={2} suffix="万" color="text-emerald-600" duration={1500} />
+                <AnimatedCounter end={stats?.enterprises || 0} suffix="" color="text-emerald-600" duration={1500} />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">活跃入驻企业</div>
              </div>
              <div className="text-center">
                 <div className="inline-flex p-3 bg-rose-50 rounded text-rose-600 mb-6 animate-in zoom-in duration-500 delay-300">
                   <Sparkles size={32} />
                 </div>
-                <AnimatedCounter end={500} suffix="万" color="text-rose-600" duration={2500} />
+                <AnimatedCounter end={stats?.matches || 0} suffix="" color="text-rose-600" duration={2500} />
                 <div className="text-sm font-bold text-slate-400 uppercase tracking-widest">AI 智能成功对接</div>
              </div>
            </div>
@@ -1260,15 +1271,16 @@ const LandingPage = () => (
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-xl md:text-3xl font-bold mb-8 md:mb-16 text-slate-900">量化效率标杆</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <StatCard value={578} suffix="%" label="效率跨越式提升" delay={0} />
-          <StatCard value={82} suffix="%" label="匹配精度" delay={100} />
-          <StatCard value={70} suffix="%" label="HR 人力成本降低" delay={200} />
+          <StatCard value={578} prefix="+" suffix="%" label="效率跨越式提升" delay={0} />
+          <StatCard value={82} prefix="+" suffix="%" label="匹配精度" delay={100} />
+          <StatCard value={70} prefix="-" suffix="%" label="HR 人力成本降低" delay={200} />
           <StatCard value={48} prefix="< " suffix="h" label="招聘周期" delay={300} />
         </div>
       </div>
     </section>
   </div>
-);
+  );
+};
 
 const Hero = () => (
   <section className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 overflow-hidden">
@@ -4523,57 +4535,53 @@ const TokenManagementView = () => {
           }
         };
         return (
-          <div className="mb-10 bg-white rounded-lg border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-50/60 rounded-full -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-50/60 rounded-full translate-y-1/2 -translate-x-1/2" />
-            <div className="p-6 relative z-10">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div className="mb-10 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-8 border border-indigo-100">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
+                  <Gift size={20} className="text-indigo-500" /> 邀请好友，双方获赠 Token
+                </h3>
+                <p className="text-sm text-slate-600">
+                  每邀请一位好友注册，您获得 <span className="font-bold text-indigo-600">{inviteReward.inviter?.toLocaleString()} tokens</span>，好友获得 <span className="font-bold text-indigo-600">{inviteReward.invitee?.toLocaleString()} tokens</span>
+                </p>
+              </div>
+              <button 
+                onClick={() => navigate('/invite')}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all whitespace-nowrap shadow-lg shadow-indigo-200"
+              >
+                查看邀请记录
+              </button>
+            </div>
+
+            {/* 邀请码 + 邀请链接 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* 邀请码 */}
+              <div className="rounded-lg p-4 flex items-center justify-between border border-indigo-200">
                 <div>
-                  <h3 className="text-sm md:text-base font-black text-slate-900 mb-1 flex items-center gap-2">
-                    <Gift size={18} className="text-indigo-500 flex-shrink-0" /> 邀请好友，双方获赠 Token
-                  </h3>
-                  <p className="text-xs md:text-sm text-slate-500">
-                    每邀请一位好友注册，您获得 <span className="font-bold text-indigo-600">{inviteReward.inviter?.toLocaleString()} tokens</span>，好友获得 <span className="font-bold text-indigo-600">{inviteReward.invitee?.toLocaleString()} tokens</span>
-                  </p>
+                  <p className="text-[11px] text-indigo-400 font-medium mb-1">邀请码</p>
+                  <div className="text-xl font-black text-slate-900 tracking-[0.2em]">{myInviteCode || '------'}</div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">好友注册时填写此邀请码</p>
                 </div>
                 <button 
-                  onClick={() => navigate('/invite')}
-                  className="px-4 py-2 text-indigo-600 text-xs font-bold hover:underline whitespace-nowrap flex items-center gap-1 self-start sm:self-auto"
+                  onClick={() => doCopy(myInviteCode, setCodeCopiedT)}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${codeCopiedT ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
-                  查看邀请记录 <ChevronRight size={14} />
+                  {codeCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Link2 size={12} /> 复制</>}
                 </button>
               </div>
-
-              {/* 邀请码 + 邀请链接 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* 邀请码 */}
-                <div className="bg-indigo-50/70 rounded-xl border border-indigo-100 p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] text-slate-400 mb-1">邀请码</p>
-                    <div className="text-xl font-black text-slate-900 tracking-[0.2em]">{myInviteCode || '------'}</div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">好友注册时填写此邀请码</p>
-                  </div>
-                  <button 
-                    onClick={() => doCopy(myInviteCode, setCodeCopiedT)}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${codeCopiedT ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                  >
-                    {codeCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Link2 size={12} /> 复制</>}
-                  </button>
+              {/* 邀请链接 */}
+              <div className="rounded-lg p-4 flex items-center justify-between border border-indigo-200">
+                <div className="min-w-0 flex-1 mr-3">
+                  <p className="text-[11px] text-indigo-400 font-medium mb-1">邀请链接</p>
+                  <div className="text-xs font-mono text-slate-600 truncate">{myInviteLink || '------'}</div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">好友点击链接直接注册</p>
                 </div>
-                {/* 邀请链接 */}
-                <div className="bg-indigo-50/70 rounded-xl border border-indigo-100 p-4 flex items-center justify-between">
-                  <div className="min-w-0 flex-1 mr-3">
-                    <p className="text-[11px] text-slate-400 mb-1">邀请链接</p>
-                    <div className="text-xs font-mono text-slate-600 truncate">{myInviteLink || '------'}</div>
-                    <p className="text-[10px] text-slate-400 mt-0.5">好友点击链接直接注册</p>
-                  </div>
-                  <button 
-                    onClick={() => doCopy(myInviteLink, setLinkCopiedT)}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap ${linkCopiedT ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                  >
-                    {linkCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Share2 size={12} /> 复制</>}
-                  </button>
-                </div>
+                <button 
+                  onClick={() => doCopy(myInviteLink, setLinkCopiedT)}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1 whitespace-nowrap ${linkCopiedT ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                >
+                  {linkCopiedT ? <><CheckCircle2 size={12} /> 已复制</> : <><Share2 size={12} /> 复制</>}
+                </button>
               </div>
             </div>
           </div>
@@ -5381,6 +5389,34 @@ const FlowDetailView = () => {
               <span className="text-sm text-slate-500 flex items-center gap-1"><CircleDollarSign size={14} className="text-emerald-500" /> {flow.salary}</span>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* 匹配岗位信息 */}
+      <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm mb-8">
+        <h3 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+          <Briefcase size={16} className="text-indigo-600" /> 匹配岗位
+        </h3>
+        <div
+          onClick={() => flow.jobId && navigate(`/candidate/job/${flow.jobId}`)}
+          className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100 cursor-pointer hover:border-indigo-200 hover:bg-indigo-50/30 transition-all group"
+        >
+          <div className="w-12 h-12 bg-white rounded-lg border border-slate-200 flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
+            {flow.jobLogo ? (
+              <img src={flow.jobLogo} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Building2 size={20} className="text-slate-400" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">{flow.role}</p>
+            <p className="text-sm text-slate-500 font-medium flex items-center gap-2 mt-0.5">
+              <span>{flow.company}</span>
+              {flow.jobLocation && <><span className="text-slate-300">·</span><span className="flex items-center gap-1"><MapPin size={12} />{flow.jobLocation}</span></>}
+              {flow.salary && <><span className="text-slate-300">·</span><span className="flex items-center gap-1"><CircleDollarSign size={12} className="text-emerald-500" />{flow.salary}</span></>}
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0" />
         </div>
       </div>
 
@@ -6611,19 +6647,19 @@ const PricingView = () => {
       </div>
 
       {/* 邀请奖励 */}
-      <div className="mt-8 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-8 border border-amber-100">
+      <div className="mt-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-8 border border-indigo-100">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-black text-slate-900 mb-2 flex items-center gap-2">
-              <Gift size={20} className="text-amber-500" /> 邀请好友，双方获赠 Token
+              <Gift size={20} className="text-indigo-500" /> 邀请好友，双方获赠 Token
             </h3>
             <p className="text-sm text-slate-600">
-              每成功邀请一位好友注册，您获得 <span className="font-bold text-amber-600">50,000 tokens</span>，好友获得 <span className="font-bold text-amber-600">20,000 tokens</span>
+              每成功邀请一位好友注册，您获得 <span className="font-bold text-indigo-600">50,000 tokens</span>，好友获得 <span className="font-bold text-indigo-600">20,000 tokens</span>
             </p>
           </div>
           <button 
             onClick={() => navigate('/invite')}
-            className="px-6 py-3 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all whitespace-nowrap"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all whitespace-nowrap shadow-lg shadow-indigo-200"
           >
             查看邀请码
           </button>
@@ -6715,15 +6751,26 @@ const CandidateView = () => {
                 点击添加第一条记忆
               </button>
             </div>
-          ) : memories.map((memory: any) => (
-            <div key={memory.id} className={`p-4 rounded-lg border bg-slate-50 ${memory.color || 'border-slate-200'}`}>
+          ) : memories.map((memory: any) => {
+            const tagColors: Record<string, string> = {
+              '偏好': 'bg-purple-100 text-purple-700', '经验': 'bg-amber-100 text-amber-700', '技能': 'bg-emerald-100 text-emerald-700',
+              '技术': 'bg-indigo-100 text-indigo-700', '文化': 'bg-rose-100 text-rose-700', '要求': 'bg-orange-100 text-orange-700',
+              '策略': 'bg-fuchsia-100 text-fuchsia-700', '福利': 'bg-cyan-100 text-cyan-700', '动作': 'bg-violet-100 text-violet-700',
+              '薪酬': 'bg-green-100 text-green-700', '地点': 'bg-sky-100 text-sky-700', '目标': 'bg-rose-100 text-rose-700',
+              '汇报': 'bg-violet-100 text-violet-700', '团队': 'bg-teal-100 text-teal-700', '项目': 'bg-amber-100 text-amber-700',
+              '公司': 'bg-blue-100 text-blue-700',
+            };
+            const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
+            return (
+            <div key={memory.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-black uppercase tracking-wider">{memory.type}</span>
+                <span className={`text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded ${tagColor}`}>{memory.type}</span>
                 <span className="text-xs text-slate-400 font-mono">{memory.date}</span>
               </div>
-              <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>"{memory.content}"</p>
+              <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>{memory.content}</p>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -7124,11 +7171,21 @@ const EnterpriseMemoryView = () => {
               </div>
            ) : (
            <div className="grid grid-cols-1 gap-6">
-              {filteredMemories.map((memory) => (
+              {filteredMemories.map((memory) => {
+                const tagColors: Record<string, string> = {
+                  '偏好': 'bg-purple-100 text-purple-700', '经验': 'bg-amber-100 text-amber-700', '技能': 'bg-emerald-100 text-emerald-700',
+                  '技术': 'bg-indigo-100 text-indigo-700', '文化': 'bg-rose-100 text-rose-700', '要求': 'bg-orange-100 text-orange-700',
+                  '策略': 'bg-fuchsia-100 text-fuchsia-700', '福利': 'bg-cyan-100 text-cyan-700', '动作': 'bg-violet-100 text-violet-700',
+                  '薪酬': 'bg-green-100 text-green-700', '地点': 'bg-sky-100 text-sky-700', '目标': 'bg-rose-100 text-rose-700',
+                  '汇报': 'bg-violet-100 text-violet-700', '团队': 'bg-teal-100 text-teal-700', '项目': 'bg-amber-100 text-amber-700',
+                  '公司': 'bg-blue-100 text-blue-700',
+                };
+                const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
+                return (
                 <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all flex flex-col md:flex-row gap-6">
                    <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-3">
-                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
+                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
                            {memory.type}
                          </span>
                          <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
@@ -7138,8 +7195,8 @@ const EnterpriseMemoryView = () => {
                          </span>
                          
                       </div>
-                      <p className="text-base text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
-                        “{memory.content}”
+                      <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
+                        {memory.content}
                       </p>
                       <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
                          <button 
@@ -7202,7 +7259,8 @@ const EnterpriseMemoryView = () => {
                       )}
                    </div>
                 </div>
-              ))}
+                );
+              })}
            </div>
            )}
         </div>
@@ -7577,11 +7635,21 @@ const CandidateMemoryView = () => {
               </div>
            ) : (
            <div className="grid grid-cols-1 gap-6">
-              {filteredMemories.map((memory) => (
+              {filteredMemories.map((memory) => {
+                const tagColors: Record<string, string> = {
+                  '偏好': 'bg-purple-100 text-purple-700', '经验': 'bg-amber-100 text-amber-700', '技能': 'bg-emerald-100 text-emerald-700',
+                  '技术': 'bg-indigo-100 text-indigo-700', '文化': 'bg-rose-100 text-rose-700', '要求': 'bg-orange-100 text-orange-700',
+                  '策略': 'bg-fuchsia-100 text-fuchsia-700', '福利': 'bg-cyan-100 text-cyan-700', '动作': 'bg-violet-100 text-violet-700',
+                  '薪酬': 'bg-green-100 text-green-700', '地点': 'bg-sky-100 text-sky-700', '目标': 'bg-rose-100 text-rose-700',
+                  '汇报': 'bg-violet-100 text-violet-700', '团队': 'bg-teal-100 text-teal-700', '项目': 'bg-amber-100 text-amber-700',
+                  '公司': 'bg-blue-100 text-blue-700',
+                };
+                const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
+                return (
                 <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all flex flex-col md:flex-row gap-6">
                    <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-3">
-                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${memory.color}`}>
+                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
                            {memory.type}
                          </span>
                          <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
@@ -7591,8 +7659,8 @@ const CandidateMemoryView = () => {
                          </span>
                          
                       </div>
-                      <p className="text-base text-slate-800 font-semibold leading-relaxed mb-4 group-hover:text-emerald-600 transition-colors">
-                        "{memory.content}"
+                      <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
+                        {memory.content}
                       </p>
                       <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
                          <button 
@@ -7655,7 +7723,8 @@ const CandidateMemoryView = () => {
                       )}
                    </div>
                 </div>
-              ))}
+                );
+              })}
            </div>
            )}
         </div>
@@ -9019,15 +9088,26 @@ const EmployerDashboard = () => {
                   点击添加第一条记忆
                 </button>
               </div>
-           ) : memories.map((memory: any) => (
-              <div key={memory.id} className={`p-4 rounded-lg border bg-slate-50 ${memory.color || 'border-slate-200'}`}>
+           ) : memories.map((memory: any) => {
+            const tagColors: Record<string, string> = {
+              '偏好': 'bg-purple-100 text-purple-700', '经验': 'bg-amber-100 text-amber-700', '技能': 'bg-emerald-100 text-emerald-700',
+              '技术': 'bg-indigo-100 text-indigo-700', '文化': 'bg-rose-100 text-rose-700', '要求': 'bg-orange-100 text-orange-700',
+              '策略': 'bg-fuchsia-100 text-fuchsia-700', '福利': 'bg-cyan-100 text-cyan-700', '动作': 'bg-violet-100 text-violet-700',
+              '薪酬': 'bg-green-100 text-green-700', '地点': 'bg-sky-100 text-sky-700', '目标': 'bg-rose-100 text-rose-700',
+              '汇报': 'bg-violet-100 text-violet-700', '团队': 'bg-teal-100 text-teal-700', '项目': 'bg-amber-100 text-amber-700',
+              '公司': 'bg-blue-100 text-blue-700',
+            };
+            const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
+            return (
+              <div key={memory.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50">
                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-black uppercase tracking-wider">{memory.type}</span>
+                    <span className={`text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded ${tagColor}`}>{memory.type}</span>
                     <span className="text-xs text-slate-400 font-mono">{memory.date}</span>
                  </div>
-                 <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>"{memory.content}"</p>
+                 <p className="text-sm text-slate-600 leading-relaxed line-clamp-2" title={memory.content}>{memory.content}</p>
               </div>
-           ))}
+            );
+           })}
         </div>
       </div>
 
@@ -9283,7 +9363,7 @@ const EnterpriseHomeView = () => {
     return (
       <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
         <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-8">
-          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回管理后台
+          <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
         </button>
         <div className="bg-white rounded-lg p-6 md:p-12 border border-slate-100 shadow-xl text-center">
           <div className="w-24 h-24 bg-gradient-to-br from-indigo-100 to-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
@@ -9309,7 +9389,7 @@ const EnterpriseHomeView = () => {
   return (
     <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
       <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-6">
-        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回管理后台
+        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
       </button>
 
       {/* 顶部 Banner */}
@@ -9528,7 +9608,8 @@ const EnterpriseHomeView = () => {
         {/* 右侧信息栏 */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* 资料完善度 */}
+          {/* 资料完善度 - 100%时隐藏 */}
+          {profileCompleteness < 100 && (
           <div className="bg-white rounded-lg border border-slate-100 shadow-sm p-6">
             <h3 className="text-base font-black text-slate-900 mb-4 flex items-center gap-2">
               <Activity size={18} className="text-indigo-600" /> 资料完善度
@@ -9542,58 +9623,57 @@ const EnterpriseHomeView = () => {
                 <div className="bg-gradient-to-r from-indigo-500 to-violet-500 h-full rounded-full transition-all duration-700" style={{width: `${profileCompleteness}%`}}></div>
               </div>
             </div>
-            {profileCompleteness < 100 && (
-              <button onClick={() => navigate('/settings?tab=General')} className="w-full mt-3 py-2.5 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all flex items-center justify-center gap-2">
-                <Edit3 size={14} /> 继续完善
-              </button>
-            )}
+            <button onClick={() => navigate('/settings?tab=General')} className="w-full mt-3 py-2.5 text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all flex items-center justify-center gap-2">
+              <Edit3 size={14} /> 继续完善
+            </button>
           </div>
+          )}
           
           {/* 联系信息 */}
-          <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-lg p-6 text-white shadow-xl relative overflow-hidden">
-            <div className="absolute -top-6 -right-6 w-24 h-24 bg-white/5 rounded-full blur-xl"></div>
-            <h3 className="text-base font-black mb-5 flex items-center gap-2 relative z-10">
-              <Phone size={18} /> 联系信息
+          <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200 relative overflow-hidden">
+            <div className="absolute -top-6 -right-6 w-24 h-24 bg-indigo-50 rounded-full blur-xl"></div>
+            <h3 className="text-base font-black mb-5 flex items-center gap-2 relative z-10 text-slate-900">
+              <Phone size={18} className="text-indigo-600" /> 联系信息
             </h3>
             <div className="space-y-4 relative z-10">
               {dc.contactName && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><UserIcon size={14} /></div>
+                  <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center"><UserIcon size={14} className="text-indigo-600" /></div>
                   <div>
-                    <p className="text-xs text-indigo-200 font-medium">联系人</p>
-                    <p className="font-bold">{dc.contactName}</p>
+                    <p className="text-xs text-slate-400 font-medium">联系人</p>
+                    <p className="font-bold text-slate-800">{dc.contactName}</p>
                   </div>
                 </div>
               )}
               {dc.hrPhone && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Phone size={14} /></div>
+                  <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center"><Phone size={14} className="text-indigo-600" /></div>
                   <div>
-                    <p className="text-xs text-indigo-200 font-medium">电话</p>
-                    <p className="font-bold">{dc.hrPhone}</p>
+                    <p className="text-xs text-slate-400 font-medium">电话</p>
+                    <p className="font-bold text-slate-800">{dc.hrPhone}</p>
                   </div>
                 </div>
               )}
               {dc.contactEmail && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Mail size={14} /></div>
+                  <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center"><Mail size={14} className="text-indigo-600" /></div>
                   <div>
-                    <p className="text-xs text-indigo-200 font-medium">邮箱</p>
-                    <p className="font-bold text-sm break-all">{dc.contactEmail}</p>
+                    <p className="text-xs text-slate-400 font-medium">邮箱</p>
+                    <p className="font-bold text-sm break-all text-slate-800">{dc.contactEmail}</p>
                   </div>
                 </div>
               )}
               {dc.website && (
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center"><Globe size={14} /></div>
+                  <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center"><Globe size={14} className="text-indigo-600" /></div>
                   <div>
-                    <p className="text-xs text-indigo-200 font-medium">官网</p>
-                    <p className="font-bold text-sm break-all">{dc.website}</p>
+                    <p className="text-xs text-slate-400 font-medium">官网</p>
+                    <p className="font-bold text-sm break-all text-slate-800">{dc.website}</p>
                   </div>
                 </div>
               )}
               {!dc.contactName && !dc.hrPhone && !dc.contactEmail && (
-                <p className="text-indigo-200/70 text-sm italic text-center py-2">暂未设置联系信息</p>
+                <p className="text-slate-400 text-sm italic text-center py-2">暂未设置联系信息</p>
               )}
             </div>
           </div>
@@ -22513,7 +22593,7 @@ const ComplaintGuideView = () => {
 // --- 版本更新页面 ---
 const ChangelogView = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'platform' | 'agent'>('platform');
+  const [activeTab, setActiveTab] = useState<'web' | 'app' | 'agent'>('web');
   const [changelog, setChangelog] = useState<any[]>([]);
   const [loadingChangelog, setLoadingChangelog] = useState(true);
 
@@ -22532,6 +22612,46 @@ const ChangelogView = () => {
     };
     fetchChangelog();
   }, []);
+
+  const appChangelog = [
+    {
+      version: 'v1.0.1',
+      date: '2026-02-14',
+      tag: '最新',
+      tagColor: 'bg-emerald-100 text-emerald-700',
+      items: [
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '全面采用自定义 PageHeader 替代 iOS 原生导航栏，彻底解决返回按钮白色背景问题，15 个 common 页面 + auth 页全部统一' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '用户资料页对齐 Web 端：头像（avatar_url 图片 / 渐变首字母兜底）、UID、脱敏手机号（138****1234）、认证状态、邀请码完整展示' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '统一 Avatar 头像组件：expo-linear-gradient 渐变背景（indigo→purple，与 Web 一致）、相对路径自动拼接绝对 URL、图片加载失败自动兜底' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '身份切换功能上线：候选人/招聘方 Profile 页新增"切换为招聘方/求职者"按钮，Modal 遮罩动画 + 确认对话框' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '登录页测试账号对齐 Web：求职者测试（test@example.com）、企业方测试（hr@devnors.com）' },
+        { type: '修复', color: 'text-amber-600 bg-amber-50', desc: '修复消息通知始终为空的严重 bug：后端返回 notifications 字段，APP 错误使用 items 解析，导致数据无法展示' },
+        { type: '修复', color: 'text-amber-600 bg-amber-50', desc: '修复 Notification 类型定义缺失：补全 type、importance、icon、time、sender、read 等后端实际返回字段' },
+        { type: '修复', color: 'text-amber-600 bg-amber-50', desc: '修复招聘方 Profile 页 AI 助手菜单项点击无响应：onPress 回调未被调用' },
+        { type: '优化', color: 'text-indigo-600 bg-indigo-50', desc: '消息中心完全对齐 Web 端：类型筛选 Tab（全部/系统/匹配/面试/互动）、重要性标记、相对时间、图标映射、全部已读' },
+        { type: '优化', color: 'text-indigo-600 bg-indigo-50', desc: '编辑资料页增强：80px 头像大图展示、UID 显示、认证状态、上次登录时间、头像链接编辑字段' },
+        { type: '优化', color: 'text-indigo-600 bg-indigo-50', desc: '通知卡片视觉重构：critical 红色边框+重要标签+脉冲红点、unread indigo 背景+蓝点、sender 来源标签、长按删除确认' },
+      ],
+    },
+    {
+      version: 'v1.0.0',
+      date: '2026-02-13',
+      tag: '首发',
+      tagColor: 'bg-indigo-100 text-indigo-700',
+      items: [
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: 'Devnors 移动端 App 首个版本发布（React Native + Expo Router）' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '支持求职者和招聘方双角色注册登录与身份切换' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '求职者功能上线：岗位推荐浏览、AI 助手对话、投递管理、消息中心、个人档案编辑' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '招聘方功能上线：工作台数据看板、岗位发布管理、人才池浏览、AI 助手、消息中心' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: 'AI 助手集成：支持多模型选择、快捷操作面板、任务列表管理' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '通用功能模块：通知中心、Token 管理与充值、系统设置、岗位/候选人/工作流详情页' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: 'NativeWind (Tailwind CSS) 样式系统，原生体验与 Web 设计语言统一' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: 'Expo Router 文件系统路由，支持 (auth)/(candidate)/(employer)/(common) 四大路由分组' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: 'Zustand 状态管理：认证状态持久化（AsyncStorage）、主题切换' },
+        { type: '新功能', color: 'text-emerald-600 bg-emerald-50', desc: '完整 API 服务层：auth、jobs、candidates、flows、ai、tokens、notifications 等模块' },
+      ],
+    },
+  ];
 
   const agentMajorVersions = [
     {
@@ -22590,17 +22710,23 @@ const ChangelogView = () => {
         </button>
         <div>
           <h1 className="text-2xl font-black text-slate-900">版本更新</h1>
-          <p className="text-slate-500 text-sm">Devnors 得若平台与 Agent 更新日志</p>
+          <p className="text-slate-500 text-sm">Devnors 得若 Web · APP · Agent 更新日志</p>
         </div>
       </div>
 
       {/* Tab 切换 */}
       <div className="flex gap-2 mb-8">
         <button
-          onClick={() => setActiveTab('platform')}
-          className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === 'platform' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+          onClick={() => setActiveTab('web')}
+          className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === 'web' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
         >
-          平台更新
+          Web更新
+        </button>
+        <button
+          onClick={() => setActiveTab('app')}
+          className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${activeTab === 'app' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border border-slate-200 hover:border-indigo-200 hover:text-indigo-600'}`}
+        >
+          <Smartphone size={16} /> APP更新
         </button>
         <button
           onClick={() => setActiveTab('agent')}
@@ -22610,7 +22736,7 @@ const ChangelogView = () => {
         </button>
       </div>
 
-      {activeTab === 'platform' ? (
+      {activeTab === 'web' ? (
         loadingChangelog ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-200 border-t-indigo-600" />
@@ -22653,6 +22779,40 @@ const ChangelogView = () => {
           </div>
         </div>
         )
+      ) : activeTab === 'app' ? (
+        <div className="relative">
+          {/* 时间轴线 */}
+          <div className="absolute left-[19px] top-0 bottom-0 w-px bg-slate-200" />
+
+          <div className="space-y-12">
+            {appChangelog.map((release, idx) => (
+              <div key={release.version} className="relative pl-12">
+                {/* 时间轴圆点 */}
+                <div className={`absolute left-2.5 top-1 w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300'}`} />
+
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-black text-slate-900">{release.version}</span>
+                      {release.tag && (
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${release.tagColor}`}>{release.tag}</span>
+                      )}
+                    </div>
+                    <span className="text-xs text-slate-400 font-medium">{release.date}</span>
+                  </div>
+                  <div className="p-6 space-y-3">
+                    {release.items.map((item, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-bold shrink-0 mt-0.5 ${item.color}`}>{item.type}</span>
+                        <p className="text-sm text-slate-600">{item.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="space-y-12">
           {agentMajorVersions.map((major, mIdx) => (
@@ -23330,6 +23490,15 @@ const tokenInsufficientEvent = {
 (window as any).__showTokenInsufficient = (balance: number) => tokenInsufficientEvent.emit(balance);
 
 // 主应用内容组件
+// 路由切换时自动滚动到页面顶部
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+};
+
 const AppContent = () => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try { return localStorage.getItem('devnors_dark_mode') === 'true'; } catch { return false; }
@@ -23356,9 +23525,21 @@ const AppContent = () => {
   }, [isDarkMode]);
 
   const toggleDarkMode = () => {
+    // 添加过渡 class，让所有颜色平滑切换
+    document.documentElement.classList.add('theme-transition');
+    // 触发图标动画
+    document.querySelectorAll('.theme-icon-spin').forEach(el => {
+      el.classList.remove('theme-icon-animate');
+      void (el as HTMLElement).offsetWidth; // 强制 reflow 重新触发
+      el.classList.add('theme-icon-animate');
+    });
     const newVal = !isDarkMode;
     setIsDarkMode(newVal);
-    // 同步保存到后端
+    // 过渡结束后移除 class
+    setTimeout(() => {
+      document.documentElement.classList.remove('theme-transition');
+      document.querySelectorAll('.theme-icon-spin').forEach(el => el.classList.remove('theme-icon-animate'));
+    }, 600);
     if (user?.id) {
       import('./services/apiService').then(m => {
         m.updateSettings({ dark_mode: newVal }, user.id).catch(() => {});
@@ -23394,6 +23575,7 @@ const AppContent = () => {
 
   return (
     <div className={`min-h-screen flex flex-col ${isDarkMode ? 'dark' : ''}`}>
+      <ScrollToTop />
       <TokenInsufficientModal show={tokenModalShow} balance={tokenModalBalance} onClose={() => setTokenModalShow(false)} />
       <Navbar isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />
       <main className="flex-1">

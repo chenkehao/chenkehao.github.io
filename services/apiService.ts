@@ -1907,3 +1907,10 @@ export interface ChangelogRelease {
 export const getChangelog = async (): Promise<ChangelogRelease[]> => {
   return request('/public/changelog', { method: 'GET' });
 };
+
+/**
+ * 获取平台统计数据（首页展示）
+ */
+export const getPlatformStats = async (): Promise<{ candidates: number; enterprises: number; matches: number }> => {
+  return request('/public/platform-stats', { method: 'GET' });
+};

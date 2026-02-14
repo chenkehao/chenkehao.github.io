@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/auth';
 import LoadingScreen from '../components/ui/LoadingScreen';
+import { COLORS } from '../constants/config';
 import "../global.css";
 
 const queryClient = new QueryClient({
@@ -63,7 +64,7 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             animation: 'slide_from_right',
-            contentStyle: { backgroundColor: '#f8fafc' },
+            contentStyle: { backgroundColor: COLORS.light.bgSecondary },
           }}
         >
           <Stack.Screen name="(auth)" />

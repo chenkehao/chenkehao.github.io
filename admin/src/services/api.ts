@@ -56,6 +56,9 @@ export const login = (email: string, password: string) =>
   post('/auth/login/json', { email, password });
 
 export const getMe = () => get('/auth/me');
+export const updateMe = (data: any) => put('/auth/me', data);
+export const changePassword = (old_password: string, new_password: string) =>
+  put(`/auth/me/password?old_password=${encodeURIComponent(old_password)}&new_password=${encodeURIComponent(new_password)}`);
 
 // ─── Dashboard ───
 export const getDashboardStats = () => get('/admin/dashboard/stats');

@@ -1,14 +1,17 @@
-import React from 'react';
-import { View, Text, ScrollView, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, Alert } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../stores/auth';
 import { getTokenStats, getTokenHistory, getTokenPackages } from '../../services/tokens';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import PageHeader from '../../components/ui/PageHeader';
+import { COLORS } from '../../constants/config';
 
 export default function TokensScreen() {
   const user = useAuthStore((s) => s.user);
+  const [purchasingId, setPurchasingId] = useState<number | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ['tokenStats', user?.id],
@@ -28,14 +31,16 @@ export default function TokensScreen() {
   });
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.light.bgSecondary }}>
+      <PageHeader title="Token 余额" showBack />
+      <ScrollView style={{ flex: 1 }}>
       <View style={{ padding: 16 }}>
         {/* 余额卡片 */}
         <Card
           variant="elevated"
           style={{
             marginBottom: 20,
-            backgroundColor: '#4f46e5',
+            backgroundColor: COLORS.primary,
           }}
         >
           <Text style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Token 余额</Text>
@@ -59,37 +64,56 @@ export default function TokensScreen() {
         </Card>
 
         {/* 充值套餐 */}
-        <Text style={{ fontSize: 18, fontWeight: '600', color: '#0f172a', marginBottom: 12 }}>
+        <Text style={{ fontSize: 18, fontWeight: '600', color: COLORS.light.text, marginBottom: 12 }}>
           充值套餐
         </Text>
-        {(packages as Array<{ id: number; name: string; tokens: number; price: number; description?: string }>).map((pkg) => (
+        {(Array.isArray(packages) ? packages as Array<{ id: number; name: string; tokens: number; price: number; description?: string }> : []).map((pkg) => (
           <Card key={pkg.id} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
             <View
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: '#eef2ff',
+                backgroundColor: COLORS.primaryBg,
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginRight: 12,
               }}
             >
-              <Ionicons name="diamond-outline" size={20} color="#4f46e5" />
+              <Ionicons name="diamond-outline" size={20} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 15, fontWeight: '600', color: '#0f172a' }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.light.text }}>
                 {pkg.name}
               </Text>
-              <Text style={{ fontSize: 12, color: '#64748b' }}>
+              <Text style={{ fontSize: 12, color: COLORS.light.muted }}>
                 {pkg.tokens.toLocaleString()} Token
               </Text>
             </View>
             <Button
-              title={`¥${pkg.price}`}
+              title={purchasingId === pkg.id ? '处理中...' : `¥${pkg.price}`}
               size="sm"
               variant="outline"
-              onPress={() => {}}
+              loading={purchasingId === pkg.id}
+              onPress={() => {
+                Alert.alert(
+                  '确认购买',
+                  `确定购买「${pkg.name}」套餐吗？\n\n${pkg.tokens.toLocaleString()} Token · ¥${pkg.price}`,
+                  [
+                    { text: '取消', style: 'cancel' },
+                    {
+                      text: '确认购买',
+                      onPress: async () => {
+                        setPurchasingId(pkg.id);
+                        setTimeout(() => {
+                          setPurchasingId(null);
+                          Alert.alert('购买成功', `已成功购买 ${pkg.tokens.toLocaleString()} Token`);
+                        }, 1500);
+                      },
+                    },
+                  ]
+                );
+              }}
             />
           </Card>
         ))}
@@ -99,7 +123,7 @@ export default function TokensScreen() {
           style={{
             fontSize: 18,
             fontWeight: '600',
-            color: '#0f172a',
+            color: COLORS.light.text,
             marginTop: 20,
             marginBottom: 12,
           }}
@@ -114,15 +138,15 @@ export default function TokensScreen() {
               justifyContent: 'space-between',
               alignItems: 'center',
               paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: '#f1f5f9',
+              borderBottomWidth: 0.5,
+              borderBottomColor: COLORS.light.borderLight,
             }}
           >
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, color: '#334155' }}>
+              <Text style={{ fontSize: 14, color: COLORS.light.textSecondary }}>
                 {item.description || item.action}
               </Text>
-              <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+              <Text style={{ fontSize: 12, color: COLORS.light.placeholder, marginTop: 2 }}>
                 {new Date(item.created_at).toLocaleString('zh-CN')}
               </Text>
             </View>
@@ -130,7 +154,7 @@ export default function TokensScreen() {
               style={{
                 fontSize: 14,
                 fontWeight: '600',
-                color: item.tokens > 0 ? '#10b981' : '#ef4444',
+                color: item.tokens > 0 ? COLORS.success : COLORS.danger,
               }}
             >
               {item.tokens > 0 ? '+' : ''}{item.tokens}
@@ -140,10 +164,11 @@ export default function TokensScreen() {
 
         {(!history?.items || history.items.length === 0) && (
           <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-            <Text style={{ color: '#94a3b8' }}>暂无消耗记录</Text>
+            <Text style={{ color: COLORS.light.placeholder }}>暂无消耗记录</Text>
           </View>
         )}
       </View>
     </ScrollView>
+    </View>
   );
 }

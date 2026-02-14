@@ -209,19 +209,40 @@ export interface TokenPackage {
 
 export interface Notification {
   id: number;
-  user_id: number;
+  /** 通知类型: system / match / interview / message */
+  type: string;
+  /** 重要程度: critical / important / normal / low */
+  importance: string;
   title: string;
   content: string;
-  notification_type: string;
-  is_read: boolean;
-  created_at: string;
-  extra_data?: Record<string, unknown>;
+  /** 相对时间: "刚刚" / "3分钟前" / "昨天" 等 (后端已格式化) */
+  time: string;
+  /** ISO 时间戳 */
+  timestamp: string;
+  /** 是否已读 */
+  read: boolean;
+  /** 图标名 (Bell / Target / Calendar / MessageSquare 等) */
+  icon: string;
+  /** CSS 颜色类名 */
+  color: string;
+  /** CSS 背景色类名 */
+  bgColor: string;
+  /** 跳转链接 */
+  link: string;
+  /** 发送者 */
+  sender: string;
+  // 兼容旧字段
+  notification_type?: string;
+  is_read?: boolean;
+  created_at?: string;
 }
 
 export interface NotificationListResponse {
-  items: Notification[];
+  notifications: Notification[];
   total: number;
   unread_count: number;
+  page: number;
+  page_size: number;
 }
 
 // ============ 待办相关 ============

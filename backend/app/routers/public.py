@@ -448,10 +448,13 @@ async def get_public_flow(
 
     return {
         "id": flow.id,
+        "jobId": flow.job_id,
         "candidateId": flow.candidate_id,
         "candidateName": candidate.profile.display_name if candidate and candidate.profile else "未知",
         "role": job.title if job else "未知职位",
         "company": job.company if job else "未知公司",
+        "jobLogo": job.logo if job else None,
+        "jobLocation": job.location if job else None,
         "stage": stage_val,
         "status": frontend_status,
         "matchScore": flow.match_score or 0,
@@ -4002,6 +4005,17 @@ async def auto_fill_profile_from_resume(
                     db.add(memory)
                     memories_created.append(info[:50] + '...' if len(info) > 50 else info)
         
+        # 记录 Token 消耗
+        estimated_tokens = max(len(parse_prompt) + len(json.dumps(parsed_data, ensure_ascii=False)), 3000)
+        try:
+            await record_and_deduct_tokens(
+                db, user_id, TokenAction.RESUME_PARSE, estimated_tokens,
+                model_name="gemini",
+                description="简历智能解析 - 自动填充资料"
+            )
+        except Exception as e:
+            print(f"[auto-fill] Token deduct error: {e}")
+        
         await db.commit()
         
         # 计算完善度
@@ -5208,6 +5222,19 @@ async def _run_smart_invite(task_id: str, job_ids: List[int], user_id: int, todo
                 ticker.cancel()
                 try: await ticker
                 except asyncio.CancelledError: pass
+            
+            # 记录 Token 消耗
+            if ai_response_text:
+                estimated_tokens = max(len(match_prompt) + len(ai_response_text), 2000)
+                try:
+                    await record_and_deduct_tokens(
+                        db, user_id, TokenAction.JOB_MATCH, estimated_tokens,
+                        model_name="minimax" if minimax_api_key and ai_response_text else "gemini",
+                        description=f"智能邀请匹配 - {', '.join(job_titles[:3])}"
+                    )
+                    await db.commit()
+                except Exception as e:
+                    print(f"[async-invite] Token deduct error: {e}")
             
             # 解析结果
             matches = []
@@ -7409,6 +7436,40 @@ async def get_changelog(db: AsyncSession = Depends(get_db)):
         return tuple(int(p) for p in parts)
     
     return sorted(versions_map.values(), key=version_key, reverse=True)
+
+
+# ============ 平台统计数据接口 ============
+
+@router.get("/platform-stats")
+async def get_platform_stats(db: AsyncSession = Depends(get_db)):
+    """获取平台核心统计数据（用于首页展示）"""
+    from app.models.user import User, UserRole
+    from app.models.candidate import Candidate
+
+    # 候选人总数
+    candidate_count = (await db.execute(
+        select(func.count()).select_from(
+            select(User.id).where(User.role == UserRole.CANDIDATE).subquery()
+        )
+    )).scalar() or 0
+
+    # 企业总数（recruiter 角色的用户数）
+    enterprise_count = (await db.execute(
+        select(func.count()).select_from(
+            select(User.id).where(User.role == UserRole.RECRUITER).subquery()
+        )
+    )).scalar() or 0
+
+    # AI 匹配成功对接总数（flows 总数）
+    flow_count = (await db.execute(
+        select(func.count()).select_from(select(Flow.id).subquery())
+    )).scalar() or 0
+
+    return {
+        "candidates": candidate_count,
+        "enterprises": enterprise_count,
+        "matches": flow_count,
+    }
 
 
 # ============ APP 移动端专用接口 ============

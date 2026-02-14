@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../stores/auth';
 import Button from '../../components/ui/Button';
+import { COLORS } from '../../constants/config';
 
 type RoleOption = 'candidate' | 'employer';
 
@@ -38,13 +39,13 @@ export default function SelectRoleScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.light.bgSecondary }}>
       <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 28, fontWeight: '700', color: '#0f172a', textAlign: 'center' }}>
+        <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.light.text, textAlign: 'center' }}>
           选择你的身份
         </Text>
         <Text
-          style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginTop: 8, marginBottom: 40 }}
+          style={{ fontSize: 14, color: COLORS.light.muted, textAlign: 'center', marginTop: 8, marginBottom: 40 }}
         >
           选择后可在设置中切换
         </Text>
@@ -62,9 +63,9 @@ export default function SelectRoleScreen() {
                 padding: 20,
                 marginBottom: 16,
                 borderRadius: 16,
-                backgroundColor: isSelected ? '#eef2ff' : '#fff',
+                backgroundColor: isSelected ? COLORS.primaryBg : COLORS.light.card,
                 borderWidth: 2,
-                borderColor: isSelected ? '#4f46e5' : '#e2e8f0',
+                borderColor: isSelected ? COLORS.primary : COLORS.light.border,
               }}
             >
               <View
@@ -72,7 +73,7 @@ export default function SelectRoleScreen() {
                   width: 56,
                   height: 56,
                   borderRadius: 16,
-                  backgroundColor: isSelected ? '#4f46e5' : '#f1f5f9',
+                  backgroundColor: isSelected ? COLORS.primary : COLORS.light.borderLight,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginRight: 16,
@@ -81,7 +82,7 @@ export default function SelectRoleScreen() {
                 <Ionicons
                   name={role.icon}
                   size={28}
-                  color={isSelected ? '#fff' : '#64748b'}
+                  color={isSelected ? '#fff' : COLORS.light.muted}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -89,17 +90,17 @@ export default function SelectRoleScreen() {
                   style={{
                     fontSize: 17,
                     fontWeight: '600',
-                    color: isSelected ? '#4f46e5' : '#0f172a',
+                    color: isSelected ? COLORS.primary : COLORS.light.text,
                   }}
                 >
                   {role.title}
                 </Text>
-                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                <Text style={{ fontSize: 13, color: COLORS.light.muted, marginTop: 4 }}>
                   {role.desc}
                 </Text>
               </View>
               {isSelected && (
-                <Ionicons name="checkmark-circle" size={24} color="#4f46e5" />
+                <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
               )}
             </TouchableOpacity>
           );

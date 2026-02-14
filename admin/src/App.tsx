@@ -11,6 +11,7 @@ import {
   Receipt, CreditCard, Wallet, DollarSign, ArrowDown, Download, Hash, Minus,
   ArrowLeft, Mail, Phone, MapPin, Calendar, Award, Zap, Package,
   PieChart, TrendingDown, Percent, Target, ShieldCheck, RotateCcw,
+  Sun, Moon, Menu,
 } from 'lucide-react';
 import * as api from './services/api';
 
@@ -142,12 +143,12 @@ const StatCard = ({ label, value, sub, icon: Icon, trend }: { label: string; val
 );
 
 const PageHeader = ({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) => (
-  <div className="flex items-center justify-between mb-8">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-8 gap-3">
     <div>
-      <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
-      {sub && <p className="text-xs text-slate-400 mt-1.5">{sub}</p>}
+      <h1 className="text-lg md:text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
+      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
     </div>
-    {actions && <div className="flex items-center gap-3">{actions}</div>}
+    {actions && <div className="flex items-center gap-2 md:gap-3 flex-wrap">{actions}</div>}
   </div>
 );
 
@@ -171,16 +172,16 @@ const Pagination = ({ page, size, total, onChange }: { page: number; size: numbe
   const pages = Math.ceil(total / size);
   if (pages <= 1) return null;
   return (
-    <div className="flex items-center justify-between mt-6 px-1">
-      <span className="text-xs text-slate-400">共 {total} 条</span>
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between mt-4 md:mt-6 px-1 gap-2">
+      <span className="text-xs text-slate-400 shrink-0">共 {total} 条</span>
+      <div className="flex items-center gap-1.5 md:gap-2">
         <button onClick={() => onChange(page - 1)} disabled={page === 0}
-          className="px-4 py-2 rounded-md border border-slate-200 text-[13px] text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-slate-200">
+          className="px-3 md:px-4 py-1.5 md:py-2 rounded-md border border-slate-200 text-xs md:text-[13px] text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-slate-200">
           上一页
         </button>
-        <span className="px-3 py-2 text-[13px] text-slate-500 font-medium tabular-nums">{page + 1} / {pages}</span>
+        <span className="px-2 py-1.5 text-xs md:text-[13px] text-slate-500 font-medium tabular-nums">{page + 1}/{pages}</span>
         <button onClick={() => onChange(page + 1)} disabled={page >= pages - 1}
-          className="px-4 py-2 rounded-md border border-slate-200 text-[13px] text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-slate-200">
+          className="px-3 md:px-4 py-1.5 md:py-2 rounded-md border border-slate-200 text-xs md:text-[13px] text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-300 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:border-slate-200">
           下一页
         </button>
       </div>
@@ -199,12 +200,12 @@ const Modal = ({ open, onClose, title, children, wide }: { open: boolean; onClos
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-[2px] modal-overlay" onClick={onClose}>
-      <div className={`bg-white rounded-md shadow-[0_24px_48px_-12px_rgba(0,0,0,0.15)] w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-4 max-h-[85vh] overflow-auto modal-content border border-slate-200/50`} onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10 rounded-t-md">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <div className={`bg-white rounded-md shadow-[0_24px_48px_-12px_rgba(0,0,0,0.15)] w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} mx-3 md:mx-4 max-h-[90vh] md:max-h-[85vh] overflow-auto modal-content border border-slate-200/50`} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 sticky top-0 bg-white/95 backdrop-blur-sm z-10 rounded-t-md">
+          <h3 className="text-sm md:text-base font-semibold text-slate-900">{title}</h3>
           <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600" title="关闭 (Esc)"><X size={18} /></button>
         </div>
-        <div className="px-6 py-6">{children}</div>
+        <div className="px-4 md:px-6 py-4 md:py-6">{children}</div>
       </div>
     </div>,
     document.body
@@ -315,9 +316,19 @@ const safeParseUser = (): any => {
 
 const AdminLayout = ({ children }: { children: ReactNode }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(() => localStorage.getItem('admin_dark') === '1');
   const navigate = useNavigate();
   const location = useLocation();
   const user = safeParseUser();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('admin_dark', dark ? '1' : '0');
+  }, [dark]);
+
+  // 路由变化时自动关闭移动端侧边栏
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
@@ -325,71 +336,124 @@ const AdminLayout = ({ children }: { children: ReactNode }) => {
     navigate('/login');
   };
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-[#f8f9fc]">
-      {/* Sidebar */}
-      <aside className={`flex flex-col bg-white border-r border-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? 'w-[64px]' : 'w-[240px]'}`}>
-        {/* Logo */}
-        <div className="h-14 flex items-center px-4 shrink-0">
-          {!collapsed && (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded-md flex items-center justify-center shadow-sm shadow-indigo-200">
-                <Shield size={15} className="text-white" />
-              </div>
-              <div>
-                <span className="text-[15px] font-bold text-slate-900 tracking-tight">Devnors</span>
-                <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold">Admin</span>
-              </div>
+  const handleNav = (path: string) => {
+    navigate(path);
+    setMobileOpen(false);
+  };
+
+  /* 侧边栏内容（桌面端/移动端共享） */
+  const sidebarContent = (isMobile: boolean) => (
+    <>
+      {/* Logo */}
+      <div className="h-14 flex items-center px-4 shrink-0">
+        {(isMobile || !collapsed) && (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded-md flex items-center justify-center shadow-sm shadow-indigo-200">
+              <Shield size={15} className="text-white" />
             </div>
-          )}
+            <div>
+              <span className="text-[15px] font-bold text-slate-900 tracking-tight">Devnors</span>
+              <span className="text-xs ml-1.5 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold">Admin</span>
+            </div>
+          </div>
+        )}
+        {isMobile ? (
+          <button onClick={() => setMobileOpen(false)} className="ml-auto p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600">
+            <X size={18} />
+          </button>
+        ) : (
           <button onClick={() => setCollapsed(!collapsed)} className={`p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 ${collapsed ? 'mx-auto' : 'ml-auto'}`}>
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2.5">
-          {NAV_ITEMS.map(item => {
-            const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-            return (
-              <button key={item.path} onClick={() => navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium mb-0.5 transition-all duration-150 ${
-                  active
-                    ? 'bg-indigo-50/80 text-indigo-700 shadow-[0_0_0_1px_rgba(79,70,229,0.08)]'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                }`}
-                title={collapsed ? item.label : undefined}
-              >
-                <item.icon size={17} strokeWidth={active ? 2.2 : 1.8} className={`shrink-0 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-2 px-2.5">
+        {NAV_ITEMS.map(item => {
+          const active = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+          return (
+            <button key={item.path} onClick={() => handleNav(item.path)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium mb-0.5 transition-all duration-150 ${
+                active
+                  ? 'bg-indigo-50/80 text-indigo-700 shadow-[0_0_0_1px_rgba(79,70,229,0.08)]'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              }`}
+              title={(!isMobile && collapsed) ? item.label : undefined}
+            >
+              <item.icon size={17} strokeWidth={active ? 2.2 : 1.8} className={`shrink-0 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400'}`} />
+              {(isMobile || !collapsed) && <span className="truncate">{item.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
 
-        {/* User */}
-        <div className="border-t border-slate-100 p-3.5 shrink-0">
-          {!collapsed && (
-            <div className="flex items-center gap-3 mb-3 p-2.5 rounded-md hover:bg-slate-50 transition-colors cursor-default">
-              <div className="w-9 h-9 rounded-md bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold shadow-sm">
-                {(user.name || 'A')[0]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate">{user.name || 'Admin'}</p>
-                <p className="text-xs text-slate-400 truncate">{user.admin_role?.display_name || '系统管理员'}</p>
-              </div>
+      {/* User */}
+      <div className="border-t border-slate-100 p-3.5 shrink-0">
+        {(isMobile || !collapsed) && (
+          <div onClick={() => handleNav('/profile')} className="flex items-center gap-3 mb-3 px-2.5 py-2 rounded-md hover:bg-slate-50 cursor-pointer transition-colors group">
+            <div className="w-9 h-9 rounded-md bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-semibold shadow-sm shrink-0">
+              {(user.name || 'A')[0]}
             </div>
-          )}
-          <button onClick={handleLogout} className={`flex items-center gap-2 text-xs text-slate-400 hover:text-rose-500 font-medium transition-colors ${collapsed ? 'mx-auto' : 'px-2'}`}>
-            <LogOut size={15} /> {!collapsed && '退出登录'}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate leading-tight group-hover:text-indigo-600 transition-colors">{user.name || 'Admin'}</p>
+              <p className="text-xs text-slate-400 truncate">{user.admin_role?.display_name || '系统管理员'}</p>
+            </div>
+            <Settings size={14} className="text-slate-300 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )}
+        <div className={`flex items-center ${(!isMobile && collapsed) ? 'justify-center' : 'justify-between px-2'}`}>
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-slate-400 hover:text-rose-500 font-medium transition-colors">
+            <LogOut size={15} /> {(isMobile || !collapsed) && '退出登录'}
+          </button>
+          <button onClick={() => setDark(!dark)} className="p-1.5 rounded-md text-slate-400 hover:text-indigo-500 hover:bg-slate-100 transition-colors" title={dark ? '浅色模式' : '深色模式'}>
+            {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
         </div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#f8f9fc]">
+      {/* 桌面端侧边栏 */}
+      <aside className={`hidden md:flex flex-col bg-white border-r border-slate-200/70 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? 'w-[64px]' : 'w-[240px]'}`}>
+        {sidebarContent(false)}
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-8 max-w-[1440px] mx-auto animate-fade-in">{children}</div>
-      </main>
+      {/* 移动端侧边栏遮罩 + 抽屉 */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-[260px] bg-white flex flex-col shadow-2xl animate-slide-in-left">
+            {sidebarContent(true)}
+          </aside>
+        </div>
+      )}
+
+      {/* 主内容区 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 移动端顶部栏 */}
+        <header className="md:hidden flex items-center justify-between h-12 px-4 bg-white border-b border-slate-200/70 shrink-0">
+          <button onClick={() => setMobileOpen(true)} className="p-1.5 -ml-1 hover:bg-slate-100 rounded-md text-slate-500">
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-gradient-to-br from-indigo-600 to-indigo-500 rounded flex items-center justify-center">
+              <Shield size={11} className="text-white" />
+            </div>
+            <span className="text-sm font-bold text-slate-900">Devnors</span>
+            <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold">Admin</span>
+          </div>
+          <button onClick={() => setDark(!dark)} className="p-1.5 -mr-1 text-slate-400 hover:text-indigo-500">
+            {dark ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-4 md:p-8 max-w-[1440px] mx-auto animate-fade-in">{children}</div>
+        </main>
+      </div>
     </div>
   );
 };
@@ -459,7 +523,7 @@ const DashboardPage = () => {
       } />
 
       {/* 核心指标 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <Card className="p-6 card-hover">
           <div className="flex items-start justify-between">
             <div>
@@ -493,7 +557,7 @@ const DashboardPage = () => {
         <StatCard label="待处理工单" value={stats.tickets.open} sub="需要及时响应" icon={Ticket} />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <StatCard label="候选人" value={stats.business.total_candidates} icon={UserCheck} />
         <StatCard label="招聘流程" value={stats.business.total_flows} icon={GitBranch} />
         <StatCard label="Token 发放总量" value={stats.tokens.total_granted.toLocaleString()} icon={Gift} />
@@ -503,7 +567,7 @@ const DashboardPage = () => {
       {/* 快捷操作 */}
       <Card className="p-6 mb-7">
         <h3 className="text-base font-semibold text-slate-800 mb-5 flex items-center gap-2"><Zap size={16} className="text-amber-500" /> 快捷操作</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {[
             { label: '用户管理', path: '/users', icon: Users, color: 'bg-blue-50 text-blue-600', desc: `${stats.users.total} 位用户` },
             { label: '订单管理', path: '/orders', icon: Receipt, color: 'bg-teal-50 text-teal-600', desc: `¥${stats.revenue.total} 收入` },
@@ -726,7 +790,7 @@ const UsersPage = () => {
                 <p className="text-xs text-slate-400">UID: {editUser.id}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2 bg-slate-50 rounded-md"><span className="text-slate-400">手机</span><p className="font-semibold text-slate-700 mt-0.5">{editUser.phone || '-'}</p></div>
               <div className="p-2 bg-slate-50 rounded-md"><span className="text-slate-400">注册时间</span><p className="font-semibold text-slate-700 mt-0.5">{editUser.created_at?.slice(0, 10)}</p></div>
               <div className="p-2 bg-slate-50 rounded-md"><span className="text-slate-400">邀请码</span><p className="font-semibold text-slate-700 mt-0.5">{editUser.invite_code || '-'}</p></div>
@@ -934,13 +998,13 @@ const UserDetailPage = () => {
       {tab === 'overview' && (
         <div className="space-y-6">
           {/* 数据概览卡片 */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <StatCard label="Token 总量" value={data.tokens.total.toLocaleString()} icon={Package} />
             <StatCard label="Token 已消耗" value={data.tokens.consumed.toLocaleString()} icon={Zap} />
             <StatCard label="订单数" value={data.orders.count} icon={Receipt} />
             <StatCard label="AI 对话" value={data.ai.chat_count} icon={Bot} />
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <StatCard label="发布职位" value={data.jobs.count} icon={Briefcase} />
             <StatCard label="招聘流程" value={data.flows.count} icon={GitBranch} />
             <StatCard label="工单数" value={data.tickets.count} icon={Ticket} />
@@ -951,7 +1015,7 @@ const UserDetailPage = () => {
           {data.candidate && (
             <Card className="p-5">
               <h3 className="text-[15px] font-bold text-slate-900 mb-3 flex items-center gap-2"><UserCheck size={15} className="text-emerald-500" /> 候选人资料</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="p-3 bg-slate-50 rounded-md">
                   <p className="text-xs text-slate-400">简历状态</p>
                   <p className="text-sm font-semibold text-slate-700 mt-0.5">{data.candidate.has_resume ? '已上传' : '未上传'}</p>
@@ -983,7 +1047,7 @@ const UserDetailPage = () => {
           {data.enterprise && (
             <Card className="p-5">
               <h3 className="text-[15px] font-bold text-slate-900 mb-3 flex items-center gap-2"><Building2 size={15} className="text-blue-500" /> 企业信息</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="p-3 bg-slate-50 rounded-md"><p className="text-xs text-slate-400">企业名称</p><p className="text-sm font-semibold text-slate-700 mt-0.5">{data.enterprise.company_name}</p></div>
                 <div className="p-3 bg-slate-50 rounded-md"><p className="text-xs text-slate-400">统一信用代码</p><p className="text-xs font-mono font-semibold text-slate-700 mt-0.5">{data.enterprise.credit_code || '—'}</p></div>
                 <div className="p-3 bg-slate-50 rounded-md"><p className="text-xs text-slate-400">法人</p><p className="text-sm font-semibold text-slate-700 mt-0.5">{data.enterprise.legal_person || '—'}</p></div>
@@ -1024,7 +1088,7 @@ const UserDetailPage = () => {
       {/* ── Token Tab ── */}
       {tab === 'tokens' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <Card className="p-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-md bg-amber-50 flex items-center justify-center"><Wallet size={18} className="text-amber-600" /></div>
@@ -1128,7 +1192,7 @@ const UserDetailPage = () => {
       {/* ── 订单 Tab ── */}
       {tab === 'orders' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <StatCard label="订单数" value={data.orders.count} icon={Receipt} />
             <StatCard label="累计消费" value={`¥${data.orders.total_paid}`} icon={CreditCard} />
           </div>
@@ -1300,7 +1364,7 @@ const UserDetailPage = () => {
       {/* ── AI 活动 Tab ── */}
       {tab === 'ai' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <StatCard label="AI 对话数" value={data.ai.chat_count} icon={MessageSquare} />
             <StatCard label="AI Token 消耗" value={data.ai.chat_tokens.toLocaleString()} icon={Zap} />
           </div>
@@ -1478,7 +1542,7 @@ const EnterprisesPage = () => {
                 <p className="text-xs text-slate-400">{detail.industry || '-'} · {detail.company_size || '-'}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">所在地</span><p className="font-semibold text-slate-700 mt-0.5">{[detail.province, detail.city].filter(Boolean).join(' ') || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">所属用户 ID</span><p className="font-semibold text-slate-700 mt-0.5">#{detail.user_id || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">创建时间</span><p className="font-semibold text-slate-700 mt-0.5">{detail.created_at?.slice(0, 10) || '-'}</p></div>
@@ -1641,7 +1705,7 @@ const JobsPage = () => {
               </div>
               <StatusBadge value={detail.status} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">工作地点</span><p className="font-semibold text-slate-700 mt-0.5">{detail.location || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">工作类型</span><p className="font-semibold text-slate-700 mt-0.5">{LABEL_MAP[detail.job_type] || detail.job_type || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">浏览次数</span><p className="font-semibold text-indigo-600 mt-0.5">{detail.view_count || 0}</p></div>
@@ -1750,7 +1814,7 @@ const CandidatesPage = () => {
               </div>
               {detail.is_profile_complete ? <Badge color="bg-emerald-100 text-emerald-700">画像已完善</Badge> : <Badge color="bg-amber-100 text-amber-700">画像未完善</Badge>}
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">工作经验</span><p className="font-semibold text-slate-700 mt-0.5">{detail.experience_years ? `${detail.experience_years} 年` : '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">最高学历</span><p className="font-semibold text-slate-700 mt-0.5">{detail.education || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">期望薪资</span><p className="font-semibold text-slate-700 mt-0.5">{detail.expected_salary || '-'}</p></div>
@@ -1799,7 +1863,7 @@ const FlowsPage = () => {
       } />
 
       {stats?.stages?.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {stats.stages.map((s: any) => {
             const stageColors: Record<string, string> = { screening: 'bg-blue-500', interviewing: 'bg-amber-500', offering: 'bg-purple-500', hired: 'bg-emerald-500', rejected: 'bg-rose-500' };
             return (
@@ -1876,7 +1940,7 @@ const FlowsPage = () => {
               </div>
               <StatusBadge value={detail.status} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">当前阶段</span><p className="mt-0.5"><StatusBadge value={detail.current_stage || 'pending'} /></p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">匹配分数</span><p className="font-bold text-slate-700 mt-0.5 text-base">{detail.match_score || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">Token 消耗</span><p className="font-semibold text-amber-600 mt-0.5">{detail.tokens_consumed?.toLocaleString() || 0}</p></div>
@@ -1928,7 +1992,7 @@ const TokensPage = () => {
 
       {loading ? <LoadingSpinner /> : tab === 'overview' && overview ? (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
             <StatCard label="总消耗" value={overview.total_consumed.toLocaleString()} icon={Activity} />
             <StatCard label="总发放" value={overview.total_granted.toLocaleString()} icon={Gift} />
             <StatCard label="流通余额" value={overview.total_balance.toLocaleString()} icon={CircleDollarSign} />
@@ -2017,7 +2081,7 @@ const TokensPage = () => {
             const totalRevenue = packages.items.reduce((s: number, p: any) => s + (p.price || 0), 0);
             const usedPct = totalTokens > 0 ? Math.round((totalTokens - totalRemaining) / totalTokens * 100) : 0;
             return (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
                 <StatCard label="套餐总量" value={totalTokens.toLocaleString()} icon={CircleDollarSign} />
                 <StatCard label="剩余总量" value={totalRemaining.toLocaleString()} icon={Activity} />
                 <StatCard label="使用率" value={`${usedPct}%`} icon={BarChart3} />
@@ -2100,7 +2164,7 @@ const InvitationsPage = () => {
       } />
 
       {stats && (
-        <div className="grid grid-cols-3 gap-6 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-7">
           <StatCard label="总邀请数" value={stats.total_invitations} icon={UserPlus} />
           <StatCard label="奖励 Token 总量" value={stats.total_reward_tokens?.toLocaleString() || 0} icon={Gift} />
           <StatCard label="TOP 邀请者" value={stats.leaderboard?.[0]?.name || '-'} sub={`${stats.leaderboard?.[0]?.invite_count || 0} 次邀请`} icon={Star} />
@@ -2421,7 +2485,7 @@ const NotificationsPage = () => {
         const readCount = data.items.filter((n: any) => n.is_read).length;
         const unreadCount = data.items.filter((n: any) => !n.is_read).length;
         return (
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
             <StatCard label="总通知数" value={data.total} icon={Bell} />
             <StatCard label="当前页已读" value={readCount} icon={CheckCircle} />
             <StatCard label="当前页未读" value={unreadCount} icon={Clock} />
@@ -2516,7 +2580,7 @@ const NotificationsPage = () => {
             <div className="p-3 bg-slate-50 rounded-md">
               <p className="text-[13px] text-slate-600 whitespace-pre-wrap leading-relaxed">{notifDetail.content}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">接收用户</span><p className="font-semibold text-slate-700 mt-0.5"><UserLink id={notifDetail.user_id} /></p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">发送者</span><p className="font-semibold text-slate-700 mt-0.5">{notifDetail.sender || '系统'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">类型</span><p className="mt-0.5"><StatusBadge value={notifDetail.type} /></p></div>
@@ -2568,14 +2632,14 @@ const AIPage = () => {
         const avgTokensPerCall = totalCalls > 0 ? Math.round(totalTokens / totalCalls) : 0;
         return (
           <>
-            <div className="grid grid-cols-3 gap-6 mb-7">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-7">
               <StatCard label="总调用次数" value={totalCalls} icon={Activity} />
               <StatCard label="总 Token 消耗" value={totalTokens.toLocaleString()} icon={CircleDollarSign} />
               <StatCard label="平均单次消耗" value={avgTokensPerCall.toLocaleString()} sub="tokens/次" icon={BarChart3} />
             </div>
             <Card className="p-6 mb-6">
               <h3 className="text-[15px] font-bold text-slate-900 mb-4 flex items-center gap-2"><Bot size={15} className="text-purple-500" /> 各智能体调用概况</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {stats.agents.map((a: any) => {
                   const pct = totalCalls > 0 ? Math.round(a.call_count / totalCalls * 100) : 0;
                   const avgTokens = a.call_count > 0 ? Math.round((a.total_tokens || 0) / a.call_count) : 0;
@@ -2710,7 +2774,7 @@ const ContentPage = () => {
       } />
 
       {/* 统计 + 类型筛选 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <StatCard label="总日志条目" value={data?.items?.length || 0} icon={FileText} />
         <StatCard label="版本数" value={[...new Set(data?.items?.map((c: any) => c.version) || [])].length} icon={Activity} />
         <StatCard label="新功能" value={(data?.items || []).filter((c: any) => c.item_type === '新功能').length} icon={Plus} />
@@ -2758,7 +2822,7 @@ const ContentPage = () => {
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="新增更新日志">
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-500 mb-1 block">版本号</label>
               <input value={form.version} onChange={e => setForm({ ...form, version: e.target.value })} placeholder="v1.0.0"
@@ -2969,7 +3033,7 @@ const AuditPage = () => {
               </div>
               <StatusBadge value={logDetail.risk_level} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">执行者</span><p className="font-semibold text-slate-700 mt-0.5">{logDetail.actor || '-'}</p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">类别</span><p className="mt-0.5"><StatusBadge value={logDetail.category} /></p></div>
               <div className="p-2.5 bg-slate-50 rounded-md"><span className="text-slate-400">IP 地址</span><p className="font-mono text-slate-600 text-xs mt-0.5">{logDetail.ip_address || '-'}</p></div>
@@ -3095,7 +3159,7 @@ const SettingsPage = () => {
       {/* 系统运行状态 */}
       <Card className="p-6 mt-6">
         <h3 className="text-[15px] font-bold text-slate-900 mb-4 flex items-center gap-2"><Activity size={15} className="text-emerald-500" /> 运行状态</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <div className="p-3 bg-slate-50 rounded-md text-center">
             <p className="text-xs text-slate-400 mb-1">API 状态</p>
             <Badge color="bg-emerald-100 text-emerald-700">运行中</Badge>
@@ -3254,7 +3318,7 @@ const AnalyticsPage = () => {
       } />
 
       {/* ── 核心指标 ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <Card className="p-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-md bg-indigo-50 flex items-center justify-center"><Users size={18} className="text-indigo-600" /></div>
@@ -3301,7 +3365,7 @@ const AnalyticsPage = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <StatCard label="在线职位" value={data.jobs.active} icon={Briefcase} sub={`共 ${data.jobs.total} 个`} />
         <StatCard label="招聘流程" value={data.flows.total} icon={GitBranch} sub={`均匹配 ${data.flows.avg_match}%`} />
         <StatCard label="候选人" value={data.candidates.total} icon={UserCheck} sub={`${data.candidates.complete_profiles} 已完善`} />
@@ -3427,7 +3491,7 @@ const AnalyticsPage = () => {
 
       {/* ── 套餐分布 ── */}
       {data.tokens.by_package.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
           {data.tokens.by_package.map((p: any) => {
             const names: Record<string, string> = { free: '免费版', starter: '入门版', pro: '专业版', enterprise: '企业版' };
             const colors: Record<string, string> = { free: 'bg-slate-50 text-slate-600', starter: 'bg-blue-50 text-blue-600', pro: 'bg-indigo-50 text-indigo-600', enterprise: 'bg-amber-50 text-amber-600' };
@@ -3453,7 +3517,7 @@ const AnalyticsPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-7">
         <Card className="p-5">
           <h3 className="text-[15px] font-bold text-slate-900 mb-3 flex items-center gap-2"><Briefcase size={15} className="text-blue-500" /> 职位分析</h3>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="p-3 bg-slate-50 rounded-md text-center">
               <p className="text-lg font-black text-slate-900">{data.jobs.total}</p>
               <p className="text-xs text-slate-400">总职位</p>
@@ -3484,7 +3548,7 @@ const AnalyticsPage = () => {
 
         <Card className="p-5">
           <h3 className="text-[15px] font-bold text-slate-900 mb-3 flex items-center gap-2"><GitBranch size={15} className="text-emerald-500" /> 招聘流程</h3>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="p-3 bg-slate-50 rounded-md text-center">
               <p className="text-lg font-black text-slate-900">{data.flows.total}</p>
               <p className="text-xs text-slate-400">总流程</p>
@@ -3511,7 +3575,7 @@ const AnalyticsPage = () => {
 
         <Card className="p-5">
           <h3 className="text-[15px] font-bold text-slate-900 mb-3 flex items-center gap-2"><MessageSquare size={15} className="text-purple-500" /> AI 对话趋势</h3>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="p-3 bg-slate-50 rounded-md text-center">
               <p className="text-lg font-black text-slate-900">{data.ai.user_messages.toLocaleString()}</p>
               <p className="text-xs text-slate-400">用户消息</p>
@@ -3698,7 +3762,7 @@ const OrdersPage = () => {
 
       {/* 财务概览 */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
           <Card className="p-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-md bg-emerald-50 flex items-center justify-center"><TrendingUp size={18} className="text-emerald-600" /></div>
@@ -3929,7 +3993,7 @@ const OrdersPage = () => {
       <Modal open={!!detailModal} onClose={() => setDetailModal(null)} title={`订单详情`} wide>
         {detailModal && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-3 bg-slate-50 rounded-md">
                 <p className="text-xs text-slate-400 mb-1">订单号</p>
                 <p className="text-xs font-mono font-semibold text-slate-700">{detailModal.order_no}</p>
@@ -3943,7 +4007,7 @@ const OrdersPage = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-3 bg-slate-50 rounded-md">
                 <p className="text-xs text-slate-400 mb-1">类型</p>
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${(ORDER_TYPE_MAP[detailModal.order_type] || {}).color || 'bg-slate-100 text-slate-600'}`}>
@@ -3958,7 +4022,7 @@ const OrdersPage = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-3 bg-slate-50 rounded-md">
                 <p className="text-xs text-slate-400 mb-1">用户</p>
                 <p className="text-sm text-slate-700"><UserLink id={detailModal.user_id} name={detailModal.user_name} className="font-semibold" /> <span className="text-xs text-slate-400">UID: {detailModal.user_id}</span></p>
@@ -3996,7 +4060,7 @@ const OrdersPage = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-center">
               <div className="p-2 bg-slate-50 rounded-md">
                 <p className="text-xs text-slate-400">创建时间</p>
                 <p className="text-xs text-slate-600 mt-0.5">{detailModal.created_at?.slice(0, 16).replace('T', ' ')}</p>
@@ -4292,7 +4356,7 @@ const AdminManagementPage = () => {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-7">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-7">
         <Card className="p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[13px] font-semibold text-slate-400">管理员总数</span>
@@ -4777,6 +4841,189 @@ const AdminManagementPage = () => {
 
 
 // ═══════════════════════════════════════════════════════════════════
+// 个人资料
+// ═══════════════════════════════════════════════════════════════════
+
+const ProfilePage = () => {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [pwForm, setPwForm] = useState({ old_password: '', new_password: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [pwMsg, setPwMsg] = useState('');
+  const navigate = useNavigate();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const me = await api.getMe();
+      setUser(me);
+      setForm({ name: me.name || '', phone: me.phone || '', email: me.email || '' });
+    } catch { /* ignore */ }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleSave = async () => {
+    setSaving(true); setMsg('');
+    try {
+      const updated = await api.updateMe({ name: form.name, phone: form.phone || null });
+      setUser(updated);
+      // 同步更新 localStorage
+      const stored = safeParseUser();
+      localStorage.setItem('admin_user', JSON.stringify({ ...stored, name: updated.name, phone: updated.phone }));
+      setMsg('保存成功');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e: any) {
+      setMsg(e.message || '保存失败');
+    }
+    setSaving(false);
+  };
+
+  const handleChangePw = async () => {
+    setPwSaving(true); setPwMsg('');
+    if (pwForm.new_password !== pwForm.confirm) {
+      setPwMsg('两次密码不一致');
+      setPwSaving(false);
+      return;
+    }
+    if (pwForm.new_password.length < 6) {
+      setPwMsg('新密码至少 6 位');
+      setPwSaving(false);
+      return;
+    }
+    try {
+      await api.changePassword(pwForm.old_password, pwForm.new_password);
+      setPwMsg('密码修改成功');
+      setPwForm({ old_password: '', new_password: '', confirm: '' });
+      setTimeout(() => setPwMsg(''), 2000);
+    } catch (e: any) {
+      setPwMsg(e.message || '修改失败');
+    }
+    setPwSaving(false);
+  };
+
+  if (loading) return <LoadingSpinner />;
+  if (!user) return <EmptyState text="无法加载用户信息" />;
+
+  return (
+    <>
+      <PageHeader title="个人资料" sub="管理您的账户信息和安全设置"
+        actions={<button onClick={() => navigate(-1)} className="flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-200 text-[13px] text-slate-600 font-medium hover:bg-slate-50"><ArrowLeft size={14} /> 返回</button>}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 左侧 — 头像卡片 */}
+        <Card className="p-6 flex flex-col items-center text-center">
+          <div className="w-20 h-20 rounded-md bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg mb-4">
+            {(user.name || 'A')[0]}
+          </div>
+          <h3 className="text-base font-bold text-slate-900">{user.name}</h3>
+          <p className="text-xs text-slate-400 mt-1">{user.email}</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <StatusBadge value={user.role} />
+            {user.admin_role?.display_name && <Badge color="bg-indigo-50 text-indigo-600">{user.admin_role.display_name}</Badge>}
+          </div>
+          <div className="mt-5 pt-5 border-t border-slate-100 w-full space-y-3 text-left">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Hash size={13} className="text-slate-300" />
+              <span>UID: {user.id}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Mail size={13} className="text-slate-300" />
+              <span>{user.email}</span>
+            </div>
+            {user.phone && (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Phone size={13} className="text-slate-300" />
+                <span>{user.phone}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Calendar size={13} className="text-slate-300" />
+              <span>注册于 {user.created_at?.slice(0, 10) || '—'}</span>
+            </div>
+            {user.last_login && (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Clock size={13} className="text-slate-300" />
+                <span>上次登录 {user.last_login.slice(0, 16).replace('T', ' ')}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* 右侧 — 编辑区域 */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* 基本信息 */}
+          <Card className="p-6">
+            <h3 className="text-[15px] font-bold text-slate-900 mb-5 flex items-center gap-2"><Edit size={15} className="text-indigo-500" /> 基本信息</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">姓名</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">手机号</label>
+                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="选填"
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">邮箱</label>
+                <input value={form.email} disabled
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm bg-slate-50 text-slate-400 cursor-not-allowed" />
+              </div>
+            </div>
+            <div className="mt-6 flex items-center gap-3">
+              <button onClick={handleSave} disabled={saving}
+                className="px-5 py-2.5 bg-indigo-600 text-white rounded-md font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
+                {saving ? <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white spin-smooth" /> : <CheckCircle size={14} />}
+                保存
+              </button>
+              {msg && <span className={`text-xs font-medium ${msg.includes('成功') ? 'text-emerald-600' : 'text-rose-500'}`}>{msg}</span>}
+            </div>
+          </Card>
+
+          {/* 修改密码 */}
+          <Card className="p-6">
+            <h3 className="text-[15px] font-bold text-slate-900 mb-5 flex items-center gap-2"><Key size={15} className="text-amber-500" /> 修改密码</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">当前密码</label>
+                <input type="password" value={pwForm.old_password} onChange={e => setPwForm({ ...pwForm, old_password: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">新密码</label>
+                <input type="password" value={pwForm.new_password} onChange={e => setPwForm({ ...pwForm, new_password: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1.5 block">确认新密码</label>
+                <input type="password" value={pwForm.confirm} onChange={e => setPwForm({ ...pwForm, confirm: e.target.value })}
+                  onKeyDown={e => e.key === 'Enter' && handleChangePw()}
+                  className="w-full px-3 py-2.5 rounded-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+            </div>
+            <div className="mt-6 flex items-center gap-3">
+              <button onClick={handleChangePw} disabled={pwSaving || !pwForm.old_password || !pwForm.new_password || !pwForm.confirm}
+                className="px-5 py-2.5 bg-amber-500 text-white rounded-md font-semibold text-sm hover:bg-amber-600 disabled:opacity-50 flex items-center gap-2">
+                {pwSaving ? <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white spin-smooth" /> : <Key size={14} />}
+                修改密码
+              </button>
+              {pwMsg && <span className={`text-xs font-medium ${pwMsg.includes('成功') ? 'text-emerald-600' : 'text-rose-500'}`}>{pwMsg}</span>}
+            </div>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // 路由守卫
 // ═══════════════════════════════════════════════════════════════════
 
@@ -4790,7 +5037,18 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
 // 主应用
 // ═══════════════════════════════════════════════════════════════════
 
-const App = () => (
+/** 全局深色模式初始化：确保登录页等不在 AdminLayout 内的页面也能读到 dark 状态 */
+const useDarkInit = () => {
+  useEffect(() => {
+    if (localStorage.getItem('admin_dark') === '1') {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+};
+
+const App = () => {
+  useDarkInit();
+  return (
   <HashRouter>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -4816,12 +5074,14 @@ const App = () => (
               <Route path="/audit" element={<AuditPage />} />
               <Route path="/admins" element={<AdminManagementPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Routes>
           </AdminLayout>
         </RequireAuth>
       } />
     </Routes>
   </HashRouter>
-);
+  );
+};
 
 export default App;

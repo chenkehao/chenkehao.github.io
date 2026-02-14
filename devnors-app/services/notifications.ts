@@ -1,8 +1,8 @@
 /**
- * 通知 API 服务
+ * 通知 API 服务 - 对齐 Web 端 apiService
  */
 import api from './api';
-import type { Notification } from '../shared/types';
+import type { Notification, NotificationListResponse } from '../shared/types';
 
 /** 获取通知列表 */
 export const getNotifications = async (
@@ -13,11 +13,7 @@ export const getNotifications = async (
     page?: number;
     pageSize?: number;
   } = {}
-): Promise<{
-  items: Notification[];
-  total: number;
-  unread_count: number;
-}> => {
+): Promise<NotificationListResponse> => {
   const response = await api.get('/public/notifications', {
     params: {
       user_id: userId,
@@ -30,7 +26,7 @@ export const getNotifications = async (
   return response.data;
 };
 
-/** 标记已读 */
+/** 标记已读（不传 notificationId 则标记全部） */
 export const markNotificationRead = async (
   userId: number,
   notificationId?: number

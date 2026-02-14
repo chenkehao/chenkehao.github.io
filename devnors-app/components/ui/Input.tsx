@@ -8,6 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '../../constants/config';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -36,7 +37,7 @@ export default function Input({
           style={{
             fontSize: 14,
             fontWeight: '500',
-            color: '#334155',
+            color: COLORS.light.textSecondary,
             marginBottom: 6,
           }}
         >
@@ -48,9 +49,9 @@ export default function Input({
           flexDirection: 'row',
           alignItems: 'center',
           borderWidth: 1,
-          borderColor: error ? '#ef4444' : isFocused ? '#4f46e5' : '#e2e8f0',
+          borderColor: error ? COLORS.danger : isFocused ? COLORS.primary : COLORS.light.border,
           borderRadius: 10,
-          backgroundColor: '#f8fafc',
+          backgroundColor: COLORS.light.bgSecondary,
           paddingHorizontal: 12,
         }}
       >
@@ -58,7 +59,7 @@ export default function Input({
           <Ionicons
             name={icon}
             size={18}
-            color={isFocused ? '#4f46e5' : '#94a3b8'}
+            color={isFocused ? COLORS.primary : COLORS.light.placeholder}
             style={{ marginRight: 8 }}
           />
         )}
@@ -68,11 +69,11 @@ export default function Input({
               flex: 1,
               paddingVertical: 12,
               fontSize: 15,
-              color: '#0f172a',
+              color: COLORS.light.text,
             },
             style,
           ]}
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={COLORS.light.placeholder}
           secureTextEntry={isPassword && !showPassword}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -86,13 +87,13 @@ export default function Input({
             <Ionicons
               name={showPassword ? 'eye-off-outline' : 'eye-outline'}
               size={20}
-              color="#94a3b8"
+              color={COLORS.light.placeholder}
             />
           </TouchableOpacity>
         )}
       </View>
       {error && (
-        <Text style={{ fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+        <Text style={{ fontSize: 12, color: COLORS.danger, marginTop: 4 }}>
           {error}
         </Text>
       )}

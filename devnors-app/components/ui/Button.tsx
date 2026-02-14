@@ -7,6 +7,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { COLORS } from '../../constants/config';
 
 interface ButtonProps extends TouchableOpacityProps {
   title: string;
@@ -19,34 +20,34 @@ interface ButtonProps extends TouchableOpacityProps {
 const variantStyles: Record<string, { container: ViewStyle; text: TextStyle }> = {
   primary: {
     container: {
-      backgroundColor: '#4f46e5',
-      shadowColor: '#4f46e5',
+      backgroundColor: COLORS.primary,
+      shadowColor: COLORS.primary,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.25,
       shadowRadius: 8,
       elevation: 4,
     },
-    text: { color: '#ffffff' },
+    text: { color: '#fff' },
   },
   secondary: {
-    container: { backgroundColor: '#f1f5f9' },
-    text: { color: '#334155' },
+    container: { backgroundColor: COLORS.light.borderLight },
+    text: { color: COLORS.light.textSecondary },
   },
   outline: {
     container: {
       backgroundColor: 'transparent',
       borderWidth: 1.5,
-      borderColor: '#4f46e5',
+      borderColor: COLORS.primary,
     },
-    text: { color: '#4f46e5' },
+    text: { color: COLORS.primary },
   },
   ghost: {
     container: { backgroundColor: 'transparent' },
-    text: { color: '#4f46e5' },
+    text: { color: COLORS.primary },
   },
   danger: {
-    container: { backgroundColor: '#ef4444' },
-    text: { color: '#ffffff' },
+    container: { backgroundColor: COLORS.danger },
+    text: { color: '#fff' },
   },
 };
 
