@@ -39,6 +39,7 @@ venv/
 # Database
 *.db
 backend/*.db
+!backend/devnors.db
 
 # Uploads
 backend/uploads/
