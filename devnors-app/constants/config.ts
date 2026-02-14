@@ -4,7 +4,7 @@
 
 // 后端 API 地址
 export const API_BASE_URL = __DEV__
-  ? 'http://localhost:8080/api/v1'
+  ? 'http://localhost:8000/api/v1'
   : 'https://api.devnors.com/api/v1';
 
 // Token 存储 key

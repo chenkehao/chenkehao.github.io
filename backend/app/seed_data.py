@@ -5,10 +5,13 @@ Database Seed Data
 
 import asyncio
 import json
+import os
+import shutil
 from datetime import datetime, timedelta
 from sqlalchemy import select
 
 from app.database import engine, AsyncSessionLocal
+from app.config import settings
 from app.models.user import User, UserRole, TeamMember
 from app.models.job import Job, JobTag, JobStatus, JobType
 from app.models.candidate import Candidate, CandidateProfile, Skill
@@ -29,6 +32,37 @@ from app.models.admin_role import AdminRole, PRESET_ROLES
 from app.utils.security import get_password_hash
 
 
+def _get_db_file_path() -> str | None:
+    """从数据库 URL 提取 SQLite 文件路径"""
+    url = settings.database_url
+    if "sqlite" in url:
+        # sqlite+aiosqlite:///./devnors.db → ./devnors.db
+        path = url.split("///")[-1]
+        return path
+    return None
+
+
+def _backup_db_if_needed():
+    """
+    安全防护：在种子数据写入前，如果数据库文件已存在且有数据，
+    自动创建备份，防止意外覆盖。
+    """
+    db_path = _get_db_file_path()
+    if not db_path or not os.path.exists(db_path):
+        return
+
+    file_size = os.path.getsize(db_path)
+    file_size_mb = file_size / (1024 * 1024)
+    print(f"📊 Database file: {db_path} ({file_size_mb:.1f} MB)")
+
+    if file_size > 5 * 1024 * 1024:  # > 5MB → 有大量真实数据
+        backup_path = db_path + ".backup"
+        shutil.copy2(db_path, backup_path)
+        print(f"⚠️  数据库文件较大 ({file_size_mb:.1f}MB)，但表中无用户数据！")
+        print(f"🔒 已自动备份到: {backup_path}")
+        print(f"   如需恢复，执行: cp {backup_path} {db_path}")
+
+
 async def seed_database():
     """初始化数据库种子数据"""
     async with AsyncSessionLocal() as db:
@@ -37,6 +71,10 @@ async def seed_database():
         if result.scalar_one_or_none():
             print("Database already has data, skipping seed")
             return
+        
+        # 安全防护：如果数据库文件很大但表为空，说明可能是 schema 变更导致的
+        # 自动备份，避免种子数据覆盖真实数据
+        _backup_db_if_needed()
         
         print("Seeding database...")
         
