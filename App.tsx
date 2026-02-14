@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -865,33 +865,24 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 bg-white border-b border-slate-200 px-3 py-3 md:px-6 md:py-4">
-      <div className="max-w-7xl mx-auto flex justify-between items-center relative">
+    <>
+    <nav className={`fixed top-0 w-full z-50 bg-white/95 backdrop-blur-sm border-b border-slate-200/60 ${isLoggedIn ? 'px-2 md:px-4 py-2 md:py-2.5' : 'px-3 md:px-5 py-3 md:py-4'}`}>
+      <div className={`${isLoggedIn ? 'max-w-full' : 'max-w-7xl'} mx-auto flex justify-between items-center relative`}>
         <Link to="/" className="flex items-center space-x-1.5 md:space-x-2" onClick={() => setShowMobileMenu(false)}>
-          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 transition-transform active:scale-95">
-            <Zap className="text-white w-5 h-5 md:w-6 md:h-6" />
+          <div className={`${isLoggedIn ? 'w-8 h-8 md:w-9 md:h-9' : 'w-8 h-8 md:w-10 md:h-10'} bg-indigo-600 rounded-lg flex items-center justify-center shadow-sm transition-transform active:scale-95`}>
+            <Zap className={`text-white ${isLoggedIn ? 'w-4 h-4 md:w-5 md:h-5' : 'w-5 h-5 md:w-6 md:h-6'}`} />
           </div>
-          <span className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Devnors <span className="text-indigo-600 text-xs md:text-sm font-normal">得若</span></span>
+          <span className={`${isLoggedIn ? 'text-xl md:text-xl' : 'text-xl md:text-2xl'} font-bold tracking-tight text-slate-900`}>Devnors <span className="text-indigo-600 text-xs font-normal">得若</span></span>
         </Link>
         
-        <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-500 absolute left-1/2 -translate-x-1/2">
+        <div className={`hidden md:flex ${isLoggedIn ? 'space-x-6 text-sm' : 'space-x-8 text-sm'} font-medium text-slate-500 absolute left-1/2 -translate-x-1/2 z-10`}>
           {isLoggedIn && (
             <>
-              <Link to="/ai-assistant" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><Bot size={16}/> AI助手</Link>
-              <Link to="/workbench" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><LayoutDashboard size={16}/> 工作台</Link>
+              <Link to="/ai-assistant" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><Bot size={16}/> AI Agent</Link>
+              <Link to="/workbench" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5 font-semibold"><LayoutDashboard size={16}/> 控制面板</Link>
             </>
           )}
-          {/* 根据用户身份显示不同入口 */}
-          {userRole === 'candidate' && (
-            <Link to="/candidate" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-              <UserIcon size={16} /> 人才中心
-            </Link>
-          )}
-          {userRole === 'employer' && (
-            <Link to="/employer" className="hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-              <Building2 size={16} /> 企业中心
-            </Link>
-          )}
+          
           {!isLoggedIn && (
             <>
               <Link to="/products" className="hover:text-indigo-600 transition-colors">产品</Link>
@@ -905,23 +896,20 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
         <div className="flex items-center space-x-1.5 md:space-x-3">
           {isLoggedIn && (
             <>
-              <Link to="/tokens" className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-600 rounded border border-slate-200 transition-all group" title="Token 资产管理">
-                <div className="p-0.5 md:p-1 bg-white rounded shadow-sm group-hover:rotate-12 transition-transform">
-                  <CircleDollarSign size={14} className="text-amber-500" />
-                </div>
+              <Link to="/tokens" className="flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 py-1.5 bg-slate-50 text-slate-600 hover:bg-amber-50 hover:text-amber-600 rounded-lg border border-slate-200/60 transition-all group" title="Token 资产管理">
+                <CircleDollarSign size={14} className="text-amber-500 group-hover:rotate-12 transition-transform" />
                 <span className={`text-xs font-bold transition-all duration-500 ${tokenBalanceChanged ? 'text-amber-600 scale-110' : 'text-slate-700 scale-100'}`} style={{ display: 'inline-block' }}>{navTokenBalance}</span>
               </Link>
-              <div className="hidden md:block w-px h-5 bg-slate-200 mx-1"></div>
-              <Link to="/notifications" className="relative p-1.5 md:p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all" title="消息中心">
-                <Bell size={18}/>
+              <Link to="/notifications" className="relative p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all" title="消息中心">
+                <Bell size={17}/>
                 {unreadNotifications > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
                     {unreadNotifications > 99 ? '99+' : unreadNotifications}
                   </span>
                 )}
               </Link>
-              <Link to="/settings" className="hidden md:flex p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all" title="系统设置">
-                <Settings size={18}/>
+              <Link to="/settings" className="hidden md:flex p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-all" title="系统设置">
+                <Settings size={17}/>
               </Link>
             </>
           )}
@@ -930,18 +918,18 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
             <div className="relative">
               <button 
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 transition-all"
+                className="flex items-center gap-2 px-1.5 py-1 hover:bg-slate-50 rounded-full transition-all"
               >
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-sm font-bold overflow-hidden">
+                <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-bold overflow-hidden ring-2 ring-white shadow-sm">
                   {user?.avatar_url ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" /> : (user?.name?.charAt(0) || 'U')}
                 </div>
                 <div className="text-left hidden sm:block">
-                  <div className="text-sm font-bold text-slate-900 truncate max-w-[100px]">{user?.name || '用户'}</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-sm font-bold text-slate-800 truncate max-w-[100px] leading-tight">{user?.name || '用户'}</div>
+                  <div className="text-xs text-slate-400 leading-tight">
                     {userRole === 'candidate' ? '求职者' : userRole === 'employer' ? '招聘方' : ''}
                   </div>
                 </div>
-                <ChevronDown size={16} className="text-slate-400" />
+                <ChevronDown size={12} className="text-slate-300 hidden sm:block" />
               </button>
               
               {showUserMenu && (
@@ -1083,15 +1071,10 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
             {isLoggedIn && (
               <>
                 <Link to="/ai-assistant" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><Bot size={16}/> AI 助手</Link>
-                <Link to="/workbench" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><LayoutDashboard size={16}/> 工作台</Link>
+                <Link to="/workbench" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><LayoutDashboard size={16}/> 控制面板</Link>
               </>
             )}
-            {userRole === 'candidate' && (
-              <Link to="/candidate" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><UserIcon size={16}/> 人才中心</Link>
-            )}
-            {userRole === 'employer' && (
-              <Link to="/employer" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><Building2 size={16}/> 企业中心</Link>
-            )}
+            
             {isLoggedIn && (
               <Link to="/settings" onClick={() => setShowMobileMenu(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"><Settings size={16}/> 系统设置</Link>
             )}
@@ -1107,7 +1090,9 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
         </div>
       )}
 
-      {/* 身份切换全屏过渡弹窗 */}
+    </nav>
+
+      {/* 身份切换全屏过渡弹窗 - 必须在 nav 外部，因为 nav 的 backdrop-blur 会创建新的包含块 */}
       {switchOverlay?.show && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-2xl shadow-2xl p-10 max-w-sm w-full mx-4 text-center animate-in zoom-in-95 duration-300">
@@ -1143,7 +1128,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
           </div>
         </div>
       )}
-    </nav>
+    </>
   );
 };
 
@@ -3850,7 +3835,7 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   };
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto min-h-screen animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto min-h-screen animate-in fade-in duration-700">
       {/* Toast 提示 */}
       {toast.show && (
         <div className={`fixed top-16 right-3 md:top-24 md:right-6 z-[9999] px-4 py-2.5 md:px-5 md:py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 animate-in slide-in-from-right duration-300 ${
@@ -3870,48 +3855,32 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
          <p className="text-slate-500 font-medium mt-2">在这里个性化您的智能招聘体验，管理底层引擎与团队权限</p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 md:gap-12 items-start">
-        {/* 左侧导航菜单 */}
-        <aside className="w-full lg:w-72 flex-shrink-0 space-y-2 sticky top-28">
-           <div className="bg-white rounded p-4 border border-slate-100 shadow-sm space-y-1">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
-                  className={`w-full flex items-center gap-3 px-5 py-4 rounded font-black text-sm transition-all group ${
-                    activeTab === item.id 
-                    ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 translate-x-2' 
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
-                  }`}
-                >
-                  <item.icon size={20} className={`${activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-indigo-600'} transition-colors`} />
-                  {item.label}
-                  {activeTab === item.id && <ChevronRight size={16} className="ml-auto animate-pulse" />}
-                </button>
-              ))}
-           </div>
-           
-           <div className="p-8 bg-white rounded-md text-slate-900 relative overflow-hidden mt-6 border border-slate-100 shadow-lg">
-              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-600/5" />
-              <div className="text-xs font-black uppercase text-indigo-600 mb-3 tracking-widest">系统状态</div>
-              <div className="flex items-center gap-2 mb-4">
-                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-sm font-black uppercase tracking-tighter text-slate-900">MAS Active</span>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed font-medium italic ">“多智能体系统运行良好，所有设置映射已同步至边缘节点。”</p>
-           </div>
-        </aside>
+      {/* Tab 导航 */}
+      <div className="flex flex-wrap gap-2 mb-8 bg-white rounded-xl p-2 border border-slate-100 shadow-sm">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id as any)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${
+              activeTab === item.id 
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
+              : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
+            }`}
+          >
+            <item.icon size={16} className={activeTab === item.id ? 'text-white' : 'text-slate-400'} />
+            {item.label}
+          </button>
+        ))}
+      </div>
 
-        {/* 右侧功能内容区 */}
-        <main className="flex-1 w-full min-w-0">
-           <div className="relative">
-              {renderContent()}
-           </div>
-        </main>
+      {/* 内容区 */}
+      <div className="relative">
+        {renderContent()}
       </div>
     </div>
   );
 };
+
 
 // 图标映射（移到组件外部避免重复创建）
 const notificationIconMap: Record<string, any> = {
@@ -4057,7 +4026,7 @@ const NotificationCenterView = () => {
 
   if (!isLoggedIn) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Bell className="mx-auto text-slate-300 mb-4" size={64} />
         <p className="text-slate-500 font-bold mb-4">请先登录查看消息</p>
         <button onClick={() => navigate('/login')} className="bg-indigo-600 text-white px-8 py-3 rounded font-black">
@@ -4068,7 +4037,7 @@ const NotificationCenterView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -4337,7 +4306,7 @@ const TokenManagementView = () => {
   
   if (loading) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={40} />
         <p className="text-slate-400 text-sm">加载中...</p>
       </div>
@@ -4345,12 +4314,7 @@ const TokenManagementView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-28 md:pb-16 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      {/* 顶部导航 */}
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-600 mb-6 text-sm font-medium transition-colors">
-        <ChevronLeft size={18} /> 返回
-      </button>
-
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       {/* 页面标题 */}
       <div className="flex items-center justify-between mb-10">
         <div>
@@ -4773,7 +4737,7 @@ const WorkbenchView = () => {
   });
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
           <h1 className="text-2xl md:text-4xl font-black text-slate-900 mb-2 ">智能工作台</h1>
@@ -5149,9 +5113,9 @@ const TodoListView = () => {
   }), [allTodos]);
 
   return (
-    <div className="pt-32 pb-20 px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-6 px-6 md:py-8 md:px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <button onClick={() => navigate('/workbench')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors">
-        <ChevronLeft size={20} /> 返回工作台
+        <ChevronLeft size={20} /> 返回
       </button>
 
       <div className="mb-10">
@@ -5279,7 +5243,7 @@ const TodoDetailView = () => {
   }, [todoId, navigate]);
   
   return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
       <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
       <p className="text-slate-500">正在跳转到 AI 助手...</p>
     </div>
@@ -5322,14 +5286,14 @@ const FlowDetailView = () => {
   const defaultNodes = ['邀请', '匹配', '筛选', '面试', '结果'];
 
   if (loading) return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
       <Loader2 className="mx-auto animate-spin text-indigo-600 mb-4" size={32} />
       <p className="text-slate-500 font-medium">加载中...</p>
     </div>
   );
 
   if (!flow) return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
       <AlertCircle className="mx-auto text-slate-300 mb-4" size={64} />
       <p className="text-slate-500 font-black">对接任务不存在</p>
       <button onClick={() => navigate('/workbench')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded font-black">返回工作台</button>
@@ -5343,7 +5307,7 @@ const FlowDetailView = () => {
   const agents = flow.agentsUsed?.length > 0 ? flow.agentsUsed : ['AI 智能体'];
 
   return (
-    <div className="pt-32 pb-20 px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="py-6 px-6 md:py-8 md:px-8 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
         <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
       </button>
@@ -6702,7 +6666,7 @@ const CandidateView = () => {
 
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
           <h1 className="text-2xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">人才方</h1>
@@ -6863,7 +6827,7 @@ const CandidateHomeView = () => {
   const profile = location.state?.profile as CandidateProfile;
 
   if (!profile) return (
-    <div className="pt-40 text-center animate-in fade-in">
+    <div className="pt-20 text-center animate-in fade-in">
        <Loader2 className="animate-spin mx-auto text-indigo-600 mb-4" size={48} />
        <p className="text-slate-500 font-black">正在加载您的个性化主页...</p>
        <button onClick={() => navigate('/candidate')} className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded font-black">返回控制台</button>
@@ -6871,7 +6835,7 @@ const CandidateHomeView = () => {
   );
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-12">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-black transition-colors">
           <ChevronLeft size={20} /> 返回控制台
@@ -7084,11 +7048,7 @@ const EnterpriseMemoryView = () => {
   };
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-black transition-colors mb-6">
-        <ChevronLeft size={20} /> 返回
-      </button>
-
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
            <h1 className="text-3xl font-black text-slate-900 flex items-center gap-4">
@@ -7123,36 +7083,20 @@ const EnterpriseMemoryView = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-3 space-y-4">
-           <div className="bg-white p-6 rounded border border-slate-100 card-shadow">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 px-2">记忆分类库</h3>
-              <div className="space-y-1">
-                 {['全部', '文化', '技术', '要求', '策略', '动作', '福利', '偏好'].map((cat) => (
-                   <button 
-                     key={cat}
-                     onClick={() => setActiveCategory(cat)}
-                     className={`w-full text-left px-4 py-3 rounded font-bold text-sm transition-all flex justify-between items-center ${activeCategory === cat ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'}`}
-                   >
-                     {cat}
-                     <ChevronRight size={14} className={activeCategory === cat ? 'opacity-100' : 'opacity-0'} />
-                   </button>
-                 ))}
-              </div>
-           </div>
-           
-           <div className="bg-indigo-50 p-5 rounded border border-indigo-200 shadow-sm relative overflow-hidden">
-              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-indigo-200/30" />
-              <h4 className="text-xs font-black uppercase text-indigo-600 mb-2">AI 记忆同步状态</h4>
-              <div className="flex items-center gap-2 mb-4">
-                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-sm font-black text-slate-800">Agent 同步中 (100%)</span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed italic">“系统正在实时分析您与人才沟通的细节，并自动提炼新的招聘偏好记忆。”</p>
-           </div>
-        </div>
+      {/* 分类 Tab */}
+      <div className="flex flex-wrap gap-2 mb-6 bg-white rounded-xl p-2 border border-slate-100 shadow-sm">
+        {['全部', '文化', '技术', '要求', '策略', '动作', '福利', '偏好'].map((cat) => (
+          <button 
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeCategory === cat ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
-        <div className="lg:col-span-9">
+      <div>
            {!memoriesLoading && filteredMemories.length === 0 ? (
               <div className="bg-white rounded-lg border border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
                 <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-5">
@@ -7182,88 +7126,79 @@ const EnterpriseMemoryView = () => {
                 };
                 const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
                 return (
-                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all flex flex-col md:flex-row gap-6">
-                   <div className="flex-1">
-                      <div className="flex items-center gap-2.5 mb-3">
-                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
-                           {memory.type}
-                         </span>
-                         <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
-                         {/* 记忆强度显示 - 始终显示 */}
-                         <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
-                           <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
-                         </span>
-                         
-                      </div>
-                      <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
-                        {memory.content}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                         <button 
-                           onClick={() => {
-                             const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
-                             setMemoryModal({
-                               show: true,
-                               mode: 'edit',
-                               id: memory.id,
-                               type: typeId,
-                               content: memory.content,
-                               importance: memory.importance || 'Medium',
-                             });
-                           }}
-                           className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors"
-                         >
-                           <Edit3 size={12} /> 编辑
-                         </button>
-                         <button 
-                           onClick={() => setDeleteConfirm({show: true, memoryId: memory.id, content: memory.content})}
-                           className="flex items-center gap-1.5 hover:text-rose-600 transition-colors"
-                         >
-                           <Trash2 size={12} /> 删除
-                         </button>
-                      </div>
+                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all">
+                   <div className="flex items-center gap-2.5 mb-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
+                        {memory.type}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
+                        <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
+                      </span>
                    </div>
-                   <div className="md:w-56 bg-slate-50 rounded-lg p-5 border border-slate-100 flex flex-col justify-between">
-                      <div>
-                        <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Agent 推理逻辑</h5>
-                        <p className="text-xs text-slate-500 font-normal leading-relaxed">
-                          {memory.ai_reasoning || ({
-                            requirement: '基于用户在对话中明确提出的招聘要求固化，后续生成岗位、筛选候选人时将自动遵循此规则。',
-                            culture: '从用户描述中提取的企业文化与工作方式偏好，将影响岗位描述中的团队氛围和工作环境部分。',
-                            tech: '用户指定的技术栈偏好或技术要求，后续岗位生成和候选人匹配时将优先匹配此技术方向。',
-                            strategy: '从用户操作中提炼的招聘策略与面试方法论，将指导 Agent 后续的招聘流程和候选人评估。',
-                            benefit: '用户设定的福利待遇标准，生成岗位时将自动附带此福利信息，提升岗位吸引力。',
-                            action: '基于用户操作行为和指令记录的动作偏好，Agent 后续执行相似任务时将参考此模式。',
-                            preference: '用户的通用招聘偏好，贯穿所有岗位生成和候选人筛选环节。',
-                            experience: '用户对候选人经验的要求标准，匹配候选人时将以此作为核心筛选维度。',
-                          } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
-                        </p>
-                      </div>
+                   <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4">
+                     {memory.content}
+                   </p>
+                   <div className="bg-slate-50 rounded-lg p-4 border border-slate-100 mb-4">
+                      <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Brain size={12} className="text-indigo-400" /> Agent 推理逻辑
+                      </h5>
+                      <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                        {memory.ai_reasoning || ({
+                          requirement: '基于用户在对话中明确提出的招聘要求固化，后续生成岗位、筛选候选人时将自动遵循此规则。',
+                          culture: '从用户描述中提取的企业文化与工作方式偏好，将影响岗位描述中的团队氛围和工作环境部分。',
+                          tech: '用户指定的技术栈偏好或技术要求，后续岗位生成和候选人匹配时将优先匹配此技术方向。',
+                          strategy: '从用户操作中提炼的招聘策略与面试方法论，将指导 Agent 后续的招聘流程和候选人评估。',
+                          benefit: '用户设定的福利待遇标准，生成岗位时将自动附带此福利信息，提升岗位吸引力。',
+                          action: '基于用户操作行为和指令记录的动作偏好，Agent 后续执行相似任务时将参考此模式。',
+                          preference: '用户的通用招聘偏好，贯穿所有岗位生成和候选人筛选环节。',
+                          experience: '用户对候选人经验的要求标准，匹配候选人时将以此作为核心筛选维度。',
+                        } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
+                      </p>
                       {memory.version_history && memory.version_history.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-slate-200">
-                          <h6 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                        <div className="mt-2 pt-2 border-t border-slate-200 flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1">
                             <History size={10} /> 版本记录 ({memory.version_history.length})
-                          </h6>
-                          <div className="space-y-1 max-h-20 overflow-y-auto">
-                            {memory.version_history.slice(-3).map((v: any, vi: number) => (
-                              <div key={vi} className="text-xs text-slate-400 leading-tight">
-                                <span className="font-bold text-slate-500">v{v.version}</span>
-                                <span className="mx-1">·</span>
-                                <span>{v.date}</span>
-                                <span className="mx-1">·</span>
-                                <span className="text-slate-500">{v.source?.substring(0, 20)}</span>
-                              </div>
-                            ))}
-                          </div>
+                          </span>
+                          {memory.version_history.slice(-3).map((v: any, vi: number) => (
+                            <span key={vi} className="text-xs text-slate-400">
+                              <span className="font-bold text-slate-500">v{v.version}</span>
+                              <span className="mx-1">·</span>
+                              <span>{v.date}</span>
+                            </span>
+                          ))}
                         </div>
                       )}
+                   </div>
+                   <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <button 
+                        onClick={() => {
+                          const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
+                          setMemoryModal({
+                            show: true,
+                            mode: 'edit',
+                            id: memory.id,
+                            type: typeId,
+                            content: memory.content,
+                            importance: memory.importance || 'Medium',
+                          });
+                        }}
+                        className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors"
+                      >
+                        <Edit3 size={12} /> 编辑
+                      </button>
+                      <button 
+                        onClick={() => setDeleteConfirm({show: true, memoryId: memory.id, content: memory.content})}
+                        className="flex items-center gap-1.5 hover:text-rose-600 transition-colors"
+                      >
+                        <Trash2 size={12} /> 删除
+                      </button>
                    </div>
                 </div>
                 );
               })}
            </div>
            )}
-        </div>
       </div>
       
       {/* 添加/编辑记忆弹窗 */}
@@ -7548,11 +7483,7 @@ const CandidateMemoryView = () => {
   }, [activeCategory, memoriesData]);
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 font-black transition-colors mb-6">
-        <ChevronLeft size={20} /> 返回
-      </button>
-
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
            <h1 className="text-3xl font-black text-slate-900 flex items-center gap-4">
@@ -7587,36 +7518,20 @@ const CandidateMemoryView = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-3 space-y-4">
-           <div className="bg-white p-6 rounded border border-slate-100 card-shadow">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 px-2">记忆分类库</h3>
-              <div className="space-y-1">
-                 {['全部', '技能', '经验', '偏好', '目标', '薪酬', '地点', '技术'].map((cat) => (
-                   <button 
-                     key={cat}
-                     onClick={() => setActiveCategory(cat)}
-                     className={`w-full text-left px-4 py-3 rounded font-bold text-sm transition-all flex justify-between items-center ${activeCategory === cat ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-600 hover:bg-slate-50'}`}
-                   >
-                     {cat}
-                     <ChevronRight size={14} className={activeCategory === cat ? 'opacity-100' : 'opacity-0'} />
-                   </button>
-                 ))}
-              </div>
-           </div>
-           
-           <div className="bg-emerald-50 p-5 rounded border border-emerald-200 shadow-sm relative overflow-hidden">
-              <Sparkle className="absolute -right-4 -bottom-4 w-24 h-24 text-emerald-200/30" />
-              <h4 className="text-xs font-black uppercase text-emerald-600 mb-2">AI 记忆同步状态</h4>
-              <div className="flex items-center gap-2 mb-4">
-                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-sm font-black text-slate-800">Agent 同步中 (100%)</span>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed italic">"系统正在实时分析您的职业履历，并自动提炼能力画像与职业偏好记忆。"</p>
-           </div>
-        </div>
+      {/* 分类 Tab */}
+      <div className="flex flex-wrap gap-2 mb-6 bg-white rounded-xl p-2 border border-slate-100 shadow-sm">
+        {['全部', '技能', '经验', '偏好', '目标', '薪酬', '地点', '技术'].map((cat) => (
+          <button 
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeCategory === cat ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
 
-        <div className="lg:col-span-9">
+      <div>
            {!memoriesLoading && filteredMemories.length === 0 ? (
               <div className="bg-white rounded-lg border border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
                 <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-5">
@@ -7646,88 +7561,79 @@ const CandidateMemoryView = () => {
                 };
                 const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
                 return (
-                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all flex flex-col md:flex-row gap-6">
-                   <div className="flex-1">
-                      <div className="flex items-center gap-2.5 mb-3">
-                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
-                           {memory.type}
-                         </span>
-                         <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
-                         {/* 记忆强度显示 - 始终显示 */}
-                         <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
-                           <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
-                         </span>
-                         
-                      </div>
-                      <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4 transition-colors">
-                        {memory.content}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                         <button 
-                           onClick={() => {
-                             const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
-                             setMemoryModal({
-                               show: true,
-                               mode: 'edit',
-                               id: memory.id,
-                               type: typeId,
-                               content: memory.content,
-                               importance: memory.importance || 'Medium',
-                             });
-                           }}
-                           className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
-                         >
-                           <Edit3 size={12} /> 编辑
-                         </button>
-                         <button 
-                           onClick={() => setDeleteConfirm({show: true, memoryId: memory.id, content: memory.content})}
-                           className="flex items-center gap-1.5 hover:text-rose-600 transition-colors"
-                         >
-                           <Trash2 size={12} /> 删除
-                         </button>
-                      </div>
+                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all">
+                   <div className="flex items-center gap-2.5 mb-3">
+                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
+                        {memory.type}
+                      </span>
+                      <span className="text-xs font-bold text-slate-400">{memory.date} 固化</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${(memory.emphasis_count || 1) > 1 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="记忆强度：提及次数越多，记忆越深刻">
+                        <Zap size={10} /> 强度 ×{memory.emphasis_count || 1}
+                      </span>
                    </div>
-                   <div className="md:w-56 bg-emerald-50 rounded-lg p-5 border border-emerald-100 flex flex-col justify-between">
-                      <div>
-                        <h5 className="text-xs font-black text-emerald-600 uppercase tracking-wider mb-2">Agent 推理逻辑</h5>
-                        <p className="text-xs text-slate-500 font-normal leading-relaxed">
-                          {memory.ai_reasoning || ({
-                            skill: '从用户简历或对话中识别的核心技能，将用于岗位匹配时的能力评估和推荐排序。',
-                            experience: '用户的工作经历记录，匹配岗位时将对照经验年限和行业背景进行精准推荐。',
-                            preference: '用户表达的求职偏好，过滤推荐岗位时优先满足这些条件。',
-                            goal: '用户的职业发展目标，推荐岗位时将考虑岗位的成长空间是否匹配用户长期规划。',
-                            salary: '用户的薪酬期望区间，推荐岗位时自动过滤薪资不匹配的机会。',
-                            location: '用户的工作地点偏好，推荐岗位时优先推荐符合地点要求的机会。',
-                            tech: '用户掌握的技术栈，匹配岗位时将以技术契合度作为核心推荐依据。',
-                            culture: '用户偏好的工作文化与团队氛围，推荐时倾向匹配文化契合的企业。',
-                          } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
-                        </p>
-                      </div>
+                   <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4">
+                     {memory.content}
+                   </p>
+                   <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100 mb-4">
+                      <h5 className="text-xs font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Brain size={12} className="text-emerald-400" /> Agent 推理逻辑
+                      </h5>
+                      <p className="text-xs text-slate-500 font-normal leading-relaxed">
+                        {memory.ai_reasoning || ({
+                          skill: '从用户简历或对话中识别的核心技能，将用于岗位匹配时的能力评估和推荐排序。',
+                          experience: '用户的工作经历记录，匹配岗位时将对照经验年限和行业背景进行精准推荐。',
+                          preference: '用户表达的求职偏好，过滤推荐岗位时优先满足这些条件。',
+                          goal: '用户的职业发展目标，推荐岗位时将考虑岗位的成长空间是否匹配用户长期规划。',
+                          salary: '用户的薪酬期望区间，推荐岗位时自动过滤薪资不匹配的机会。',
+                          location: '用户的工作地点偏好，推荐岗位时优先推荐符合地点要求的机会。',
+                          tech: '用户掌握的技术栈，匹配岗位时将以技术契合度作为核心推荐依据。',
+                          culture: '用户偏好的工作文化与团队氛围，推荐时倾向匹配文化契合的企业。',
+                        } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
+                      </p>
                       {memory.version_history && memory.version_history.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-emerald-200">
-                          <h6 className="text-xs font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                        <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1">
                             <History size={10} /> 版本记录 ({memory.version_history.length})
-                          </h6>
-                          <div className="space-y-1 max-h-20 overflow-y-auto">
-                            {memory.version_history.slice(-3).map((v: any, vi: number) => (
-                              <div key={vi} className="text-xs text-slate-400 leading-tight">
-                                <span className="font-bold text-slate-500">v{v.version}</span>
-                                <span className="mx-1">·</span>
-                                <span>{v.date}</span>
-                                <span className="mx-1">·</span>
-                                <span className="text-slate-500">{v.source?.substring(0, 20)}</span>
-                              </div>
-                            ))}
-                          </div>
+                          </span>
+                          {memory.version_history.slice(-3).map((v: any, vi: number) => (
+                            <span key={vi} className="text-xs text-slate-400">
+                              <span className="font-bold text-slate-500">v{v.version}</span>
+                              <span className="mx-1">·</span>
+                              <span>{v.date}</span>
+                            </span>
+                          ))}
                         </div>
                       )}
+                   </div>
+                   <div className="flex items-center gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      <button 
+                        onClick={() => {
+                          const typeId = memory.raw_type || typeNameToId[memory.type] || 'preference';
+                          setMemoryModal({
+                            show: true,
+                            mode: 'edit',
+                            id: memory.id,
+                            type: typeId,
+                            content: memory.content,
+                            importance: memory.importance || 'Medium',
+                          });
+                        }}
+                        className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
+                      >
+                        <Edit3 size={12} /> 编辑
+                      </button>
+                      <button 
+                        onClick={() => setDeleteConfirm({show: true, memoryId: memory.id, content: memory.content})}
+                        className="flex items-center gap-1.5 hover:text-rose-600 transition-colors"
+                      >
+                        <Trash2 size={12} /> 删除
+                      </button>
                    </div>
                 </div>
                 );
               })}
            </div>
            )}
-        </div>
       </div>
       
       {/* 添加/编辑记忆弹窗 */}
@@ -7959,7 +7865,7 @@ const JobDetailView = () => {
   };
   
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-emerald-600 font-black transition-colors mb-8">
         <ChevronLeft size={20} /> 返回
       </button>
@@ -8179,7 +8085,7 @@ const CandidateProfileView = () => {
   // 加载状态
   if (profileLoading) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
         <p className="text-slate-500">加载资料中...</p>
       </div>
@@ -8189,10 +8095,7 @@ const CandidateProfileView = () => {
   // 空状态引导
   if (isProfileEmpty) {
     return (
-      <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-black transition-colors mb-8">
-          <ChevronLeft size={20} /> 返回
-        </button>
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
         <div className="bg-white rounded-lg p-6 md:p-12 border border-slate-100 shadow-xl text-center">
           <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <UserIcon size={48} className="text-indigo-600" />
@@ -8247,12 +8150,9 @@ const CandidateProfileView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-28 md:pb-16 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       {/* 顶部导航 */}
-      <div className="flex items-center justify-between mb-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 font-medium text-sm transition-colors">
-          <ChevronLeft size={18} /> 返回
-        </button>
+      <div className="flex items-center justify-end mb-8">
         <div className="flex gap-3">
           <button 
             onClick={() => navigate('/ai-assistant?taskType=apply')}
@@ -8958,7 +8858,7 @@ const EmployerDashboard = () => {
   }, [userId]);
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 招聘前置检查弹窗 */}
       {recruitCheckModal.show && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40" onClick={() => !recruitCheckModal.checking && setRecruitCheckModal(prev => ({ ...prev, show: false }))}>
@@ -9351,7 +9251,7 @@ const EnterpriseHomeView = () => {
   
   if (profileLoading || settingsLoading) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
         <p className="text-slate-500 font-medium">加载企业资料中...</p>
       </div>
@@ -9361,7 +9261,7 @@ const EnterpriseHomeView = () => {
   // 空状态引导
   if (isProfileEmpty) {
     return (
-      <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
         <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-8">
           <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
         </button>
@@ -9387,11 +9287,7 @@ const EnterpriseHomeView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <button onClick={() => navigate('/employer')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-bold transition-colors group mb-6">
-        <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
-      </button>
-
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 顶部 Banner */}
       <div className="bg-white rounded-lg shadow-xl overflow-hidden border border-slate-100 relative mb-8">
         <div className="h-[240px] relative overflow-hidden">
@@ -9738,7 +9634,7 @@ const TalentDetailView = () => {
 
   if (checking) {
     return (
-      <div className="pt-40 text-center animate-pulse">
+      <div className="pt-20 text-center animate-pulse">
         <Loader2 className="animate-spin mx-auto text-indigo-600 mb-4" size={48} />
         <p className="text-slate-500 font-bold">正在调取候选人档案...</p>
       </div>
@@ -9746,7 +9642,7 @@ const TalentDetailView = () => {
   }
 
   return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
       <AlertCircle className="mx-auto text-slate-300 mb-4" size={48} />
       <p className="text-slate-500 font-bold">该候选人暂无招聘流程记录</p>
       <button onClick={() => navigate(-1)} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">返回</button>
@@ -9868,7 +9764,7 @@ const JobPostDetailView = () => {
 
   if (loading) {
     return (
-      <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto">
         <div className="text-center py-20">
           <Loader2 className="mx-auto animate-spin text-indigo-600 mb-3" size={24} />
           <p className="text-sm text-slate-400">加载岗位详情...</p>
@@ -9879,7 +9775,7 @@ const JobPostDetailView = () => {
 
   if (!jobData) {
     return (
-      <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto">
         <div className="text-center py-20">
           <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
           <p className="text-slate-900 font-black mb-2">岗位不存在或无权访问</p>
@@ -9892,7 +9788,7 @@ const JobPostDetailView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
       {/* 页面头部 */}
       <button onClick={() => navigate("/employer/post")} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group text-sm">
         <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回职位管理
@@ -10489,7 +10385,7 @@ const MemoryInputView = () => {
   
   if (submitted) {
     return (
-      <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-3xl mx-auto animate-in fade-in duration-500">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
           <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
         </button>
@@ -18360,8 +18256,8 @@ ${recentContext}
   const TaskIcon = selectedTask ? getIconComponent(selectedTask.icon) : Calendar;
 
   return (
-    <div className="pt-16 pb-2 px-2 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-      <div className="flex gap-3 md:gap-5 h-[calc(100vh-80px)] md:h-[calc(100vh-180px)] min-h-[400px] md:min-h-[600px] relative">
+    <div className="fixed top-[52px] md:top-[60px] left-0 right-0 bottom-[40px] bg-slate-50 animate-in fade-in duration-500 z-10">
+      <div className="flex gap-0 h-full relative">
         {/* 移动端任务面板遮罩 */}
         {showMobileTaskPanel && (
           <div className="fixed inset-0 bg-black/30 z-40 md:hidden" onClick={() => setShowMobileTaskPanel(false)} />
@@ -18369,39 +18265,39 @@ ${recentContext}
         {/* 左侧任务列表 — 移动端为滑出抽屉 */}
         <div className={`
           fixed md:relative top-0 left-0 z-50 md:z-auto
-          w-[280px] md:w-72 h-full md:h-auto flex-shrink-0
-          bg-white rounded-none md:rounded-xl border-r md:border border-slate-200/80 shadow-xl md:shadow-lg
+          w-[280px] md:w-[280px] h-full md:h-auto flex-shrink-0
+          bg-white border-r border-slate-200/40
           overflow-hidden flex flex-col
           transition-transform duration-300 ease-out
           ${showMobileTaskPanel ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
-          <div className="bg-gradient-to-r from-indigo-50 to-slate-50 px-4 py-3 border-b border-slate-200/80">
+          <div className="bg-white px-4 py-3 border-b border-slate-100">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                  <ListTodo size={14} className="text-white" />
+                <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
+                  <ListTodo size={13} className="text-white" />
                 </div>
-                <span className="text-slate-800 font-bold text-sm">任务中心</span>
+                <span className="text-slate-800 font-semibold text-sm">任务中心</span>
               </div>
             </div>
             {/* 任务筛选标签 */}
-            <div className="flex gap-1">
+            <div className="flex gap-1 bg-slate-100/80 p-0.5 rounded-xl">
               <button
                 onClick={() => setTaskFilter('pending')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 px-2 py-1.5 rounded-[10px] text-xs font-medium transition-all ${
                   taskFilter === 'pending' 
-                    ? 'bg-indigo-600 text-white' 
-                    : 'bg-white text-slate-500 hover:bg-slate-100'
+                    ? 'bg-white text-slate-800 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 进行中 ({pendingTasksCount})
               </button>
               <button
                 onClick={() => setTaskFilter('completed')}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 px-2 py-1.5 rounded-[10px] text-xs font-medium transition-all ${
                   taskFilter === 'completed' 
-                    ? 'bg-emerald-600 text-white' 
-                    : 'bg-white text-slate-500 hover:bg-slate-100'
+                    ? 'bg-white text-slate-800 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 已完成 ({completedTasksCount})
@@ -18411,21 +18307,21 @@ ${recentContext}
           <div className="flex-1 p-3 space-y-2 overflow-y-auto scrollbar-hide">
             {/* 通用助手入口 */}
             <div 
-              className={`cursor-pointer p-3.5 rounded-lg border transition-all ${
+              className={`cursor-pointer px-2.5 py-2 rounded-lg border transition-all ${
                 !selectedTask 
-                  ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
-                  : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'
+                  ? 'bg-indigo-50/50 border-indigo-200/60 shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 hover:border-slate-200/60'
               }`}
               onClick={() => { setSelectedTask(null); setShowMobileTaskPanel(false); }}
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  !selectedTask ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-slate-200'
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  !selectedTask ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200/60'
                 }`}>
-                  <Bot size={18} />
+                  <Bot size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-slate-800 truncate">通用 AI 助手</div>
+                  <div className="text-sm font-semibold text-slate-800 truncate">通用 AI 助手</div>
                   <div className="text-xs text-slate-400">随时提问咨询</div>
                 </div>
               </div>
@@ -18440,7 +18336,7 @@ ${recentContext}
                 <p className="text-slate-300 text-xs mb-3">登录后可查看任务</p>
                 <button 
                   onClick={() => navigate('/login')}
-                  className="px-4 py-2 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-500 transition-colors"
+                  className="px-4 py-2 bg-indigo-600 text-white text-xs rounded-xl hover:bg-indigo-500 transition-colors"
                 >
                   立即登录
                 </button>
@@ -18465,48 +18361,44 @@ ${recentContext}
               return (
                 <div 
                   key={task.id} 
-                  className={`cursor-pointer p-3.5 rounded-lg border transition-all ${
+                  className={`cursor-pointer px-2.5 py-2 rounded-lg border transition-all ${
                     isSelected 
-                      ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
-                      : 'bg-slate-50 border-transparent hover:bg-white hover:border-slate-200'
+                      ? 'bg-indigo-50/50 border-indigo-200/60 shadow-sm' 
+                      : 'bg-transparent border-transparent hover:bg-slate-50 hover:border-slate-200/60'
                   }`}
                   onClick={() => { setSelectedTask(task); setShowMobileTaskPanel(false); }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      task.status === 'running' ? 'bg-amber-100 text-amber-600' : 
-                      task.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 
-                      isSelected ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-200'
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      task.status === 'running' ? 'bg-amber-50 text-amber-600' : 
+                      task.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : 
+                      isSelected ? 'bg-indigo-600 text-white' : 'bg-white text-slate-400 border border-slate-200/60'
                     }`}>
-                      <TaskItemIcon size={18} />
+                      <TaskItemIcon size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
+                      <div className={`text-sm font-semibold truncate ${isSelected ? 'text-indigo-700' : 'text-slate-700'}`}>
+                        {task.title}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
                         {task.status?.toLowerCase() === 'running' && <Loader2 size={10} className="animate-spin text-amber-500" />}
                         {task.status?.toLowerCase() === 'completed' && <CheckCircle2 size={10} className="text-emerald-500" />}
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                        <span className={`text-xs ${
                           task.status?.toLowerCase() === 'running' ? 'text-amber-500' : 
                           task.status?.toLowerCase() === 'completed' ? 'text-emerald-500' : 'text-slate-400'
                         }`}>
                           {task.status?.toLowerCase() === 'running' ? '进行中' : task.status?.toLowerCase() === 'completed' ? '已完成' : '待执行'}
                         </span>
-                      </div>
-                      <div className={`text-sm font-bold truncate ${isSelected ? 'text-indigo-700' : 'text-slate-700'}`}>
-                        {task.title}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
                         {task.priority && (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                            task.priority === 'High' ? 'bg-rose-100 text-rose-600' : 
-                            task.priority === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'
+                          <span className={`text-xs ${
+                            task.priority === 'High' ? 'text-rose-500' : 
+                            task.priority === 'Medium' ? 'text-amber-500' : 'text-slate-400'
                           }`}>
-                            {task.priority}
+                            · {task.priority}
                           </span>
                         )}
                         {task.source === 'agent' && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600">
-                            Agent
-                          </span>
+                          <span className="text-xs text-purple-500">· Agent</span>
                         )}
                       </div>
                     </div>
@@ -18517,10 +18409,11 @@ ${recentContext}
           </div>
         </div>
 
-        {/* 右侧 AI 对话区域 */}
-        <div className="flex-1 bg-white rounded-xl overflow-hidden border border-slate-200/80 shadow-lg flex flex-col min-w-0">
+        {/* 右侧 AI 对话区域 — 居中限宽 */}
+        <div className="flex-1 flex justify-center min-w-0">
+        <div className="w-full max-w-3xl bg-white border-l border-slate-200/40 overflow-hidden flex flex-col min-w-0">
           {/* 头部 */}
-          <div className="bg-gradient-to-r from-white to-slate-50 px-3 py-2.5 md:px-5 md:py-3 border-b border-slate-200/80 flex justify-between items-center gap-2">
+          <div className="bg-white px-3 py-2.5 md:px-5 md:py-3 border-b border-slate-100 flex justify-between items-center gap-2">
             <div className="flex items-center gap-2 md:gap-3 min-w-0">
               {/* 移动端任务面板切换按钮 */}
               <button 
@@ -18530,9 +18423,9 @@ ${recentContext}
               >
                 <ListTodo size={18} />
               </button>
-              <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-emerald-400 rounded-full animate-pulse flex-shrink-0"></div>
-              <span className="text-slate-900 font-bold text-xs md:text-sm truncate">
-                {selectedTask ? (selectedTask.title || '任务对话').substring(0, 15) : 'Devnors AI助手'}
+              <div className="w-2 h-2 md:w-2.5 md:h-2.5 bg-emerald-500 rounded-full animate-pulse flex-shrink-0"></div>
+              <span className="text-slate-900 font-bold text-sm md:text-base truncate">
+                {selectedTask ? (selectedTask.title || '任务对话').substring(0, 15) : 'Devnors AI Agent'}
               </span>
             </div>
             <div className="flex items-center gap-1.5 md:gap-3 flex-shrink-0">
@@ -18541,7 +18434,7 @@ ${recentContext}
                 onChange={(e) => {
                   if (isModelAvailable(e.target.value)) setSelectedModel(e.target.value);
                 }}
-                className="text-[10px] md:text-xs border border-slate-200 rounded-lg px-1.5 py-1 md:px-3 md:py-1.5 bg-white text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer max-w-[100px] md:max-w-none"
+                className="text-[11px] md:text-xs border border-slate-200/60 rounded-xl px-2 py-1 md:px-2.5 md:py-1 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:border-indigo-300 cursor-pointer max-w-[110px] md:max-w-none"
               >
                 {allModelOptions.map(model => (
                   <option key={model} value={model} disabled={!isModelAvailable(model)}>
@@ -18556,7 +18449,7 @@ ${recentContext}
               )}
               <button 
                 onClick={handleResetChat} 
-                className="p-1.5 md:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all" 
+                className="p-1.5 md:p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-xl transition-all" 
                 title="清除聊天记录"
               >
                 <RotateCcw size={14} />
@@ -18566,22 +18459,22 @@ ${recentContext}
           
           {/* 任务信息条（选中任务时显示） */}
           {selectedTask && (
-            <div className="px-3 py-2 md:px-4 md:py-3 bg-gradient-to-r from-indigo-50 to-slate-50 border-b border-slate-200/80">
+            <div className="px-3 py-2 md:px-4 md:py-2.5 bg-slate-50/50 border-b border-slate-100">
               <div className="flex items-center gap-2 md:gap-3">
-                <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md flex-shrink-0">
-                  <TaskIcon size={16} />
+                <div className="w-8 h-8 md:w-9 md:h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                  <TaskIcon size={15} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 md:gap-2 mb-0.5">
-                    <span className="text-xs md:text-sm font-bold text-slate-900 truncate">{selectedTask.title || selectedTask.task}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase flex-shrink-0 ${
+                    <span className="text-sm md:text-base font-bold text-slate-900 truncate">{selectedTask.title || selectedTask.task}</span>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-medium uppercase flex-shrink-0 ${
                       selectedTask.priority === 'High' ? 'bg-rose-100 text-rose-600' : 
-                      selectedTask.priority === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'
+                      selectedTask.priority === 'Medium' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'
                     }`}>
                       {selectedTask.priority}
                     </span>
                     {selectedTask.source === 'agent' && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 flex-shrink-0">Agent</span>
+                      <span className="px-1.5 py-0.5 rounded-md text-[9px] font-medium bg-purple-100 text-purple-600 flex-shrink-0">Agent</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-500 overflow-x-auto scrollbar-hide">
@@ -18744,23 +18637,23 @@ ${recentContext}
           )}
             
           {/* 消息区域 */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 md:p-5 space-y-3 md:space-y-4 scrollbar-hide bg-gradient-to-b from-slate-50/50 to-white">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 md:p-5 space-y-3 md:space-y-4 scrollbar-hide bg-white">
             {currentMessages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex gap-2 md:gap-3 max-w-[92%] md:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-6 h-6 md:w-8 md:h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden ${
-                    msg.role === 'user' ? (user?.avatar_url ? '' : 'bg-indigo-600') : 'bg-white border border-slate-200'
+                  <div className={`w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden ${
+                    msg.role === 'user' ? (user?.avatar_url ? '' : 'bg-indigo-600') : 'bg-slate-100'
                   }`}>
                     {msg.role === 'user' ? (
                       user?.avatar_url 
                         ? <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
-                        : <UserIcon size={12} className="text-white md:w-[14px] md:h-[14px]" />
-                    ) : <Bot size={12} className="text-indigo-600 md:w-[14px] md:h-[14px]" />}
+                        : <UserIcon size={12} className="text-white md:w-[13px] md:h-[13px]" />
+                    ) : <Bot size={12} className="text-indigo-600 md:w-[13px] md:h-[13px]" />}
                   </div>
-                  <div className={`px-3 py-2.5 md:px-4 md:py-3 rounded-2xl text-[13px] md:text-sm leading-relaxed ${
+                  <div className={`px-3.5 py-2.5 md:px-4 md:py-3 rounded-2xl text-sm md:text-[15px] leading-relaxed ${
                     msg.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-md' 
-                      : 'bg-white text-slate-700 rounded-tl-md border border-slate-100 shadow-sm'
+                      : 'bg-slate-50/80 text-slate-700 rounded-tl-md border border-slate-100'
                   }`}>
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-line">{msg.content}</p>
@@ -18846,9 +18739,9 @@ ${recentContext}
                                   code: ({node, inline, className, ...props}: any) => {
                                     const isInline = inline || !className;
                                     return isInline ? (
-                                      <code className="bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                                      <code className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
                                     ) : (
-                                      <code className="block bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto font-mono my-2" {...props} />
+                                      <code className="block bg-slate-900 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto font-mono my-2" {...props} />
                                     );
                                   },
                                   pre: ({node, ...props}) => <pre className="my-2" {...props} />,
@@ -18896,9 +18789,9 @@ ${recentContext}
                                     code: ({node, inline, className, ...props}: any) => {
                                       const isInline = inline || !className;
                                       return isInline ? (
-                                        <code className="bg-slate-100 text-indigo-600 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                                        <code className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
                                       ) : (
-                                        <code className="block bg-slate-800 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto font-mono my-2" {...props} />
+                                        <code className="block bg-slate-900 text-slate-100 p-3 rounded-lg text-xs overflow-x-auto font-mono my-2" {...props} />
                                       );
                                     },
                                     pre: ({node, ...props}) => <pre className="my-2" {...props} />,
@@ -19048,17 +18941,17 @@ ${recentContext}
                                 <div 
                                   key={partIdx}
                                   onClick={handleTaskClick}
-                                  className="my-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 cursor-pointer hover:shadow-md hover:border-indigo-300 transition-all group"
+                                  className="my-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-100 cursor-pointer hover:shadow-sm hover:border-indigo-200/60 transition-all group"
                                 >
                                   <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center text-lg border border-indigo-100 group-hover:scale-105 transition-transform">
+                                    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-base border border-indigo-100/60 group-hover:scale-105 transition-transform">
                                       {part.icon}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-slate-800 text-sm group-hover:text-indigo-700 transition-colors">{part.title}</div>
+                                      <div className="font-semibold text-slate-800 text-[15px] group-hover:text-indigo-700 transition-colors">{part.title}</div>
                                       <div className="text-xs text-slate-500 mt-0.5">点击开始任务</div>
                                     </div>
-                                    <ArrowRight size={16} className="text-indigo-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                                    <ArrowRight size={16} className="text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
                                   </div>
                                 </div>
                               );
@@ -19068,17 +18961,17 @@ ${recentContext}
                                 <Link 
                                   key={partIdx}
                                   to={part.path}
-                                  className="block my-3 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200 cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all group no-underline"
+                                  className="block my-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-100 cursor-pointer hover:shadow-sm hover:border-emerald-200/60 transition-all group no-underline"
                                 >
                                   <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center text-lg border border-emerald-100 group-hover:scale-105 transition-transform">
+                                    <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-base border border-emerald-100/60 group-hover:scale-105 transition-transform">
                                       {part.icon}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-slate-800 text-sm group-hover:text-emerald-700 transition-colors">{part.title}</div>
+                                      <div className="font-semibold text-slate-800 text-[15px] group-hover:text-emerald-700 transition-colors">{part.title}</div>
                                       <div className="text-xs text-slate-500 mt-0.5">点击查看详情</div>
                                     </div>
-                                    <ExternalLink size={16} className="text-emerald-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                                    <ExternalLink size={16} className="text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
                                   </div>
                                 </Link>
                               );
@@ -19115,7 +19008,7 @@ ${recentContext}
                                       onClick={() => {
                                         handleSend(action.message);
                                       }}
-                                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all active:scale-95 ${styleMap[action.style] || styleMap['secondary']}`}
+                                      className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all active:scale-95 ${styleMap[action.style] || styleMap['secondary']}`}
                                     >
                                       {action.label}
                                     </button>
@@ -19138,10 +19031,10 @@ ${recentContext}
             ))}
             {isTyping && (
               <div className="flex gap-3 animate-in fade-in">
-                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center border border-slate-200 shadow-sm">
-                  <Loader2 className="animate-spin text-indigo-600" size={14} />
+                <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center">
+                  <Loader2 className="animate-spin text-indigo-600" size={13} />
                 </div>
-                <div className="px-4 py-3 bg-white rounded-2xl rounded-tl-md border border-slate-100 shadow-sm">
+                <div className="px-4 py-3 bg-slate-50/80 rounded-2xl rounded-tl-md border border-slate-100">
                   <span className="text-slate-500 text-xs">正在思考中...</span>
                 </div>
               </div>
@@ -19149,8 +19042,8 @@ ${recentContext}
           </div>
           
           {/* 输入区域 */}
-          <div className="p-2 md:p-4 bg-white border-t border-slate-100">
-            <div className="flex gap-1.5 md:gap-2 bg-slate-50 rounded-lg p-1.5 md:p-2 border border-slate-200">
+          <div className="p-3 md:p-4 bg-white border-t border-slate-100">
+            <div className="flex gap-1.5 md:gap-2 bg-slate-50/80 rounded-2xl p-2 md:p-2.5 border border-slate-200/60">
               {/* 隐藏的文件上传 input */}
               <input
                 ref={fileInputRef}
@@ -19220,7 +19113,7 @@ ${recentContext}
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFile || isTyping}
-                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all disabled:opacity-50"
+                      className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all disabled:opacity-50"
                       title="上传附件"
                     >
                       {uploadingFile ? (
@@ -19238,13 +19131,13 @@ ${recentContext}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                 placeholder={selectedTask ? "输入指令执行任务..." : "输入您的问题..."}
-                className="flex-1 bg-transparent border-none rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none placeholder:text-slate-400"
+                className="flex-1 bg-transparent border-none rounded-lg px-3 py-2.5 text-base text-slate-900 focus:outline-none placeholder:text-slate-400"
               />
               <button
                 onClick={handleSend}
                 disabled={isTyping}
                 data-send-btn
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 rounded-lg flex items-center gap-1 md:gap-1.5 transition-all active:scale-95 disabled:opacity-50 shadow-md shadow-indigo-200 font-medium text-xs md:text-sm flex-shrink-0"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 md:px-4 rounded-xl flex items-center gap-1 md:gap-1.5 transition-all active:scale-95 disabled:opacity-50 font-medium text-xs md:text-sm flex-shrink-0"
               >
                 <Send size={14} /> <span className="hidden sm:inline">发送</span>
               </button>
@@ -19607,7 +19500,7 @@ ${recentContext}
               if (prompts.length === 0) return null;
               
               return (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   {prompts.map((item, sIdx) => (
                     <button 
                       key={sIdx}
@@ -19619,7 +19512,7 @@ ${recentContext}
                           setInputMessage(item.prompt);
                         }
                       }}
-                      className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-xs font-medium text-slate-500 border border-slate-200 rounded-full transition-colors hover:border-indigo-200 hover:text-indigo-600"
+                      className="px-3 py-1.5 bg-slate-50/80 hover:bg-indigo-50 text-xs font-medium text-slate-600 border border-slate-200/60 rounded-full transition-colors hover:border-indigo-200 hover:text-indigo-600"
                     >
                       {item.label}
                     </button>
@@ -19628,6 +19521,7 @@ ${recentContext}
               );
             })()}
           </div>
+        </div>
         </div>
       </div>
       
@@ -19674,7 +19568,7 @@ const ApplyDetailView = () => {
   }, [navigate]);
 
   return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
       <Loader2 className="mx-auto text-emerald-600 animate-spin mb-4" size={48} />
       <p className="text-slate-500">正在跳转到 AI 助手...</p>
     </div>
@@ -19820,13 +19714,10 @@ const JobManagementView = () => {
   };
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 页面头部 */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
-          <button onClick={() => navigate("/employer")} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-4 font-black transition-colors group text-sm">
-            <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回
-          </button>
           <h1 className="text-2xl md:text-4xl font-black text-slate-900 flex items-center gap-2 md:gap-4">
             <div className="p-3 bg-indigo-600 text-white rounded shadow-xl"><Briefcase size={32} /></div>
             职位管理
@@ -20236,12 +20127,9 @@ const JobRecommendListView = () => {
   ];
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 顶部标题 */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
-        </button>
         <div className="flex-1">
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">企业岗位推荐</h1>
           <p className="text-sm text-slate-500">AI 智能体为您匹配的优质岗位，共 <span className="font-black text-indigo-600">{total}</span> 个岗位</p>
@@ -20586,7 +20474,7 @@ const InviteFriendView = () => {
   // 未登录
   if (!isLoggedIn) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Lock className="mx-auto text-slate-300 mb-4" size={48} />
         <p className="text-slate-500 mb-4">请先登录再查看邀请页面</p>
         <button onClick={() => navigate('/login')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-all">去登录</button>
@@ -20596,7 +20484,7 @@ const InviteFriendView = () => {
 
   if (loading) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <Loader2 className="mx-auto text-indigo-600 animate-spin mb-4" size={48} />
         <p className="text-slate-500">加载邀请数据...</p>
       </div>
@@ -20627,12 +20515,9 @@ const InviteFriendView = () => {
   ];
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-4xl mx-auto animate-in fade-in duration-700">
-      {/* 返回按钮 + 标题 */}
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
+      {/* 标题 */}
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
-        </button>
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">邀请好友</h1>
           <p className="text-sm text-slate-500">邀请好友注册，双方都能获得 Token 奖励</p>
@@ -20917,7 +20802,7 @@ const AIDeliveryView = () => {
   };
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <button onClick={() => navigate('/candidate/home')} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group">
         <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" /> 返回
       </button>
@@ -21269,12 +21154,9 @@ const TalentPoolView = () => {
   ];
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 顶部标题 */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate('/employer')} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
-        </button>
         <div className="flex-1">
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">推荐人才</h1>
           <p className="text-sm text-slate-500">AI 智能匹配推荐给企业的优质候选人，共 <span className="font-black text-indigo-600">{total}</span> 位人才</p>
@@ -23156,6 +23038,9 @@ const FeedbackView = () => {
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState<any>(null);
 
+  // Tab 切换
+  const [activeTab, setActiveTab] = useState<'submit' | 'tickets'>('submit');
+
   // 工单列表
   const [tickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
@@ -23241,7 +23126,7 @@ const FeedbackView = () => {
 
   if (!isLoggedIn) {
     return (
-      <div className="pt-40 text-center">
+      <div className="pt-20 text-center">
         <MessageSquare className="mx-auto text-slate-300 mb-4" size={64} />
         <p className="text-slate-500 font-bold mb-4">请先登录提交反馈</p>
         <button onClick={() => navigate('/login')} className="bg-indigo-600 text-white px-8 py-3 rounded font-black">去登录</button>
@@ -23250,25 +23135,37 @@ const FeedbackView = () => {
   }
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-6xl mx-auto animate-in fade-in duration-500">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-all">
-          <ChevronLeft size={20} className="text-slate-600" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-black text-slate-900">反馈建议</h1>
-          <p className="text-slate-500 text-sm">提交工单，我们会认真对待每一条反馈</p>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-black text-slate-900">反馈建议</h1>
+        <p className="text-slate-500 text-sm">提交工单，我们会认真对待每一条反馈</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* 左侧：提交表单 */}
-        <div className="lg:col-span-5">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm sticky top-28">
-            <h2 className="text-lg font-black text-slate-900 mb-5 flex items-center gap-2">
-              <Edit3 size={18} className="text-indigo-600" /> 提交工单
-            </h2>
+      {/* Tab 导航 */}
+      <div className="flex gap-2 mb-8 bg-white rounded-xl p-1.5 border border-slate-100 shadow-sm">
+        <button
+          onClick={() => setActiveTab('submit')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${
+            activeTab === 'submit' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
+          }`}
+        >
+          <Edit3 size={15} /> 反馈意见
+        </button>
+        <button
+          onClick={() => setActiveTab('tickets')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm transition-all ${
+            activeTab === 'tickets' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'
+          }`}
+        >
+          <Inbox size={15} /> 我的工单 {tickets.length > 0 && <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === 'tickets' ? 'bg-white/20' : 'bg-slate-100'}`}>{tickets.length}</span>}
+        </button>
+      </div>
+
+      {/* 提交表单 */}
+      {activeTab === 'submit' && (
+        <div>
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
 
             {/* 类型选择 */}
             <div className="mb-5">
@@ -23350,9 +23247,11 @@ const FeedbackView = () => {
             )}
           </div>
         </div>
+      )}
 
-        {/* 右侧：工单列表 */}
-        <div className="lg:col-span-7">
+      {/* 工单列表 */}
+      {activeTab === 'tickets' && (
+        <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
               <Inbox size={18} className="text-slate-400" /> 我的工单
@@ -23434,7 +23333,7 @@ const FeedbackView = () => {
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -23488,6 +23387,244 @@ const tokenInsufficientEvent = {
 
 // 导出供 API 层调用
 (window as any).__showTokenInsufficient = (balance: number) => tokenInsufficientEvent.emit(balance);
+
+/**
+ * DashboardLayout — 左右结构布局：左侧导航 + 右侧内容区
+ * 用于 workbench / employer / candidate 页面
+ */
+const DashboardLayout = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const currentPath = location.pathname;
+  
+  // 通用导航项
+  const commonNavItems = [
+    { path: '/ai-assistant', label: 'AI Agent', icon: Bot },
+    { path: '/workbench', label: '控制面板', icon: LayoutDashboard },
+  ];
+  
+  // 根据角色的专属导航
+  const roleNavItems = userRole === 'employer' ? [
+    { path: '/workbench', label: '控制面板', icon: LayoutDashboard },
+    { path: '/employer', label: '企业中心', icon: Building2 },
+    { path: '/employer/post', label: '职位管理', icon: Briefcase },
+    { path: '/employer/talent-pool', label: '人才库', icon: Users },
+    { path: '/employer/memory', label: '企业记忆', icon: Brain },
+  ] : userRole === 'candidate' ? [
+    { path: '/workbench', label: '控制面板', icon: LayoutDashboard },
+    { path: '/candidate', label: '人才中心', icon: UserIcon },
+    { path: '/candidate/jobs', label: '职位推荐', icon: Briefcase },
+    { path: '/candidate/memory', label: '个人记忆', icon: Brain },
+  ] : [];
+  
+  // 底部工具导航
+  const toolNavItems = [
+    { path: '/tokens', label: 'Token 管理', icon: Coins },
+    { path: '/invite', label: '邀请好友', icon: Gift },
+    { path: '/feedback', label: '反馈意见', icon: MessageSquare },
+    { path: '/settings', label: '设置', icon: Settings },
+  ];
+
+  // 浏览器导航（根据角色显示）
+  const browserNavItems = [
+    ...(userRole === 'candidate' ? [{ path: '/candidate/profile', label: '个人主页', icon: UserIcon }] : []),
+    ...(userRole === 'employer' ? [{ path: '/employer/home', label: '企业主页', icon: Building2 }] : []),
+  ];
+
+  const isActive = (path: string) => {
+    if (path === '/workbench') return currentPath === '/workbench' || currentPath.startsWith('/workbench/');
+    if (path === '/employer') return currentPath === '/employer';
+    if (path === '/candidate') return currentPath === '/candidate';
+    return currentPath === path || currentPath.startsWith(path + '/');
+  };
+
+  const NavItem = ({ item }: { item: { path: string; label: string; icon: any } }) => {
+    const IconComp = item.icon;
+    const active = isActive(item.path);
+    return (
+      <button
+        onClick={() => { navigate(item.path); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+          active 
+            ? 'bg-indigo-50 text-indigo-700 font-semibold' 
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        <IconComp size={18} className={active ? 'text-indigo-600' : 'text-slate-400'} />
+        <span>{item.label}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="pt-[52px] md:pt-[60px] flex min-h-screen">
+      {/* 移动端遮罩 */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/30 z-40 md:hidden" 
+          onClick={() => setSidebarOpen(false)} 
+        />
+      )}
+      
+      {/* 左侧导航栏 */}
+      <aside className={`
+        fixed md:sticky top-[52px] md:top-[60px] left-0 z-40 md:z-auto
+        w-[240px] h-[calc(100vh-52px)] md:h-[calc(100vh-60px)]
+        bg-white border-r border-slate-200/60
+        flex flex-col flex-shrink-0
+        transition-transform duration-300 ease-out
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        overflow-y-auto scrollbar-hide
+      `}>
+        <div className="flex-1 p-3 space-y-1">
+          {/* 角色导航 */}
+          {roleNavItems.length > 0 && (
+            <div className="mb-3">
+              <p className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                {userRole === 'employer' ? '企业管理' : '求职管理'}
+              </p>
+              {roleNavItems.map(item => <NavItem key={item.path} item={item} />)}
+            </div>
+          )}
+          
+          {/* 工具 */}
+          <div className="pt-3 border-t border-slate-100">
+            <p className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">工具</p>
+            {toolNavItems.map(item => <NavItem key={item.path} item={item} />)}
+          </div>
+          
+          {/* 浏览器 */}
+          {browserNavItems.length > 0 && (
+            <div className="pt-3 border-t border-slate-100">
+              <p className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">浏览器</p>
+              {browserNavItems.map(item => <NavItem key={item.path} item={item} />)}
+            </div>
+          )}
+        </div>
+      </aside>
+      
+      {/* 移动端菜单按钮 */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="fixed bottom-20 left-4 z-30 md:hidden w-10 h-10 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center"
+      >
+        <Menu size={20} />
+      </button>
+      
+      {/* 右侧内容区 */}
+      <div className="flex-1 min-w-0 overflow-y-auto">
+        <Outlet />
+      </div>
+    </div>
+  );
+};
+
+/**
+ * CompactFooter — 登录后的可折叠页脚，内容与未登录一致，默认折叠
+ */
+const CompactFooter = () => {
+  const [expanded, setExpanded] = useState(false);
+  
+  const handleToggle = useCallback(() => {
+    setExpanded(prev => !prev);
+  }, []);
+  
+  return (
+    <footer className="border-t border-slate-100 bg-white relative z-10">
+      {/* 折叠触发栏 */}
+      <div className="px-2 md:px-4">
+        <div className="max-w-full mx-auto flex items-center justify-between h-10">
+          {!expanded && <p className="text-xs text-slate-400">© 2026 Devnors 得若智能体. All rights reserved.</p>}
+          <button 
+            type="button"
+            onClick={handleToggle}
+            className={`flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer select-none ${expanded ? 'ml-auto' : ''}`}
+          >
+            {expanded ? '收起' : '展开更多'}
+            <ChevronDown size={12} className={`transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+      
+      {/* 完整 footer 内容 — 与未登录时一致 */}
+      <div 
+        className="overflow-hidden transition-all duration-300 ease-in-out"
+        style={{ maxHeight: expanded ? '600px' : '0px', opacity: expanded ? 1 : 0 }}
+      >
+        <div className="pt-8 pb-6 border-t border-slate-100">
+          <div className="max-w-full mx-auto px-2 md:px-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-12 mb-8 md:mb-12">
+              <div className="lg:col-span-4">
+                <Link to="/" className="flex items-center gap-3 mb-6 group">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
+                    <Zap className="text-white w-6 h-6" />
+                  </div>
+                  <span className="text-2xl font-black text-slate-900">Devnors <span className="text-indigo-600 text-sm font-normal">得若</span></span>
+                </Link>
+                <p className="text-slate-500 text-sm leading-relaxed mb-6">AI 原生招聘平台。助力人才实现职业梦想，为企业精准推荐全球精英。</p>
+                <div className="flex items-center gap-4">
+                  <a href="#" title="微信" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-emerald-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05a6.582 6.582 0 0 1-.261-1.816c0-3.733 3.571-6.764 7.975-6.764.259 0 .51.02.761.04C17.46 4.539 13.46 2.188 8.69 2.188zm-2.6 4.408a1.09 1.09 0 0 1 1.092 1.089 1.09 1.09 0 0 1-1.092 1.089 1.09 1.09 0 0 1-1.093-1.09 1.09 1.09 0 0 1 1.093-1.088zm5.502 0a1.09 1.09 0 0 1 1.093 1.089 1.09 1.09 0 0 1-1.093 1.089 1.09 1.09 0 0 1-1.092-1.09 1.09 1.09 0 0 1 1.092-1.088zM16.216 9.05c-3.862 0-6.994 2.67-6.994 5.962 0 3.293 3.132 5.962 6.994 5.962.68 0 1.34-.086 1.975-.243a.723.723 0 0 1 .6.082l1.57.917a.271.271 0 0 0 .14.045c.132 0 .241-.11.241-.245 0-.06-.024-.118-.04-.176l-.322-1.218a.493.493 0 0 1 .177-.554C22.196 18.39 23.21 16.61 23.21 15.012c0-3.293-3.132-5.962-6.994-5.962zm-2.393 3.478a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814zm4.785 0a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814z"/></svg>
+                  </a>
+                  <a href="#" title="抖音" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.001-.104z"/></svg>
+                  </a>
+                  <a href="#" title="小红书" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-rose-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7h-2.03l.52-2.5H13.4l-.52 2.5h-1.86l.52-2.5H9.95l-.52 2.5H7.5v1.5h1.57l-.42 2H6.5v1.5h1.8L7.77 16.5h1.59l.52-2.5h1.86l-.52 2.5h1.59l.52-2.5H16.5V13h-2.03l.42-2H16.5V9.5zm-4.09 4h-1.86l.42-2h1.86l-.42 2z"/></svg>
+                  </a>
+                  <a href="#" title="轻识" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-indigo-500 hover:text-white transition-all group">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
+                  </a>
+                </div>
+              </div>
+              <div className="lg:col-span-7 lg:col-start-7">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">产品</h4>
+                    <div className="space-y-3">
+                      <Link to="/products" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Hire Agent</Link>
+                      <Link to="/solutions" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">解决方案</Link>
+                      <Link to="/models" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Agent 技术</Link>
+                      <Link to="/pricing" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">定价方案</Link>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">法律</h4>
+                    <div className="space-y-3">
+                      <Link to="/terms" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">服务条款</Link>
+                      <Link to="/privacy" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">隐私政策</Link>
+                      <Link to="/personal-info" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">个人信息保护</Link>
+                      <Link to="/algorithm" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">算法说明</Link>
+                      <Link to="/copyright" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版权声明</Link>
+                      <Link to="/minor-protection" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">未成年人保护</Link>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">支持</h4>
+                    <div className="space-y-3">
+                      <Link to="/about" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">关于我们</Link>
+                      <Link to="/tokens" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">资金账户</Link>
+                      <Link to="/help" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">帮助中心</Link>
+                      <Link to="/feedback" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">反馈建议</Link>
+                      <Link to="/changelog" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版本更新</Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+              <p className="text-xs text-slate-400">© 2026 Devnors 得若智能体. All rights reserved.</p>
+              <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Devnors Multi-Agent Synergy</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+};
 
 // 主应用内容组件
 // 路由切换时自动滚动到页面顶部
@@ -23599,109 +23736,113 @@ const AppContent = () => {
           <Route path="/solutions" element={<SolutionsPage />} />
           <Route path="/models" element={<ModelsPage />} />
           <Route path="/help" element={<HelpCenterView />} />
-          {/* 需要登录的页面 */}
-          <Route path="/workbench" element={<RequireAuth><WorkbenchView /></RequireAuth>} />
-          <Route path="/workbench/todos" element={<RequireAuth><TodoListView /></RequireAuth>} />
-          <Route path="/workbench/todo/:todoId" element={<RequireAuth><TodoDetailView /></RequireAuth>} />
-          <Route path="/workbench/flow/:flowId" element={<RequireAuth><FlowDetailView /></RequireAuth>} />
-          <Route path="/candidate" element={<RequireAuth><CandidateView /></RequireAuth>} />
-          <Route path="/candidate/resume" element={<RequireAuth><CandidateResumeDetail /></RequireAuth>} />
-          <Route path="/candidate/home" element={<RequireAuth><CandidateHomeView /></RequireAuth>} />
-          <Route path="/candidate/memory" element={<RequireAuth><CandidateMemoryView /></RequireAuth>} />
-          <Route path="/candidate/profile" element={<RequireAuth><CandidateProfileView /></RequireAuth>} />
+          {/* 需要登录的页面 —— 左右结构布局 */}
+          <Route element={<RequireAuth><DashboardLayout /></RequireAuth>}>
+            <Route path="/workbench" element={<WorkbenchView />} />
+            <Route path="/workbench/todos" element={<TodoListView />} />
+            <Route path="/workbench/todo/:todoId" element={<TodoDetailView />} />
+            <Route path="/workbench/flow/:flowId" element={<FlowDetailView />} />
+            <Route path="/candidate" element={<CandidateView />} />
+            <Route path="/candidate/resume" element={<CandidateResumeDetail />} />
+            <Route path="/candidate/home" element={<CandidateHomeView />} />
+            <Route path="/candidate/memory" element={<CandidateMemoryView />} />
+            <Route path="/candidate/profile" element={<CandidateProfileView />} />
+            <Route path="/candidate/apply" element={<ApplyDetailView />} />
+            <Route path="/candidate/jobs" element={<JobRecommendListView />} />
+            <Route path="/candidate/job/:jobId" element={<JobDetailView />} />
+            <Route path="/candidate/delivery" element={<AIDeliveryView />} />
+            <Route path="/employer" element={<EmployerDashboard />} />
+            <Route path="/employer/memory" element={<EnterpriseMemoryView />} />
+            <Route path="/employer/home" element={<EnterpriseHomeView />} />
+            <Route path="/employer/talent/:talentId" element={<TalentDetailView />} />
+            <Route path="/employer/post" element={<JobManagementView />} />
+            <Route path="/employer/post/:postId" element={<JobPostDetailView />} />
+            <Route path="/employer/talent-pool" element={<TalentPoolView />} />
+            <Route path="/invite" element={<InviteFriendView />} />
+            <Route path="/memory/input" element={<MemoryInputView />} />
+            <Route path="/tokens" element={<TokenManagementView />} />
+            <Route path="/notifications" element={<NotificationCenterView />} />
+            <Route path="/feedback" element={<FeedbackView />} />
+            <Route path="/settings" element={<SettingsManagementView isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} />} />
+          </Route>
+          {/* 公开的候选人 profile 页面 */}
           <Route path="/candidate/profile/:candidateId" element={<PublicCandidateProfileView />} />
-          <Route path="/candidate/apply" element={<RequireAuth><ApplyDetailView /></RequireAuth>} />
-          <Route path="/candidate/jobs" element={<RequireAuth><JobRecommendListView /></RequireAuth>} />
-          <Route path="/candidate/job/:jobId" element={<RequireAuth><JobDetailView /></RequireAuth>} />
-          <Route path="/employer" element={<RequireAuth><EmployerDashboard /></RequireAuth>} />
-          <Route path="/employer/memory" element={<RequireAuth><EnterpriseMemoryView /></RequireAuth>} />
-          <Route path="/memory/input" element={<RequireAuth><MemoryInputView /></RequireAuth>} />
-          <Route path="/employer/home" element={<RequireAuth><EnterpriseHomeView /></RequireAuth>} />
-          <Route path="/employer/talent/:talentId" element={<RequireAuth><TalentDetailView /></RequireAuth>} />
-          <Route path="/employer/post" element={<RequireAuth><JobManagementView /></RequireAuth>} />
-          <Route path="/employer/post/:postId" element={<RequireAuth><JobPostDetailView /></RequireAuth>} />
-          <Route path="/invite" element={<RequireAuth><InviteFriendView /></RequireAuth>} />
-          <Route path="/candidate/delivery" element={<RequireAuth><AIDeliveryView /></RequireAuth>} />
-          <Route path="/employer/talent-pool" element={<RequireAuth><TalentPoolView /></RequireAuth>} />
-          <Route path="/tokens" element={<RequireAuth><TokenManagementView /></RequireAuth>} />
-          <Route path="/notifications" element={<RequireAuth><NotificationCenterView /></RequireAuth>} />
-          <Route path="/feedback" element={<RequireAuth><FeedbackView /></RequireAuth>} />
-          <Route path="/settings" element={<RequireAuth><SettingsManagementView isDarkMode={isDarkMode} toggleDarkMode={toggleDarkMode} /></RequireAuth>} />
+          {/* AI Assistant 保持独立全屏布局 */}
           <Route path="/ai-assistant" element={<RequireAuth><AIAssistantView /></RequireAuth>} />
         </Routes>
       </main>
         
-        <footer className="pt-12 pb-6 border-t border-slate-100 bg-white">
-          <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-12 mb-8 md:mb-12">
-              <div className="lg:col-span-4">
-                <Link to="/" className="flex items-center gap-3 mb-6 group">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
-                    <Zap className="text-white w-6 h-6" />
-                  </div>
-                  <span className="text-2xl font-black text-slate-900">Devnors <span className="text-indigo-600 text-sm font-normal">得若</span></span>
-                </Link>
-                <p className="text-slate-500 text-sm leading-relaxed mb-6">AI 原生招聘平台。助力人才实现职业梦想，为企业精准推荐全球精英。</p>
-                <div className="flex items-center gap-4">
-                  {/* 微信 */}
-                  <a href="#" title="微信" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-emerald-500 hover:text-white transition-all group">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05a6.582 6.582 0 0 1-.261-1.816c0-3.733 3.571-6.764 7.975-6.764.259 0 .51.02.761.04C17.46 4.539 13.46 2.188 8.69 2.188zm-2.6 4.408a1.09 1.09 0 0 1 1.092 1.089 1.09 1.09 0 0 1-1.092 1.089 1.09 1.09 0 0 1-1.093-1.09 1.09 1.09 0 0 1 1.093-1.088zm5.502 0a1.09 1.09 0 0 1 1.093 1.089 1.09 1.09 0 0 1-1.093 1.089 1.09 1.09 0 0 1-1.092-1.09 1.09 1.09 0 0 1 1.092-1.088zM16.216 9.05c-3.862 0-6.994 2.67-6.994 5.962 0 3.293 3.132 5.962 6.994 5.962.68 0 1.34-.086 1.975-.243a.723.723 0 0 1 .6.082l1.57.917a.271.271 0 0 0 .14.045c.132 0 .241-.11.241-.245 0-.06-.024-.118-.04-.176l-.322-1.218a.493.493 0 0 1 .177-.554C22.196 18.39 23.21 16.61 23.21 15.012c0-3.293-3.132-5.962-6.994-5.962zm-2.393 3.478a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814zm4.785 0a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814z"/></svg>
-                  </a>
-                  {/* 抖音 */}
-                  <a href="#" title="抖音" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white transition-all group">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.001-.104z"/></svg>
-                  </a>
-                  {/* 小红书 */}
-                  <a href="#" title="小红书" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-rose-500 hover:text-white transition-all group">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7h-2.03l.52-2.5H13.4l-.52 2.5h-1.86l.52-2.5H9.95l-.52 2.5H7.5v1.5h1.57l-.42 2H6.5v1.5h1.8L7.77 16.5h1.59l.52-2.5h1.86l-.52 2.5h1.59l.52-2.5H16.5V13h-2.03l.42-2H16.5V9.5zm-4.09 4h-1.86l.42-2h1.86l-.42 2z"/></svg>
-                  </a>
-                  {/* 轻识 */}
-                  <a href="#" title="轻识" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-indigo-500 hover:text-white transition-all group">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
-                  </a>
-                </div>
-              </div>
-              <div className="lg:col-span-7 lg:col-start-7">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">产品</h4>
-                    <div className="space-y-3">
-                      <Link to="/products" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Hire Agent</Link>
-                      <Link to="/solutions" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">解决方案</Link>
-                      <Link to="/models" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Agent 技术</Link>
-                      <Link to="/pricing" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">定价方案</Link>
+        {isLoggedIn ? (
+          <CompactFooter />
+        ) : (
+          <footer className="pt-12 pb-6 border-t border-slate-100 bg-white">
+            <div className="max-w-7xl mx-auto px-4 md:px-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-12 mb-8 md:mb-12">
+                <div className="lg:col-span-4">
+                  <Link to="/" className="flex items-center gap-3 mb-6 group">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
+                      <Zap className="text-white w-6 h-6" />
                     </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">法律</h4>
-                    <div className="space-y-3">
-                      <Link to="/terms" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">服务条款</Link>
-                      <Link to="/privacy" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">隐私政策</Link>
-                      <Link to="/personal-info" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">个人信息保护</Link>
-                      <Link to="/algorithm" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">算法说明</Link>
-                      <Link to="/copyright" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版权声明</Link>
-                      <Link to="/minor-protection" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">未成年人保护</Link>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">支持</h4>
-                    <div className="space-y-3">
-                      <Link to="/about" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">关于我们</Link>
-                      <Link to="/tokens" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">资金账户</Link>
-                      <Link to="/help" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">帮助中心</Link>
-                      <Link to="/feedback" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">反馈建议</Link>
-                      <Link to="/changelog" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版本更新</Link>
-                    </div>
+                    <span className="text-2xl font-black text-slate-900">Devnors <span className="text-indigo-600 text-sm font-normal">得若</span></span>
+                  </Link>
+                  <p className="text-slate-500 text-sm leading-relaxed mb-6">AI 原生招聘平台。助力人才实现职业梦想，为企业精准推荐全球精英。</p>
+                  <div className="flex items-center gap-4">
+                    <a href="#" title="微信" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-emerald-500 hover:text-white transition-all group">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05a6.582 6.582 0 0 1-.261-1.816c0-3.733 3.571-6.764 7.975-6.764.259 0 .51.02.761.04C17.46 4.539 13.46 2.188 8.69 2.188zm-2.6 4.408a1.09 1.09 0 0 1 1.092 1.089 1.09 1.09 0 0 1-1.092 1.089 1.09 1.09 0 0 1-1.093-1.09 1.09 1.09 0 0 1 1.093-1.088zm5.502 0a1.09 1.09 0 0 1 1.093 1.089 1.09 1.09 0 0 1-1.093 1.089 1.09 1.09 0 0 1-1.092-1.09 1.09 1.09 0 0 1 1.092-1.088zM16.216 9.05c-3.862 0-6.994 2.67-6.994 5.962 0 3.293 3.132 5.962 6.994 5.962.68 0 1.34-.086 1.975-.243a.723.723 0 0 1 .6.082l1.57.917a.271.271 0 0 0 .14.045c.132 0 .241-.11.241-.245 0-.06-.024-.118-.04-.176l-.322-1.218a.493.493 0 0 1 .177-.554C22.196 18.39 23.21 16.61 23.21 15.012c0-3.293-3.132-5.962-6.994-5.962zm-2.393 3.478a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814zm4.785 0a.907.907 0 1 1 0 1.814.907.907 0 0 1 0-1.814z"/></svg>
+                    </a>
+                    <a href="#" title="抖音" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white transition-all group">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.001-.104z"/></svg>
+                    </a>
+                    <a href="#" title="小红书" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-rose-500 hover:text-white transition-all group">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7h-2.03l.52-2.5H13.4l-.52 2.5h-1.86l.52-2.5H9.95l-.52 2.5H7.5v1.5h1.57l-.42 2H6.5v1.5h1.8L7.77 16.5h1.59l.52-2.5h1.86l-.52 2.5h1.59l.52-2.5H16.5V13h-2.03l.42-2H16.5V9.5zm-4.09 4h-1.86l.42-2h1.86l-.42 2z"/></svg>
+                    </a>
+                    <a href="#" title="轻识" className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-600 hover:bg-indigo-500 hover:text-white transition-all group">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
+                    </a>
                   </div>
                 </div>
+                <div className="lg:col-span-7 lg:col-start-7">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">产品</h4>
+                      <div className="space-y-3">
+                        <Link to="/products" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Hire Agent</Link>
+                        <Link to="/solutions" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">解决方案</Link>
+                        <Link to="/models" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">Agent 技术</Link>
+                        <Link to="/pricing" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">定价方案</Link>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">法律</h4>
+                      <div className="space-y-3">
+                        <Link to="/terms" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">服务条款</Link>
+                        <Link to="/privacy" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">隐私政策</Link>
+                        <Link to="/personal-info" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">个人信息保护</Link>
+                        <Link to="/algorithm" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">算法说明</Link>
+                        <Link to="/copyright" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版权声明</Link>
+                        <Link to="/minor-protection" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">未成年人保护</Link>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">支持</h4>
+                      <div className="space-y-3">
+                        <Link to="/about" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">关于我们</Link>
+                        <Link to="/tokens" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">资金账户</Link>
+                        <Link to="/help" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">帮助中心</Link>
+                        <Link to="/feedback" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">反馈建议</Link>
+                        <Link to="/changelog" className="block text-sm text-slate-500 hover:text-indigo-600 transition-colors">版本更新</Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p className="text-xs text-slate-400">© 2026 Devnors 得若智能体. All rights reserved.</p>
+                <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Devnors Multi-Agent Synergy</p>
               </div>
             </div>
-            <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-xs text-slate-400">© 2026 Devnors 得若智能体. All rights reserved.</p>
-              <p className="text-xs text-slate-400 uppercase tracking-tighter">Powered by Devnors Multi-Agent Synergy</p>
-            </div>
-          </div>
-        </footer>
+          </footer>
+        )}
       </div>
   );
 };
@@ -23724,14 +23865,14 @@ const CandidateResumeDetail = () => {
   const profile = location.state?.profile as CandidateProfile;
 
   if (!profile) return (
-    <div className="pt-40 text-center">
+    <div className="pt-20 text-center">
        <p className="text-slate-400 font-bold mb-4">未找到简历数据</p>
        <button onClick={() => navigate('/candidate')} className="bg-indigo-600 text-white px-6 py-2 rounded">返回上传</button>
     </div>
   );
 
   return (
-    <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-5xl mx-auto">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-black transition-colors">
           <ChevronLeft size={20} /> 返回

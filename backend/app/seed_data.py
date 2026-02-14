@@ -984,14 +984,27 @@ async def seed_database():
             Changelog(version='v1.0.11', date='2026-02-13', item_type='优化', item_color=OC, description='种子数据大幅扩展：新增管理员账号、订单交易记录、Token 套餐包等初始化数据', sort_order=8),
 
             # v1.0.12 - 2026-02-14
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='首页核心数据改为真实动态统计：新增 /platform-stats API，实时展示候选人、企业、匹配数', sort_order=1),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='深色/浅色模式切换增加平滑过渡动画：全局颜色 400ms 渐变 + 切换图标旋转弹跳效果', sort_order=2),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复智能邀约匹配（smart_invite）任务不消耗 Token 的 bug', sort_order=3),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复简历智能解析自动填充资料（auto_fill_profile）不记录 Token 的 bug', sort_order=4),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复候选人简历 AI 分析（candidates/analyze）不扣减 Token 的 bug', sort_order=5),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='个人记忆与企业记忆卡片样式统一：边框统一为 slate 色，标签按类型显示彩色背景区分', sort_order=6),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='量化效率标杆数据增加方向标识：+578% 效率提升、+82% 匹配精度、-70% 人力成本', sort_order=7),
-            Changelog(version='v1.0.12', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='Token 管理页与定价页邀请卡片配色统一为 indigo/purple 渐变风格', sort_order=8),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='新功能', item_color=NC, description='首页核心数据改为真实动态统计：新增 /platform-stats API，实时展示候选人、企业、匹配数', sort_order=1),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='新功能', item_color=NC, description='深色/浅色模式切换增加平滑过渡动画：全局颜色 400ms 渐变 + 切换图标旋转弹跳效果', sort_order=2),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='修复', item_color=FC, description='修复智能邀约匹配（smart_invite）任务不消耗 Token 的 bug', sort_order=3),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='修复', item_color=FC, description='修复简历智能解析自动填充资料（auto_fill_profile）不记录 Token 的 bug', sort_order=4),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='修复', item_color=FC, description='修复候选人简历 AI 分析（candidates/analyze）不扣减 Token 的 bug', sort_order=5),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='优化', item_color=OC, description='个人记忆与企业记忆卡片样式统一：边框统一为 slate 色，标签按类型显示彩色背景区分', sort_order=6),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='优化', item_color=OC, description='量化效率标杆数据增加方向标识：+578% 效率提升、+82% 匹配精度、-70% 人力成本', sort_order=7),
+            Changelog(version='v1.0.12', date='2026-02-14', item_type='优化', item_color=OC, description='Token 管理页与定价页邀请卡片配色统一为 indigo/purple 渐变风格', sort_order=8),
+
+            # v1.0.13 - 2026-02-14
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='侧边栏新增「浏览器」分类：按身份角色动态显示个人主页（求职者）或企业主页（企业方）入口', sort_order=1),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='侧边栏「工具」分类新增反馈意见入口，支持快速提交反馈', sort_order=2),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='反馈建议页面新增「反馈意见 / 我的工单」Tab 快速切换导航', sort_order=3),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='新功能', item_color=NC, description='控制面板（工作台）入口同步添加至企业管理和求职管理两个分类', sort_order=4),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='修复', item_color=FC, description='修复身份切换过渡动画无法覆盖全屏的 bug（backdrop-blur 导致 fixed 定位上下文异常）', sort_order=5),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='侧边栏导航精简：移除「通用」分类及 AI Agent / 控制面板入口，合并至角色分类下', sort_order=6),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='全站页面宽度统一：所有侧边栏导航页面统一为 max-w-5xl（1024px），视觉一致性大幅提升', sort_order=7),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='企业记忆 / 个人记忆页面布局重构：左右分栏改为顶部分类 Tab + 垂直卡片列表，信息展示更紧凑', sort_order=8),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='系统设置 / 反馈建议页面恢复为垂直布局，移除左右分栏样式', sort_order=9),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='全站页面返回按钮清理：移除 12 个页面冗余的返回按钮，侧边栏导航已覆盖跳转需求', sort_order=10),
+            Changelog(version='v1.0.13', date='2026-02-14', tag='最新', tag_color='bg-emerald-100 text-emerald-700', item_type='优化', item_color=OC, description='Navbar 用户名与角色标签字号增大，提升顶部导航栏可读性', sort_order=11),
 
         ]
         for cl in changelog_records:
