@@ -298,6 +298,19 @@ select {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   深色/浅色模式切换过渡动画
+   ═══════════════════════════════════════════════════════════════════ */
+
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.35s ease, color 0.25s ease,
+              border-color 0.3s ease, box-shadow 0.3s ease,
+              fill 0.3s ease, stroke 0.3s ease !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    深色模式 — CSS 变量覆盖 + 全局样式重写
    ═══════════════════════════════════════════════════════════════════ */
 
@@ -340,9 +353,11 @@ select {
 .dark .bg-slate-100\/50 {
   background-color: rgba(37, 40, 56, 0.5) !important;
 }
-/* 浅色徽章背景在暗黑下变深 */
+
+/* ── Badge/Tag -50 浅色背景 → 暗色柔和背景 ──────────────────── */
 .dark .bg-indigo-50,
-.dark .bg-indigo-50\/80 {
+.dark .bg-indigo-50\/80,
+.dark .bg-indigo-50\/60 {
   background-color: rgba(79, 70, 229, 0.12) !important;
 }
 .dark .bg-emerald-50 {
@@ -372,6 +387,79 @@ select {
 .dark .bg-pink-50 {
   background-color: rgba(236, 72, 153, 0.10) !important;
 }
+.dark .bg-teal-50 {
+  background-color: rgba(20, 184, 166, 0.10) !important;
+}
+
+/* ── Badge/Tag -100 背景 → 暗色半透明背景（标签修复） ────────── */
+.dark .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.14) !important;
+}
+.dark .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.14) !important;
+}
+.dark .bg-blue-100 {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+.dark .bg-indigo-100 {
+  background-color: rgba(79, 70, 229, 0.14) !important;
+}
+.dark .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.14) !important;
+}
+.dark .bg-cyan-100 {
+  background-color: rgba(6, 182, 212, 0.14) !important;
+}
+.dark .bg-sky-100 {
+  background-color: rgba(14, 165, 233, 0.14) !important;
+}
+.dark .bg-pink-100 {
+  background-color: rgba(236, 72, 153, 0.14) !important;
+}
+.dark .bg-teal-100 {
+  background-color: rgba(20, 184, 166, 0.14) !important;
+}
+.dark .bg-orange-100 {
+  background-color: rgba(249, 115, 22, 0.14) !important;
+}
+
+/* ── Badge/Tag -700 文本 → 暗色柔和文字色（降低亮度） ─────────── */
+.dark .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+.dark .text-rose-700 {
+  color: #fda4af !important;
+}
+.dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+.dark .text-purple-700 {
+  color: #c4b5fd !important;
+}
+.dark .text-cyan-700 {
+  color: #67e8f9 !important;
+}
+.dark .text-sky-700 {
+  color: #7dd3fc !important;
+}
+.dark .text-pink-700 {
+  color: #f9a8d4 !important;
+}
+.dark .text-teal-700 {
+  color: #5eead4 !important;
+}
+.dark .text-orange-700 {
+  color: #fdba74 !important;
+}
 
 /* ── 文本色覆盖 ──────────────────────────────────────────────── */
 
@@ -388,13 +476,76 @@ select {
   color: #94a3b8 !important;
 }
 .dark .text-slate-500 {
-  color: #64748b !important;
+  color: #8892a4 !important;
 }
 .dark .text-slate-400 {
-  color: #64748b !important;
+  color: #8892a4 !important;
 }
 .dark .text-slate-300 {
-  color: #475569 !important;
+  color: #64748b !important;
+}
+
+/* ── Icon 颜色增强（深色模式下提亮） ───────────────────────── */
+
+.dark .text-indigo-400 {
+  color: #a5b4fc !important;
+}
+.dark .text-indigo-500 {
+  color: #818cf8 !important;
+}
+.dark .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+.dark .text-emerald-500 {
+  color: #6ee7b7 !important;
+}
+.dark .text-emerald-600 {
+  color: #6ee7b7 !important;
+}
+.dark .text-amber-500 {
+  color: #fcd34d !important;
+}
+.dark .text-amber-600 {
+  color: #fcd34d !important;
+}
+.dark .text-rose-500 {
+  color: #fda4af !important;
+}
+.dark .text-rose-600 {
+  color: #fb7185 !important;
+}
+.dark .text-blue-500 {
+  color: #93c5fd !important;
+}
+.dark .text-blue-600 {
+  color: #93c5fd !important;
+}
+.dark .text-purple-500 {
+  color: #c4b5fd !important;
+}
+.dark .text-purple-600 {
+  color: #c4b5fd !important;
+}
+.dark .text-cyan-500 {
+  color: #67e8f9 !important;
+}
+.dark .text-cyan-600 {
+  color: #67e8f9 !important;
+}
+.dark .text-teal-500 {
+  color: #5eead4 !important;
+}
+.dark .text-teal-600 {
+  color: #5eead4 !important;
+}
+.dark .text-sky-500 {
+  color: #7dd3fc !important;
+}
+.dark .text-pink-500 {
+  color: #f9a8d4 !important;
+}
+.dark .text-orange-500 {
+  color: #fdba74 !important;
 }
 
 /* ── 边框色覆盖 ──────────────────────────────────────────────── */
@@ -411,6 +562,9 @@ select {
 }
 .dark .border-slate-50 {
   border-color: #1c1f2b !important;
+}
+.dark .border-indigo-200\/60 {
+  border-color: rgba(99, 102, 241, 0.2) !important;
 }
 .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--color-border-light) !important;
@@ -442,6 +596,7 @@ select {
 .dark textarea:focus {
   border-color: #6366f1 !important;
   background-color: var(--color-surface) !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
 }
 .dark .bg-slate-50\/50 {
   background-color: var(--color-surface-raised) !important;
@@ -466,11 +621,32 @@ select {
 .dark .hover\:border-slate-300:hover {
   border-color: #3b3f4f !important;
 }
+.dark .hover\:border-indigo-200\/60:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
 .dark .hover\:bg-rose-50:hover {
   background-color: rgba(244, 63, 94, 0.12) !important;
 }
 .dark .hover\:bg-indigo-50:hover {
   background-color: rgba(79, 70, 229, 0.15) !important;
+}
+.dark .hover\:bg-indigo-50\/30:hover {
+  background-color: rgba(79, 70, 229, 0.10) !important;
+}
+.dark .hover\:text-slate-600:hover {
+  color: #cbd5e1 !important;
+}
+.dark .hover\:text-slate-700:hover {
+  color: #e2e8f0 !important;
+}
+.dark .hover\:text-rose-500:hover {
+  color: #fb7185 !important;
+}
+.dark .hover\:text-indigo-500:hover {
+  color: #a5b4fc !important;
+}
+.dark .hover\:text-indigo-600:hover {
+  color: #a5b4fc !important;
 }
 
 /* ── 阴影 ────────────────────────────────────────────────────── */
@@ -479,19 +655,28 @@ select {
 .dark .shadow-\[0_1px_3px_rgba\(0\2c 0\2c 0\2c 0\.04\)\] {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
+.dark .shadow-lg {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 4px 10px -5px rgba(0, 0, 0, 0.3) !important;
+}
 .dark .shadow-indigo-200,
 .dark .shadow-indigo-200\/50,
 .dark .hover\:shadow-indigo-200\/50:hover {
   box-shadow: none !important;
 }
+.dark .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+}
 .dark .card-hover:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25) !important;
+}
+.dark .hover\:shadow-sm:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* ── Modal 弹窗 ──────────────────────────────────────────────── */
 
 .dark .modal-overlay {
-  background-color: rgba(0, 0, 0, 0.55) !important;
+  background-color: rgba(0, 0, 0, 0.6) !important;
 }
 .dark .modal-content {
   background-color: var(--color-surface) !important;
@@ -501,14 +686,21 @@ select {
 
 /* ── 表格 ────────────────────────────────────────────────────── */
 
+.dark table thead {
+  background-color: var(--color-surface-raised) !important;
+}
 .dark table thead th {
-  color: #6b7280 !important;
+  color: #8892a4 !important;
+  border-color: var(--color-border-light) !important;
 }
 .dark table tbody tr {
   border-color: #1c1f2b !important;
 }
 .dark table tbody tr:hover {
   background-color: rgba(30, 33, 48, 0.5) !important;
+}
+.dark table tbody td {
+  border-color: var(--color-border-light) !important;
 }
 
 /* ── 滚动条 ──────────────────────────────────────────────────── */
@@ -523,10 +715,16 @@ select {
   scrollbar-color: #3b3f4f transparent;
 }
 
-/* ── 侧边栏 ──────────────────────────────────────────────────── */
+/* ── 侧边栏导航活跃态 ───────────────────────────────────────── */
 
 .dark .nav-item-active::before {
   background: #818cf8;
+}
+.dark .bg-indigo-50\/80 {
+  background-color: rgba(79, 70, 229, 0.15) !important;
+}
+.dark .shadow-\[0_0_0_1px_rgba\(79\2c 70\2c 229\2c 0\.08\)\] {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2) !important;
 }
 
 /* ── 加载器 ──────────────────────────────────────────────────── */
@@ -541,6 +739,27 @@ select {
 .dark .from-indigo-600.to-indigo-500 {
   --tw-gradient-from: #6366f1;
   --tw-gradient-to: #818cf8;
+}
+.dark .from-indigo-500.to-purple-500 {
+  --tw-gradient-from: #6366f1;
+  --tw-gradient-to: #a78bfa;
+}
+
+/* ── 按钮覆盖 ────────────────────────────────────────────────── */
+
+.dark .bg-indigo-600 {
+  background-color: #6366f1 !important;
+}
+.dark .bg-indigo-600:hover,
+.dark .hover\:bg-indigo-700:hover {
+  background-color: #4f46e5 !important;
+}
+.dark .bg-rose-600 {
+  background-color: #e11d48 !important;
+}
+.dark .bg-rose-600:hover,
+.dark .hover\:bg-rose-700:hover {
+  background-color: #be123c !important;
 }
 
 /* ── Recharts / SVG 图表 ─────────────────────────────────────── */
@@ -562,4 +781,22 @@ select {
 /* ── focus:bg-white 覆盖 ─────────────────────────────────────── */
 .dark .focus\:bg-white:focus {
   background-color: var(--color-surface) !important;
+}
+
+/* ── 进度条 / 数据条 ─────────────────────────────────────────── */
+.dark .bg-indigo-600\/20 {
+  background-color: rgba(79, 70, 229, 0.12) !important;
+}
+.dark .bg-emerald-600\/20 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+/* ── Ring / 活跃指示 ──────────────────────────────────────────── */
+.dark .ring-indigo-500\/20 {
+  --tw-ring-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+/* ── 移动端顶部栏/抽屉覆盖 ──────────────────────────────────── */
+.dark .shadow-2xl {
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
 }

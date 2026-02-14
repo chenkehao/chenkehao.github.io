@@ -322,6 +322,15 @@ const AdminLayout = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
   const user = safeParseUser();
 
+  const toggleDark = useCallback(() => {
+    const el = document.documentElement;
+    el.classList.add('theme-transition');
+    requestAnimationFrame(() => {
+      setDark(d => !d);
+      setTimeout(() => el.classList.remove('theme-transition'), 400);
+    });
+  }, []);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
     localStorage.setItem('admin_dark', dark ? '1' : '0');
@@ -406,7 +415,7 @@ const AdminLayout = ({ children }: { children: ReactNode }) => {
           <button onClick={handleLogout} className="flex items-center gap-2 text-xs text-slate-400 hover:text-rose-500 font-medium transition-colors">
             <LogOut size={15} /> {(isMobile || !collapsed) && '退出登录'}
           </button>
-          <button onClick={() => setDark(!dark)} className="p-1.5 rounded-md text-slate-400 hover:text-indigo-500 hover:bg-slate-100 transition-colors" title={dark ? '浅色模式' : '深色模式'}>
+          <button onClick={() => toggleDark()} className="p-1.5 rounded-md text-slate-400 hover:text-indigo-500 hover:bg-slate-100 transition-colors" title={dark ? '浅色模式' : '深色模式'}>
             {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
         </div>
@@ -445,7 +454,7 @@ const AdminLayout = ({ children }: { children: ReactNode }) => {
             <span className="text-sm font-bold text-slate-900">Devnors</span>
             <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold">Admin</span>
           </div>
-          <button onClick={() => setDark(!dark)} className="p-1.5 -mr-1 text-slate-400 hover:text-indigo-500">
+          <button onClick={() => toggleDark()} className="p-1.5 -mr-1 text-slate-400 hover:text-indigo-500">
             {dark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
         </header>
