@@ -11,17 +11,17 @@ export default defineConfig(({ mode }) => {
         proxy: {
           // 代理后端 API 请求
           '/api': {
-            target: 'http://localhost:8080',
+            target: 'http://localhost:8000',
             changeOrigin: true,
           },
           // 代理健康检查
           '/health': {
-            target: 'http://localhost:8080',
+            target: 'http://localhost:8000',
             changeOrigin: true,
           },
           // 代理上传文件
           '/uploads': {
-            target: 'http://localhost:8080',
+            target: 'http://localhost:8000',
             changeOrigin: true,
           },
         },
