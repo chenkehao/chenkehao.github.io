@@ -225,6 +225,30 @@ export const uploadAvatar = async (file: File): Promise<UserInfo> => {
   return response.json();
 };
 
+/**
+ * 上传企业Logo
+ */
+export const uploadCompanyLogo = async (file: File): Promise<UserInfo> => {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch(`${API_BASE_URL}/auth/me/logo`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.detail || 'Logo上传失败');
+  }
+  
+  return response.json();
+};
+
 // ============ AI API ============
 
 export interface ResumeAnalysisResult {

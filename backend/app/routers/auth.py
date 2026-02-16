@@ -469,6 +469,54 @@ async def upload_avatar(
     return current_user
 
 
+LOGO_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "logos")
+os.makedirs(LOGO_UPLOAD_DIR, exist_ok=True)
+
+
+@router.post("/me/logo", response_model=UserResponse)
+async def upload_logo(
+    file: UploadFile = File(..., description="企业Logo (JPG/PNG/WEBP/SVG, 最大 5MB)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """上传/更新企业Logo"""
+    allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 JPG、PNG、WEBP、GIF、SVG 格式的图片"
+        )
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="图片大小不能超过 5MB"
+        )
+
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "png"
+    filename = f"{current_user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(LOGO_UPLOAD_DIR, filename)
+
+    if current_user.company_logo and "/uploads/logos/" in current_user.company_logo:
+        old_filename = current_user.company_logo.split("/uploads/logos/")[-1]
+        old_path = os.path.join(LOGO_UPLOAD_DIR, old_filename)
+        if os.path.exists(old_path):
+            try:
+                os.remove(old_path)
+            except Exception:
+                pass
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    current_user.company_logo = f"/uploads/logos/{filename}"
+    await db.commit()
+    await db.refresh(current_user)
+
+    return current_user
+
+
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     current_user: User = Depends(get_current_user),

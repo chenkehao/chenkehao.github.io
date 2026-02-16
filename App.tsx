@@ -790,6 +790,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
   const prevTokenBalance = useRef<string>('--');
   const rawBalanceRef = useRef<number>(0);
   const animFrameRef = useRef<number>(0);
+  const [enterpriseDisplayName, setEnterpriseDisplayName] = useState<string>('');
 
   // 获取未读通知数量 + Token 余额
   useEffect(() => {
@@ -858,6 +859,18 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
     return () => clearInterval(interval);
   }, [isLoggedIn, user?.id]);
 
+  // 获取企业显示名称
+  useEffect(() => {
+    if (!isLoggedIn || !user?.id || userRole !== 'employer') { setEnterpriseDisplayName(''); return; }
+    (async () => {
+      try {
+        const { getSettings } = await import('./services/apiService');
+        const s = await getSettings(user.id);
+        setEnterpriseDisplayName(s?.short_name || s?.display_name || '');
+      } catch { /* ignore */ }
+    })();
+  }, [isLoggedIn, user?.id, userRole]);
+
   const handleLogout = () => {
     logout();
     setShowUserMenu(false);
@@ -925,9 +938,11 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 </div>
                 <div className="text-left hidden sm:block">
                   <div className="text-sm font-bold text-slate-800 truncate max-w-[100px] leading-tight">{user?.name || '用户'}</div>
-                  <div className="text-xs text-slate-400 leading-tight">
-                    {userRole === 'candidate' ? '求职者' : userRole === 'employer' ? '招聘方' : ''}
-                  </div>
+                  {userRole === 'employer' && (enterpriseDisplayName || user?.company_name) && (
+                    <div className="text-xs text-slate-400 leading-tight truncate max-w-[100px]">
+                      {enterpriseDisplayName || user?.company_name}
+                    </div>
+                  )}
                 </div>
                 <ChevronDown size={12} className="text-slate-300 hidden sm:block" />
               </button>
@@ -1037,7 +1052,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                       ) : (
                         <RotateCcw size={16} className="flex-shrink-0" />
                       )}
-                      {isSwitching ? '切换中...' : `切换为${userRole === 'candidate' ? '企业方' : '求职者'}`}
+                      {isSwitching ? '切换中...' : `切换为${userRole === 'candidate' ? '企业方' : '个人'}`}
                     </button>
                   </div>
                   {/* 退出登录 */}
@@ -1103,7 +1118,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 </div>
                 <h3 className="text-lg font-black text-slate-900 mb-2">正在切换身份</h3>
                 <p className="text-sm text-slate-500">
-                  正在切换至<span className="font-bold text-indigo-600">{switchOverlay.newRole === 'employer' ? '企业方' : '求职者'}</span>模式...
+                  正在切换至<span className="font-bold text-indigo-600">{switchOverlay.newRole === 'employer' ? '企业方' : '个人'}</span>模式...
                 </p>
               </>
             ) : (
@@ -1119,7 +1134,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }: { isDarkMode: boolean; toggleDar
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-100 mb-3">
                   <CheckCircle2 size={16} className="text-emerald-500" />
                   <span className="text-sm font-bold text-emerald-700">
-                    当前身份：{switchOverlay.newRole === 'employer' ? '企业方' : '求职者'}
+                    当前身份：{switchOverlay.newRole === 'employer' ? '企业方' : '个人'}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">正在跳转至 AI 助手...</p>
@@ -1533,6 +1548,9 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
   // 头像上传
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  // 企业Logo上传
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   // 二次验证弹窗状态（手机/邮箱修改）
   const [verifyModal, setVerifyModal] = useState<{show: boolean; type: 'phone' | 'email'; newValue: string; step: 'old' | 'new'}>({show: false, type: 'phone', newValue: '', step: 'old'});
   const [showEmailInput, setShowEmailInput] = useState(false);
@@ -1824,6 +1842,68 @@ const SettingsManagementView = ({ isDarkMode, toggleDarkMode }: { isDarkMode: bo
           <div className="space-y-6 animate-in fade-in duration-500">
             <h3 className="text-2xl font-black text-slate-900">基础信息设置</h3>
             
+            {/* 企业Logo */}
+            <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4">企业Logo</h4>
+              <div className="flex items-center gap-6">
+                <div 
+                  onClick={() => logoInputRef.current?.click()}
+                  className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-200 hover:border-indigo-300 flex items-center justify-center cursor-pointer transition-all group overflow-hidden bg-slate-50 hover:bg-indigo-50/50 flex-shrink-0"
+                >
+                  {logoUploading ? (
+                    <Loader2 className="animate-spin text-indigo-600" size={24} />
+                  ) : user?.company_logo ? (
+                    <img src={user.company_logo.startsWith('/') ? `${window.location.origin}${user.company_logo}` : user.company_logo} alt="Logo" className="w-full h-full object-contain p-2" />
+                  ) : (
+                    <div className="text-center">
+                      <ImageIcon size={24} className="mx-auto text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                      <span className="text-[10px] text-slate-400 mt-1 block">上传Logo</span>
+                    </div>
+                  )}
+                </div>
+                <input 
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) {
+                      showToast('图片大小不能超过 5MB', 'error');
+                      return;
+                    }
+                    setLogoUploading(true);
+                    try {
+                      const { uploadCompanyLogo } = await import('./services/apiService');
+                      await uploadCompanyLogo(file);
+                      await refreshUser();
+                      showToast('企业Logo更新成功', 'success');
+                      navigate('/settings?tab=General', { replace: true });
+                    } catch (err: any) {
+                      showToast(err.message || 'Logo上传失败', 'error');
+                    } finally {
+                      setLogoUploading(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <div className="text-sm text-slate-500">
+                  <p className="font-medium text-slate-700 mb-1">点击上传企业Logo</p>
+                  <p className="text-xs text-slate-400">支持 JPG、PNG、WEBP、SVG 格式，不超过 5MB</p>
+                  <p className="text-xs text-slate-400 mt-0.5">建议使用正方形透明底图片，显示效果更佳</p>
+                  {user?.company_logo && (
+                    <button 
+                      onClick={() => logoInputRef.current?.click()} 
+                      className="mt-2 text-xs text-indigo-600 font-bold hover:underline"
+                    >
+                      更换Logo
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* 企业信息 */}
             <div className="bg-white rounded-lg p-6 border border-slate-100 shadow-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -4848,7 +4928,7 @@ const WorkbenchView = () => {
                   onClick={() => setQueueFilter(null)}
                   className={`group flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all duration-200 border ${
                     queueFilter === null
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/20'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
@@ -5531,118 +5611,132 @@ const FlowDetailView = () => {
 
 // --- 关于我们页面 ---
 const AboutUsView = () => (
-  <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-6xl mx-auto">
-    <div className="text-center mb-16">
-      <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full text-sm font-bold mb-6 border border-indigo-100">
-        <Info size={16} /> 关于 Devnors 得若
+  <div className="pt-20 pb-12 px-4 md:pt-32 md:pb-20 md:px-6 max-w-5xl mx-auto">
+    {/* 页面头部 */}
+    <div className="mb-10 px-8 md:px-12">
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-full text-sm font-bold border border-indigo-100">
+          <Info size={16} /> 关于 Devnors 得若
+        </div>
       </div>
-      <h1 className="text-2xl md:text-4xl lg:text-5xl font-black text-slate-900 mb-4 md:mb-6 tracking-tight">我们的使命与愿景</h1>
+      <h1 className="text-xl md:text-2xl font-black text-slate-800 mb-3 tracking-tight text-center">全场景AI原生智能招聘平台</h1>
+      <p className="text-base text-slate-600 font-medium leading-relaxed">
+        <span className="text-indigo-500 font-bold">得若 Devnors Hire Agent</span> — 我们通过高效的AI匹配系统，为企业精准推荐全球精英，助力人才实现职业梦想。得若，找到你的搭档，让每一次选择匹配都成为机遇。
+      </p>
     </div>
 
-    <div className="bg-slate-50 rounded-lg p-10 md:p-16 border border-slate-100 relative overflow-hidden mb-8">
-      <div className="absolute top-0 right-0 p-32 opacity-5">
-        <Zap size={200} className="text-indigo-600" />
+    {/* 使命与愿景 */}
+    <div className="bg-slate-50 rounded-lg p-8 md:p-12 border border-slate-100 relative overflow-hidden mb-10">
+      <div className="absolute top-0 right-0 p-24 opacity-5">
+        <Zap size={160} className="text-indigo-600" />
       </div>
       <div className="relative z-10">
-        <h2 className="text-3xl font-black text-slate-900 mb-6">全场景AI原生智能招聘平台</h2>
-        <p className="text-xl text-slate-600 leading-relaxed font-medium">我们通过高效的 AI 匹配系统，为企业精准推荐全球精英，同时助力人才实现职业梦想。得若，找到你的搭档，让每一次选择匹配都成为机遇。</p>
+        <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-3">
+          <Sparkles size={22} className="text-indigo-600" /> 使命与愿景
+        </h2>
+        <p className="text-base text-slate-600 leading-relaxed font-medium">
+          得若 Devnors Multi‑Agent Synergy 多智能体协同系统，以AI多智能体协同技术为核心，致力于为个人提供职业发展、生活服务、婚恋社交、心理陪伴等全域智能服务，并为企业打造招聘、人事、财务、税务、法律、销售、客服等一体化全栈智能 Agent 解决方案。
+        </p>
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div className="bg-white rounded p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
-        <div className="w-14 h-14 bg-indigo-50 rounded flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+    {/* 核心能力 */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
+        <div className="w-14 h-14 bg-indigo-50 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
           <Brain size={28} className="text-indigo-600" />
         </div>
-        <h3 className="text-xl font-black text-slate-900 mb-3">AI 智能匹配</h3>
-        <p className="text-slate-500 font-medium">基于深度学习算法，实现人才与岗位的精准匹配，提升招聘效率。</p>
+        <h3 className="text-lg font-black text-slate-900 mb-2">AI 智能匹配</h3>
+        <p className="text-sm text-slate-500 font-medium leading-relaxed">基于深度学习算法，实现人才与岗位的精准匹配，提升招聘效率。</p>
       </div>
-      <div className="bg-white rounded p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
-        <div className="w-14 h-14 bg-emerald-50 rounded flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+      <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
+        <div className="w-14 h-14 bg-emerald-50 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
           <Globe size={28} className="text-emerald-600" />
         </div>
-        <h3 className="text-xl font-black text-slate-900 mb-3">全球化视野</h3>
-        <p className="text-slate-500 font-medium">打破地域限制，让优秀人才与企业实现无国界对接。</p>
+        <h3 className="text-lg font-black text-slate-900 mb-2">全球化视野</h3>
+        <p className="text-sm text-slate-500 font-medium leading-relaxed">打破地域限制，让优秀人才与企业实现无国界对接。</p>
       </div>
-      <div className="bg-white rounded p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
-        <div className="w-14 h-14 bg-amber-50 rounded flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+      <div className="bg-white rounded-lg p-8 border border-slate-100 shadow-lg hover:shadow-xl transition-all group">
+        <div className="w-14 h-14 bg-amber-50 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
           <Users size={28} className="text-amber-600" />
         </div>
-        <h3 className="text-xl font-black text-slate-900 mb-3">多智能体协作</h3>
-        <p className="text-slate-500 font-medium">多个 AI 智能体协同工作，全方位服务招聘全流程。</p>
+        <h3 className="text-lg font-black text-slate-900 mb-2">多智能体协作</h3>
+        <p className="text-sm text-slate-500 font-medium leading-relaxed">多个 AI 智能体协同工作，全方位服务招聘全流程。</p>
       </div>
     </div>
 
-    <div className="bg-white rounded-lg p-10 border border-slate-100 shadow-lg mb-8">
-      <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-        <Award size={24} className="text-amber-500" /> 核心价值观
+    {/* 核心价值观 */}
+    <div className="bg-white rounded-lg p-8 md:p-10 border border-slate-100 shadow-lg mb-10">
+      <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
+        <Award size={22} className="text-amber-500" /> 核心价值观
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="flex items-start gap-4 p-6 bg-slate-50 rounded">
-          <div className="w-12 h-12 bg-indigo-50 rounded flex items-center justify-center flex-shrink-0">
-            <CheckCircle2 size={24} className="text-indigo-600" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-lg">
+          <div className="w-11 h-11 bg-indigo-50 rounded-lg flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 size={22} className="text-indigo-600" />
           </div>
           <div>
-            <h4 className="text-lg font-black text-slate-900 mb-2">技术创新</h4>
+            <h4 className="text-base font-black text-slate-900 mb-1">技术创新</h4>
             <p className="text-slate-500 font-medium text-sm">持续投入 AI 技术研发，保持行业领先地位</p>
           </div>
         </div>
-        <div className="flex items-start gap-4 p-6 bg-slate-50 rounded">
-          <div className="w-12 h-12 bg-emerald-50 rounded flex items-center justify-center flex-shrink-0">
-            <Heart size={24} className="text-emerald-600" />
+        <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-lg">
+          <div className="w-11 h-11 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Heart size={22} className="text-emerald-600" />
           </div>
           <div>
-            <h4 className="text-lg font-black text-slate-900 mb-2">用户体验</h4>
+            <h4 className="text-base font-black text-slate-900 mb-1">用户体验</h4>
             <p className="text-slate-500 font-medium text-sm">以用户为中心，打造极致的招聘求职体验</p>
           </div>
         </div>
-        <div className="flex items-start gap-4 p-6 bg-slate-50 rounded">
-          <div className="w-12 h-12 bg-amber-50 rounded flex items-center justify-center flex-shrink-0">
-            <ShieldCheck size={24} className="text-amber-600" />
+        <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-lg">
+          <div className="w-11 h-11 bg-amber-50 rounded-lg flex items-center justify-center flex-shrink-0">
+            <ShieldCheck size={22} className="text-amber-600" />
           </div>
           <div>
-            <h4 className="text-lg font-black text-slate-900 mb-2">数据安全</h4>
+            <h4 className="text-base font-black text-slate-900 mb-1">数据安全</h4>
             <p className="text-slate-500 font-medium text-sm">严格保护用户隐私，确保数据安全可靠</p>
           </div>
         </div>
-        <div className="flex items-start gap-4 p-6 bg-slate-50 rounded">
-          <div className="w-12 h-12 bg-rose-50 rounded flex items-center justify-center flex-shrink-0">
-            <TrendingUp size={24} className="text-rose-600" />
+        <div className="flex items-start gap-4 p-5 bg-slate-50 rounded-lg">
+          <div className="w-11 h-11 bg-rose-50 rounded-lg flex items-center justify-center flex-shrink-0">
+            <TrendingUp size={22} className="text-rose-600" />
           </div>
           <div>
-            <h4 className="text-lg font-black text-slate-900 mb-2">持续成长</h4>
+            <h4 className="text-base font-black text-slate-900 mb-1">持续成长</h4>
             <p className="text-slate-500 font-medium text-sm">帮助每一位用户在职业道路上不断进步</p>
           </div>
         </div>
       </div>
     </div>
 
-    <div className="bg-white rounded-lg p-10 border border-slate-100 shadow-lg">
-      <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3">
-        <Mail size={24} className="text-indigo-500" /> 联系我们
+    {/* 联系我们 */}
+    <div className="bg-white rounded-lg p-8 md:p-10 border border-slate-100 shadow-lg">
+      <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
+        <Mail size={22} className="text-indigo-500" /> 联系我们
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <a href="mailto:admin@tvey.com" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-indigo-50 transition-all group">
-          <div className="w-12 h-12 bg-indigo-100 rounded flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-            <Mail size={24} className="text-indigo-600" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <a href="mailto:admin@tvey.com" className="flex items-center gap-4 p-5 bg-slate-50 rounded-lg hover:bg-indigo-50 transition-all group">
+          <div className="w-11 h-11 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+            <Mail size={22} className="text-indigo-600" />
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">商务合作</h4>
             <p className="text-xs text-slate-500">admin@tvey.com</p>
           </div>
         </a>
-        <div className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-amber-50 transition-all group">
-          <div className="w-12 h-12 bg-amber-100 rounded flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-            <MapPin size={24} className="text-amber-600" />
+        <div className="flex items-center gap-4 p-5 bg-slate-50 rounded-lg hover:bg-amber-50 transition-all group">
+          <div className="w-11 h-11 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+            <MapPin size={22} className="text-amber-600" />
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">公司地址</h4>
             <p className="text-xs text-slate-500">中国浙江杭州</p>
           </div>
         </div>
-        <Link to="/feedback" className="flex items-center gap-4 p-6 bg-slate-50 rounded hover:bg-rose-50 transition-all group">
-          <div className="w-12 h-12 bg-rose-100 rounded flex items-center justify-center group-hover:bg-rose-200 transition-colors">
-            <MessageCircle size={24} className="text-rose-600" />
+        <Link to="/feedback" className="flex items-center gap-4 p-5 bg-slate-50 rounded-lg hover:bg-rose-50 transition-all group">
+          <div className="w-11 h-11 bg-rose-100 rounded-lg flex items-center justify-center group-hover:bg-rose-200 transition-colors">
+            <MessageCircle size={22} className="text-rose-600" />
           </div>
           <div>
             <h4 className="text-sm font-black text-slate-900">在线客服</h4>
@@ -6681,7 +6775,7 @@ const CandidateView = () => {
           </button>
           <button 
             onClick={() => navigate('/candidate/apply')}
-            className="bg-emerald-600 text-white px-8 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-emerald-200 active:scale-95 transition-all"
+            className="bg-indigo-600 text-white px-8 py-3.5 rounded font-black text-sm flex items-center gap-2 shadow-xl shadow-indigo-200 active:scale-95 transition-all"
           >
             <Rocket size={20}/> 开始求职
           </button>
@@ -6692,25 +6786,25 @@ const CandidateView = () => {
         <div className="absolute top-0 right-0 p-8 opacity-5"><Brain size={120} /></div>
         <div className="flex justify-between items-center mb-6 relative z-10">
             <h3 className="text-xl font-black flex items-center gap-3 text-slate-900">
-              <Database size={20} className="text-emerald-500" /> 个人记忆 Memory
+              <Database size={20} className="text-indigo-500" /> 个人记忆 Memory
             </h3>
             <button 
               onClick={() => navigate('/candidate/memory')}
-              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded text-xs font-black text-emerald-600 flex items-center gap-1.5 transition-all active:scale-95 group"
+              className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded text-xs font-black text-indigo-600 flex items-center gap-1.5 transition-all active:scale-95 group"
             >
               <Pin size={12} className="group-hover:rotate-45 transition-transform" /> 记忆管理
             </button>
           </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
           {memoriesLoading ? (
-            <div className="col-span-4 flex justify-center py-4"><Loader2 className="animate-spin text-emerald-600" size={24} /></div>
+            <div className="col-span-4 flex justify-center py-4"><Loader2 className="animate-spin text-indigo-600" size={24} /></div>
           ) : memories.length === 0 ? (
             <div className="col-span-4 text-center py-8 text-slate-400">
               <Database size={32} className="mx-auto mb-2 opacity-50" />
               <p className="text-sm font-medium">暂无个人记忆</p>
               <button 
                 onClick={() => navigate('/candidate/memory')}
-                className="mt-2 text-emerald-600 text-xs font-bold hover:underline"
+                className="mt-2 text-indigo-600 text-xs font-bold hover:underline"
               >
                 点击添加第一条记忆
               </button>
@@ -6742,27 +6836,27 @@ const CandidateView = () => {
         <div className="lg:col-span-8 space-y-10">
           <div className="bg-white p-8 rounded-lg border border-slate-100 card-shadow">
             <h2 className="text-2xl font-black mb-6 flex items-center gap-3 text-slate-900">
-              <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><Briefcase size={20} /></div>
+              <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600"><Briefcase size={20} /></div>
               企业岗位库推荐
             </h2>
             <p className="text-slate-500 text-sm font-medium mb-6">基于您的职业画像，AI 智能体为您匹配了以下优质岗位</p>
               
               <div className="space-y-4">
                 {jobsLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="animate-spin text-emerald-600" size={32} /></div>
+                  <div className="flex justify-center py-8"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>
                 ) : recommendedJobs.map((job: any) => (
-                  <div key={job.id} onClick={() => navigate(`/candidate/job/${job.id}`)} className="group p-6 bg-slate-50 hover:bg-emerald-50/50 rounded border border-slate-100 hover:border-emerald-200 transition-all cursor-pointer">
+                  <div key={job.id} onClick={() => navigate(`/candidate/job/${job.id}`)} className="group p-6 bg-slate-50 hover:bg-indigo-50/50 rounded border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-start gap-4">
                         <div className="w-14 h-14 bg-white rounded flex items-center justify-center shadow-sm border border-slate-100 text-2xl font-bold">
                           {job.logo || '💼'}
                         </div>
                         <div>
-                          <h3 className="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors">{job.title}</h3>
+                          <h3 className="text-lg font-black text-slate-900 group-hover:text-indigo-700 transition-colors">{job.title}</h3>
                           <p className="text-slate-600 font-medium">{job.company} · {job.location || '全国'}</p>
                           <div className="flex flex-wrap gap-2 mt-2">
                             <span className="px-3 py-1 bg-white rounded-lg text-xs font-bold text-slate-600 border border-slate-200">{job.salary || '面议'}</span>
-                            <span className="px-3 py-1 bg-emerald-100 rounded-lg text-xs font-bold text-emerald-700">{job.match || 85}% 匹配度</span>
+                            <span className="px-3 py-1 bg-indigo-100 rounded-lg text-xs font-bold text-indigo-700">{job.match || 85}% 匹配度</span>
                             {(job.tags || []).map((tag: string, i: number) => (
                               <span key={i} className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-500">{tag}</span>
                             ))}
@@ -6796,7 +6890,7 @@ const CandidateView = () => {
               <div className="grid grid-cols-1 divide-y divide-slate-100">
                 {[
                   { label: 'AI投递', value: `${(candidateFlows || []).length} 次`, icon: Send, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-                  { label: '推荐岗位', value: `${recommendedJobs.length} 个`, icon: Briefcase, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                  { label: '推荐岗位', value: `${recommendedJobs.length} 个`, icon: Briefcase, color: 'text-indigo-600', bg: 'bg-indigo-50' },
                   { label: 'Token 余额', value: candidateTokenStats?.balance_display || '0', icon: Cpu, color: 'text-amber-500', bg: 'bg-amber-50' }
                 ].map((card, i) => (
                   <div key={i} className="p-6">
@@ -7487,7 +7581,7 @@ const CandidateMemoryView = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
         <div>
            <h1 className="text-3xl font-black text-slate-900 flex items-center gap-4">
-             <div className="p-3 bg-emerald-600 text-white rounded shadow-xl shadow-emerald-100"><Brain size={28} /></div>
+             <div className="p-3 bg-indigo-600 text-white rounded shadow-xl shadow-indigo-100"><Brain size={28} /></div>
              个人记忆 Memory
            </h1>
            <p className="text-slate-500 font-medium mt-2">Devnors Agent 持续学习并固化的人才能力、技能偏好与职业发展轨迹</p>
@@ -7503,7 +7597,7 @@ const CandidateMemoryView = () => {
           </button>
           <button 
             onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'skill', content: '', importance: 'Medium' })}
-            className="bg-emerald-600 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
+            className="bg-indigo-600 text-white px-6 py-3 rounded text-sm font-black flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-all active:scale-95"
           >
              <Plus size={18} /> 添加新记忆
           </button>
@@ -7513,7 +7607,7 @@ const CandidateMemoryView = () => {
       {/* 加载状态 */}
       {memoriesLoading && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="animate-spin text-emerald-600" size={32} />
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
           <span className="ml-3 text-slate-500 font-medium">加载人才记忆中...</span>
         </div>
       )}
@@ -7524,7 +7618,7 @@ const CandidateMemoryView = () => {
           <button 
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeCategory === cat ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'text-slate-500 hover:bg-slate-50 hover:text-emerald-600'}`}
+            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${activeCategory === cat ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
           >
             {cat}
           </button>
@@ -7534,15 +7628,15 @@ const CandidateMemoryView = () => {
       <div>
            {!memoriesLoading && filteredMemories.length === 0 ? (
               <div className="bg-white rounded-lg border border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
-                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-5">
-                  <Brain size={32} className="text-emerald-400" />
+                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-5">
+                  <Brain size={32} className="text-indigo-400" />
                 </div>
                 <h3 className="text-lg font-bold text-slate-700 mb-2">暂无个人记忆</h3>
                 <p className="text-sm text-slate-400 mb-6 max-w-sm leading-relaxed">AI Agent 会在与您对话的过程中自动提炼记忆，您也可以手动添加技能、偏好等信息，帮助 Agent 更精准地理解您</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setMemoryModal({ show: true, mode: 'add', type: 'skill', content: '', importance: 'Medium' })}
-                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all active:scale-95"
+                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-95"
                   >
                     <Plus size={16} /> 手动添加记忆
                   </button>
@@ -7561,7 +7655,7 @@ const CandidateMemoryView = () => {
                 };
                 const tagColor = tagColors[memory.type] || 'bg-slate-100 text-slate-600';
                 return (
-                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-emerald-200 transition-all">
+                <div key={memory.id} className="bg-white p-6 rounded-lg border border-slate-100 card-shadow group hover:border-indigo-200 transition-all">
                    <div className="flex items-center gap-2.5 mb-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${tagColor}`}>
                         {memory.type}
@@ -7574,9 +7668,9 @@ const CandidateMemoryView = () => {
                    <p className="text-sm text-slate-700 font-normal leading-relaxed mb-4">
                      {memory.content}
                    </p>
-                   <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100 mb-4">
-                      <h5 className="text-xs font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <Brain size={12} className="text-emerald-400" /> Agent 推理逻辑
+                   <div className="bg-slate-50 rounded-lg p-4 border border-slate-100 mb-4">
+                      <h5 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Brain size={12} className="text-indigo-400" /> Agent 推理逻辑
                       </h5>
                       <p className="text-xs text-slate-500 font-normal leading-relaxed">
                         {memory.ai_reasoning || ({
@@ -7591,8 +7685,8 @@ const CandidateMemoryView = () => {
                         } as Record<string, string>)[memory.raw_type] || '点击「记忆优化」为此条记忆生成 Agent 推理逻辑。'}
                       </p>
                       {memory.version_history && memory.version_history.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-3 flex-wrap">
-                          <span className="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1">
+                        <div className="mt-2 pt-2 border-t border-slate-200 flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-black text-indigo-500 uppercase tracking-wider flex items-center gap-1">
                             <History size={10} /> 版本记录 ({memory.version_history.length})
                           </span>
                           {memory.version_history.slice(-3).map((v: any, vi: number) => (
@@ -7618,7 +7712,7 @@ const CandidateMemoryView = () => {
                             importance: memory.importance || 'Medium',
                           });
                         }}
-                        className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
+                        className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors"
                       >
                         <Edit3 size={12} /> 编辑
                       </button>
@@ -7641,8 +7735,8 @@ const CandidateMemoryView = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                {memoryModal.mode === 'add' ? <Plus className="text-emerald-600" size={20} /> : <Edit3 className="text-emerald-600" size={20} />}
+              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
+                {memoryModal.mode === 'add' ? <Plus className="text-indigo-600" size={20} /> : <Edit3 className="text-indigo-600" size={20} />}
               </div>
               <h3 className="text-lg font-black text-slate-900">{memoryModal.mode === 'add' ? '添加新记忆' : '编辑记忆'}</h3>
             </div>
@@ -7656,11 +7750,11 @@ const CandidateMemoryView = () => {
                     onClick={() => setMemoryModal(prev => ({ ...prev, type: opt.id }))}
                     className={`p-2.5 rounded-lg border-2 transition-all text-center flex flex-col items-center gap-1 ${
                       memoryModal.type === opt.id 
-                        ? 'border-emerald-600 bg-emerald-50' 
+                        ? 'border-indigo-600 bg-indigo-50' 
                         : 'border-slate-100 hover:border-slate-200'
                     }`}
                   >
-                    <div className={memoryModal.type === opt.id ? 'text-emerald-600' : opt.color}>{opt.icon}</div>
+                    <div className={memoryModal.type === opt.id ? 'text-indigo-600' : opt.color}>{opt.icon}</div>
                     <div className="text-xs font-bold text-slate-700">{opt.label}</div>
                   </button>
                 ))}
@@ -7673,7 +7767,7 @@ const CandidateMemoryView = () => {
                 value={memoryModal.content}
                 onChange={(e) => setMemoryModal(prev => ({ ...prev, content: e.target.value }))}
                 placeholder="请输入记忆内容，例如：熟练掌握React和TypeScript..."
-                className="w-full h-28 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all resize-none"
+                className="w-full h-28 bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-300 transition-all resize-none"
               />
             </div>
             
@@ -7688,7 +7782,7 @@ const CandidateMemoryView = () => {
               <button 
                 onClick={handleSaveMemory}
                 disabled={saving || !memoryModal.content.trim()}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
                 {saving ? '保存中...' : memoryModal.mode === 'add' ? '添加记忆' : '保存修改'}
@@ -7790,7 +7884,7 @@ const CandidateMemoryView = () => {
             
             <button 
               onClick={() => setOptimizeResult(null)}
-              className="w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors"
+              className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition-colors"
             >
               完成
             </button>
@@ -7970,7 +8064,7 @@ const JobDetailView = () => {
             </div>
             <div className="bg-slate-50 rounded p-6 border border-slate-100">
               <h4 className="font-black text-slate-900 mb-2 flex items-center gap-2">
-                <MapPin size={18} className="text-emerald-600" /> 工作地点
+                <MapPin size={18} className="text-indigo-600" /> 工作地点
               </h4>
               <p className="text-slate-600 font-medium">{displayJob.location}</p>
             </div>
@@ -7984,13 +8078,13 @@ const JobDetailView = () => {
           {applyResult.success ? (
             <div className="bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm max-w-md">
               <div className="flex items-center gap-2 font-bold mb-2">
-                <Rocket size={15} className="text-emerald-400" />
+                <Rocket size={15} className="text-indigo-400" />
                 <span>AI 智能投递完成</span>
               </div>
               <div className="space-y-1 text-slate-300 text-xs">
                 <p>已投递「<span className="text-indigo-300 font-bold">{applyResult.job_title}</span>」{applyResult.company && <span className="text-slate-400"> · {applyResult.company}</span>}</p>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
+                  <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
                   <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">加入{applyResult.ai_queue || 'AI筛选队列'}</span>
                 </div>
                 {applyResult.ai_reason && <p className="text-slate-400 mt-1">💡 {applyResult.ai_reason}</p>}
@@ -9289,38 +9383,43 @@ const EnterpriseHomeView = () => {
   return (
     <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 顶部 Banner */}
-      <div className="bg-white rounded-lg shadow-xl overflow-hidden border border-slate-100 relative mb-8">
-        <div className="h-[240px] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-800">
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-10 left-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
-              <div className="absolute bottom-0 right-20 w-60 h-60 bg-violet-300/20 rounded-full blur-3xl"></div>
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-slate-100 relative mb-8">
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-violet-50 to-slate-50">
+            <div className="absolute inset-0">
+              <div className="absolute top-4 left-16 w-48 h-48 bg-indigo-100/60 rounded-full blur-3xl"></div>
+              <div className="absolute -bottom-10 right-16 w-72 h-72 bg-violet-100/40 rounded-full blur-3xl"></div>
+              <div className="absolute inset-0 opacity-[0.04]" style={{backgroundImage: 'radial-gradient(circle at 1px 1px, #6366f1 1px, transparent 0)', backgroundSize: '32px 32px'}}></div>
             </div>
           </div>
-          <div className="absolute bottom-0 left-0 w-full p-8 md:p-10 text-white flex flex-col md:flex-row items-end justify-between gap-6">
+          <div className="relative p-8 md:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex items-center gap-6">
-              <div className="w-24 h-24 bg-white rounded-lg p-5 shadow-2xl flex-shrink-0 border-2 border-white/50">
-                <Building2 className="text-indigo-600 w-full h-full" />
+              <div className="w-20 h-20 bg-white rounded-2xl shadow-lg flex-shrink-0 ring-1 ring-slate-100 overflow-hidden flex items-center justify-center">
+                {user?.company_logo ? (
+                  <img src={user.company_logo.startsWith('/') ? `${window.location.origin}${user.company_logo}` : user.company_logo} alt="Logo" className="w-full h-full object-cover" />
+                ) : (
+                  <Building2 className="text-indigo-600" size={32} />
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-2">
                   {dc.industry && (
-                    <span className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm px-3 py-1 rounded-full text-white/90 text-xs font-bold border border-white/10">
+                    <span className="inline-flex items-center gap-1.5 bg-indigo-50 px-3 py-1 rounded-full text-indigo-600 text-xs font-bold border border-indigo-100">
                       <Briefcase size={12} /> {dc.industry}
                     </span>
                   )}
                   {dc.isCertified && (
-                    <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 backdrop-blur-sm px-3 py-1 rounded-full text-emerald-200 text-xs font-bold border border-emerald-400/20">
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full text-emerald-600 text-xs font-bold border border-emerald-100">
                       <CheckCircle size={12} /> 已认证
                     </span>
                   )}
                 </div>
-                <h1 className="text-3xl md:text-4xl font-black tracking-tight leading-tight">{dc.name}</h1>
-                {dc.shortName && <p className="text-indigo-200 font-medium mt-1">{dc.shortName}</p>}
+                <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight">{dc.name}</h1>
+                {dc.shortName && <p className="text-slate-500 font-medium mt-1">{dc.shortName}</p>}
               </div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => navigate('/settings?tab=General')} className="bg-white text-slate-800 px-5 py-2.5 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-lg active:scale-95 flex items-center gap-2 text-sm">
+              <button onClick={() => navigate('/settings?tab=General')} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-sm active:scale-95 flex items-center gap-2 text-sm">
                 <Edit3 size={16} /> 编辑资料
               </button>
             </div>
@@ -9764,7 +9863,7 @@ const JobPostDetailView = () => {
 
   if (loading) {
     return (
-      <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20">
           <Loader2 className="mx-auto animate-spin text-indigo-600 mb-3" size={24} />
           <p className="text-sm text-slate-400">加载岗位详情...</p>
@@ -9775,7 +9874,7 @@ const JobPostDetailView = () => {
 
   if (!jobData) {
     return (
-      <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto">
+      <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto">
         <div className="text-center py-20">
           <AlertCircle className="mx-auto text-slate-300 mb-3" size={40} />
           <p className="text-slate-900 font-black mb-2">岗位不存在或无权访问</p>
@@ -9788,7 +9887,7 @@ const JobPostDetailView = () => {
   }
 
   return (
-    <div className="py-6 px-4 md:py-8 md:px-6 max-w-7xl mx-auto animate-in fade-in duration-700">
+    <div className="py-6 px-4 md:py-8 md:px-6 max-w-5xl mx-auto animate-in fade-in duration-700">
       {/* 页面头部 */}
       <button onClick={() => navigate("/employer/post")} className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 mb-8 font-black transition-colors group text-sm">
         <ChevronLeft size={18} className="group-hover:-translate-x-1 transition-transform" /> 返回职位管理
@@ -18321,7 +18420,7 @@ ${recentContext}
                   <Bot size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-slate-800 truncate">通用 AI 助手</div>
+                  <div className="text-sm font-semibold text-slate-800 truncate">Devnors AI Agent</div>
                   <div className="text-xs text-slate-400">随时提问咨询</div>
                 </div>
               </div>
@@ -20289,7 +20388,7 @@ const JobRecommendListView = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors truncate">{job.title}</h3>
-                        <span className="px-2 py-0.5 bg-emerald-100 rounded text-[10px] font-black text-emerald-700 flex-shrink-0">{matchScore}% 匹配</span>
+                        <span className="px-2 py-0.5 bg-indigo-100 rounded text-[10px] font-black text-indigo-700 flex-shrink-0">{matchScore}% 匹配</span>
                       </div>
                       <p className="text-sm text-slate-500 font-medium mt-0.5">{job.company} · {job.location || '全国'}</p>
                       <div className="flex flex-wrap gap-1.5 mt-2">
@@ -20312,7 +20411,7 @@ const JobRecommendListView = () => {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {appliedIds.has(job.id) ? (
                       <div className="relative group/apply">
-                        <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-default">
+                        <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-default">
                           <CheckCircle2 size={13} /> 已投递
                         </span>
                         {applyDetails[job.id] && (
@@ -20320,12 +20419,12 @@ const JobRecommendListView = () => {
                             onClick={(e) => { e.stopPropagation(); navigate(`/workbench/flow/${applyDetails[job.id].flow_id}`); }}
                             className="absolute right-0 top-full mt-2 w-64 bg-slate-900 text-white rounded-xl shadow-2xl p-4 z-50 opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 text-xs cursor-pointer hover:bg-slate-800"
                           >
-                            <div className="flex items-center gap-1.5 font-bold mb-2 text-emerald-300">
+                            <div className="flex items-center gap-1.5 font-bold mb-2 text-indigo-300">
                               <CheckCircle2 size={12} /> AI 投递详情
                             </div>
                             <p className="text-slate-300 mb-1">岗位：<span className="text-indigo-300 font-bold">{applyDetails[job.id].job_title}</span></p>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-[10px] font-bold">匹配度 {applyDetails[job.id].match_score}%</span>
+                              <span className="bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded text-[10px] font-bold">匹配度 {applyDetails[job.id].match_score}%</span>
                             </div>
                             {applyDetails[job.id].details && <p className="text-slate-400 mt-1">{applyDetails[job.id].details}</p>}
                             <p className="text-indigo-400 mt-2 font-bold flex items-center gap-1">查看投递详情 <ChevronRight size={11} /></p>
@@ -20337,7 +20436,7 @@ const JobRecommendListView = () => {
                       <button
                         onClick={(e) => handleQuickApply(e, job.id)}
                         disabled={applyingId === job.id}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-60"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-60"
                       >
                         {applyingId === job.id ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />} {applyingId === job.id ? 'AI 分析中...' : 'AI 投递'}
                       </button>
@@ -20417,13 +20516,13 @@ const JobRecommendListView = () => {
           {applyResult.success ? (
             <div className="bg-slate-900 text-white px-6 py-4 rounded-xl shadow-2xl text-sm max-w-md">
               <div className="flex items-center gap-2 font-bold mb-2">
-                <Rocket size={15} className="text-emerald-400" />
+                <Rocket size={15} className="text-indigo-400" />
                 <span>AI 智能投递完成</span>
               </div>
               <div className="space-y-1 text-slate-300 text-xs">
                 <p>已投递「<span className="text-indigo-300 font-bold">{applyResult.job_title}</span>」{applyResult.company && <span className="text-slate-400"> · {applyResult.company}</span>}</p>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
+                  <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">匹配度 {applyResult.match_score}%</span>
                   <span className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs font-bold">加入{applyResult.ai_queue || 'AI筛选队列'}</span>
                 </div>
                 {applyResult.ai_reason && <p className="text-slate-400 mt-1">💡 {applyResult.ai_reason}</p>}
@@ -23484,7 +23583,7 @@ const DashboardLayout = () => {
           {roleNavItems.length > 0 && (
             <div className="mb-3">
               <p className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                {userRole === 'employer' ? '企业管理' : '求职管理'}
+                {userRole === 'employer' ? '企业管理' : '个人管理'}
               </p>
               {roleNavItems.map(item => <NavItem key={item.path} item={item} />)}
             </div>
